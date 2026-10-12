@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suivi de Partie — Jeu de Plateau</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="heartbeat" aria-hidden="true">
+    <svg class="heartbeat-trace" viewBox="0 0 1200 120" preserveAspectRatio="none">
+      <path d="M0 60 H240 l10 -8 8 16 8 -8 H360 l14 -54 14 108 12 -44 H470 l10 -10 8 20 8 -10 H600 M600 60 H840 l10 -8 8 16 8 -8 H960 l14 -54 14 108 12 -44 H1070 l10 -10 8 20 8 -10 H1200" />
+    </svg>
+  </div>
+
+  <div id="home-screen">
+    <div class="home-box">
+      <h1 class="home-title">Luxeria</h1>
+      <button id="home-play" class="home-btn">Lancer une partie</button>
+      <button id="home-online" class="home-btn">Partie en ligne</button>
+      <button id="home-lan" class="home-btn">Partie LAN (1v1)</button>
+      <button id="home-create" class="home-btn">Terrains</button>
+      <button id="home-maps" class="home-btn">Voir les champions</button>
+    </div>
+  </div>
+
+  <header>
+    <h1>Suivi de Partie</h1>
+    <nav>
+      <button class="tab-btn active" data-tab="board">Plateau</button>
+      <button class="tab-btn" data-tab="library">Champions</button>
+      <button class="tab-btn" data-tab="maps">Terrains</button>
+      <button id="nav-home" class="tab-btn">Accueil</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-board" class="tab active">
+      <div class="board-toolbar">
+        <span id="turn-label">Tour : Équipe A</span>
+        <select id="map-select" title="Choisir le terrain"></select>
+        <button id="edit-toggle">Édition terrain</button>
+        <button id="save-map" title="Enregistrer le contenu actuel de ce terrain comme contenu par défaut et lui donner un nom">Enregistrer ce terrain</button>
+        <span id="objective-hp"></span>
+        <button id="undo-btn" title="Annuler la dernière action (raccourci : U ou A)">↩ Annuler</button>
+        <button id="next-turn" class="btn-accent" title="Passer au tour suivant (raccourci : Espace ou Z)">Passer au tour suivant</button>
+        <button id="reserve-block">Activer le blocage réserve</button>
+        <button id="fullscreen-btn" title="Passer le terrain en plein écran (raccourci : F)">⛶ Grand écran</button>
+        <button id="reset-board">Nouvelle partie</button>
+      </div>
+      <div id="placement-banner"></div>
+      <div id="rosters"></div>
+      <div id="board"></div>
+      <div id="board-log"></div>
+      <div id="win-overlay" class="win-overlay">
+        <div class="win-box">
+          <h2 id="win-title">Victoire !</h2>
+          <p class="win-text"></p>
+          <button id="win-close">Fermer</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-library" class="tab">
+      <div id="build-banner" class="build-banner" style="display:none"></div>
+      <div class="library-filters">
+        <input type="text" id="lib-search" placeholder="Rechercher un Champion…">
+        <select id="lib-role">
+          <option value="">Tous les rôles</option>
+        </select>
+      </div>
+      <div id="library-list"></div>
+    </section>
+
+    <section id="tab-maps" class="tab">
+      <div class="maps-toolbar">
+        <h2>Terrains disponibles</h2>
+        <div class="maps-toolbar-actions">
+          <button id="maps-random" class="btn-random-inline" title="Tirer un terrain au hasard parmi tous les terrains disponibles et charger une partie dessus">🎲 Terrain au hasard</button>
+          <button id="maps-create" class="btn-random">Créer un terrain</button>
+        </div>
+      </div>
+      <div id="map-gallery" class="map-gallery"></div>
+    </section>
+  </main>
+
+  <dialog id="starter-dialog">
+    <h2>Choisir les titulaires</h2>
+    <div id="starter-content"></div>
+    <button id="starter-confirm">Déployer les équipes</button>
+  </dialog>
+
+  <dialog id="lan-dialog" class="lan-dialog">
+    <div class="lan-dialog-inner">
+      <h2>Partie LAN (1v1)</h2>
+      <div class="lan-tabs">
+        <button type="button" class="lan-tab active" data-lantab="host">Héberger</button>
+        <button type="button" class="lan-tab" data-lantab="join">Rejoindre</button>
+      </div>
+      <div id="lan-host" class="lan-panel">
+        <p class="lan-help">Host = Équipe A · Client = Équipe B</p>
+        <button type="button" id="lan-host-create" class="home-btn lan-small">Créer l'offre WebRTC</button>
+        <label class="lan-label">Offre (à copier vers le client)</label>
+        <textarea id="lan-offer" class="lan-text" readonly spellcheck="false"></textarea>
+        <button type="button" id="lan-offer-copy" class="lan-btn">Copier l'offre</button>
+        <label class="lan-label">Réponse du client (à coller ici)</label>
+        <textarea id="lan-answer-in" class="lan-text" spellcheck="false"></textarea>
+        <div class="lan-row">
+          <button type="button" id="lan-host-connect" class="lan-btn lan-primary">Connecter</button>
+          <button type="button" id="lan-host-start" class="lan-btn lan-primary" disabled>Lancer la partie</button>
+        </div>
+        <div id="lan-host-status" class="lan-status"></div>
+      </div>
+      <div id="lan-join" class="lan-panel" style="display:none">
+        <label class="lan-label">Offre du host (à coller ici)</label>
+        <textarea id="lan-offer-in" class="lan-text" spellcheck="false"></textarea>
+        <button type="button" id="lan-join-gen" class="lan-btn">Générer la réponse</button>
+        <label class="lan-label">Réponse (à copier vers le host)</label>
+        <textarea id="lan-answer-out" class="lan-text" readonly spellcheck="false"></textarea>
+        <button type="button" id="lan-answer-copy" class="lan-btn">Copier la réponse</button>
+        <div id="lan-join-status" class="lan-status"></div>
+      </div>
+      <div class="lan-actions">
+        <button type="button" id="lan-close" class="lan-btn">Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="online-dialog">
+    <div class="online-box">
+      <h2>Partie en ligne</h2>
+      <p class="online-info">Matchmaking automatique : le premier joueur en attente est l'Équipe A, le second l'Équipe B. Vous composez chacun votre équipe et vous choisissez chacun vos titulaires avant que la partie ne commence.</p>
+      <button type="button" id="online-search" class="home-btn online-small">Rechercher une partie</button>
+      <div id="online-status" class="lan-status"></div>
+      <div class="lan-actions">
+        <button type="button" id="online-cancel" class="lan-btn">Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="online-toast" class="online-toast"></div>
+
+  <button id="bigscreen-exit" class="bigscreen-exit" title="Quitter le grand écran (Échap ou F)">⛶ Quitter</button>
+
+  <dialog id="ask-dialog">
+    <div class="ask-icon">🎲</div>
+    <h2 id="ask-title">Terrain au hasard</h2>
+    <p id="ask-text">Voulez-vous jouer sur un terrain tiré au hasard ?</p>
+    <p id="ask-hint" class="ask-hint">Non = garder le terrain actuel.</p>
+    <div id="ask-choice" class="ask-choice"></div>
+    <div class="ask-actions">
+      <button id="ask-no" class="ask-btn ask-btn-ghost">Non</button>
+      <button id="ask-yes" class="ask-btn ask-btn-primary">Oui, au hasard</button>
+    </div>
+  </dialog>
+
+  <dialog id="char-dialog">
+    <div id="char-dialog-content"></div>
+    <button id="dialog-close">Fermer</button>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
