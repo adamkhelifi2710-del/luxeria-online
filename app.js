@@ -4574,6 +4574,10 @@ document.getElementById("maps-random").addEventListener("click", () => {
   randomMapFor();
 });
 
+document.getElementById("maps-import").addEventListener("click", () => {
+  importMapJson();
+});
+
 function createNewTerrain() {
   const name = prompt("Nom du nouveau terrain :", "Nouveau terrain");
   if (name === null) return;
@@ -4584,6 +4588,57 @@ function createNewTerrain() {
   localStorage.setItem(NEW_MAPS_KEY, JSON.stringify(store));
   GAME.maps[m.id] = m;
   enterEditorForMap(m.id);
+}
+
+function importMapJson() {
+  const raw = prompt("Collez le JSON du terrain à importer (bouton « Exporter » depuis l'autre appareil) :");
+  if (raw === null) return;
+  const text = (raw || "").trim();
+  if (!text) return;
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    alert("JSON invalide : " + e.message);
+    return;
+  }
+  const isMap = (o) => o && typeof o === "object" && Array.isArray(o.tiles);
+  const candidates = [];
+  if (isMap(data)) candidates.push(data);
+  else if (data && typeof data === "object") {
+    Object.keys(data).forEach((k) => { if (isMap(data[k])) candidates.push(data[k]); });
+  }
+  if (!candidates.length) {
+    alert("Aucun terrain valide trouvé dans ce JSON.");
+    return;
+  }
+  const store = loadNewMaps();
+  let added = 0;
+  candidates.forEach((m) => {
+    let id = typeof m.id === "string" && m.id ? m.id : "user-" + Date.now();
+    if (GAME.maps[id] || store[id]) id = "user-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const map = {
+      id,
+      name: m.name || "Terrain importé",
+      cols: m.cols || 15,
+      rows: m.rows || 10,
+      tiles: (m.tiles || []).map((r) => r.slice()),
+      edgesWalls: (m.edgesWalls || []).slice(),
+      fireCells: (m.fireCells || []).map((p) => p.slice()),
+      healCells: (m.healCells || []).map((p) => p.slice()),
+      speedCells: (m.speedCells || []).map((p) => p.slice()),
+      voidCells: (m.voidCells || []).map((p) => p.slice()),
+      startZones: m.startZones || makeDefaultZones(),
+      objectives: m.objectives || { A: { x: 2, y: 4, hp: 20 }, B: { x: 12, y: 4, hp: 20 } }
+    };
+    store[id] = map;
+    GAME.maps[id] = map;
+    added++;
+  });
+  localStorage.setItem(NEW_MAPS_KEY, JSON.stringify(store));
+  refreshMapSelectOptions();
+  renderMapGallery();
+  alert(added + " terrain(s) importé(s).");
 }
 
 function loadMap(id) {
@@ -4795,6 +4850,29 @@ function lanSend(obj) {
   }
 }
 
+function mapSnapshot(m) {
+  if (!m) return null;
+  return {
+    id: m.id,
+    name: m.name,
+    cols: m.cols,
+    rows: m.rows,
+    tiles: (m.tiles || []).map((r) => r.slice()),
+    edgesWalls: (m.edgesWalls || []).slice(),
+    fireCells: (m.fireCells || []).map((p) => p.slice()),
+    healCells: (m.healCells || []).map((p) => p.slice()),
+    speedCells: (m.speedCells || []).map((p) => p.slice()),
+    voidCells: (m.voidCells || []).map((p) => p.slice()),
+    startZones: m.startZones,
+    objectives: m.objectives
+  };
+}
+
+function applyRemoteMap(mapName, mapData) {
+  if (!mapName || !mapData || !Array.isArray(mapData.tiles)) return;
+  GAME.maps[mapName] = mapData;
+}
+
 function lanBroadcast() {
   if (onlineMode) {
     if (onlineSetupPhase || lanRole !== "host") return;
@@ -4803,6 +4881,7 @@ function lanBroadcast() {
   }
   const snap = JSON.parse(JSON.stringify(state));
   snap.mapName = GAME.activeMap;
+  snap.mapData = mapSnapshot(GAME.maps[GAME.activeMap]);
   snap.lanSelectedTokenId = selectedTokenId;
   snap.lanSeq = lanSeq++;
   lanSend({ type: "state", state: snap });
@@ -4831,9 +4910,12 @@ function lanApplySelection(id) {
 function lanOnState(snap) {
   const sel = snap.lanSelectedTokenId;
   const mapName = snap.mapName;
+  const mapData = snap.mapData;
   delete snap.lanSelectedTokenId;
   delete snap.mapName;
+  delete snap.mapData;
   delete snap.lanSeq;
+  if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.activeMap !== mapName) setActiveMap(mapName);
   state = snap;
   lanApplySelection(sel);
@@ -5128,7 +5210,7 @@ function onlineOnMessage(ev) {
       onlinePeerLeft();
       return;
     case "setup":
-      if (lanRole === "client") onlineClientSetup(msg.mapName);
+      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map);
       return;
     case "live-deck":
       if (msg.team && msg.team !== lanLocalTeam()) onlineApplyLiveDeck(msg.team, msg.deck);
@@ -5187,16 +5269,17 @@ function onlineHostChooseMap() {
     state.decks = { A: [], B: [] };
     buildMode = null;
     undoStack = [];
-    onlineSend({ type: "setup", mapName: id });
+    onlineSend({ type: "setup", mapName: id, map: mapSnapshot(GAME.maps[id]) });
     onlineBeginBuildFor("A");
   });
 }
 
-function onlineClientSetup(mapName) {
+function onlineClientSetup(mapName, mapData) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
   onlineHideWaiting();
+  if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.maps[mapName]) setActiveMap(mapName);
   state = defaultState();
   state.decks = { A: [], B: [] };
