@@ -326,6 +326,7 @@ function pushUndo() {
 }
 
 function undoLast() {
+  if (lanMode && lanRole === "client") return;
   if (busy) return;
   if (!undoStack.length) {
     alert("Rien à annuler.");
@@ -2128,6 +2129,10 @@ if (t.charId === "cazou") {
   updateHeartbeat();
   updatePlacementBanner();
   fx = emptyFx();
+
+  if (lanMode && lanRole === "host" && lanConnected && !lanApplying && !onlineSetupPhase) {
+    lanBroadcast();
+  }
 }
 
 function inSpawnZone(player, x, y) {
@@ -4078,6 +4083,7 @@ function endPlayerTurn() {
 }
 
 document.getElementById("reset-board").addEventListener("click", () => {
+  if (lanMode && lanRole === "client") return;
   if (!confirm("Réinitialiser la partie ? Toutes les positions, PV et états seront perdus.")) return;
   const keep = confirm("Conserver les decks actuels ? (Non = tout vider)");
   if (keep) {
@@ -4119,6 +4125,7 @@ document.getElementById("reset-board").addEventListener("click", () => {
 });
 
 document.getElementById("reserve-block").addEventListener("click", () => {
+  if (lanMode && lanRole === "client") return;
   if (state.healingBlocked) {
     state.healingBlocked = false;
     log("Blocage des soins levé.");
@@ -4883,6 +4890,8 @@ function lanBroadcast() {
   snap.mapName = GAME.activeMap;
   snap.mapData = mapSnapshot(GAME.maps[GAME.activeMap]);
   snap.lanSelectedTokenId = selectedTokenId;
+  snap.lanPendingAbility = pendingAbility;
+  snap.lanPendingSpawn = pendingSpawn;
   snap.lanSeq = lanSeq++;
   lanSend({ type: "state", state: snap });
 }
@@ -4911,13 +4920,19 @@ function lanOnState(snap) {
   const sel = snap.lanSelectedTokenId;
   const mapName = snap.mapName;
   const mapData = snap.mapData;
+  const pendAb = snap.lanPendingAbility;
+  const pendSp = snap.lanPendingSpawn;
   delete snap.lanSelectedTokenId;
   delete snap.mapName;
   delete snap.mapData;
+  delete snap.lanPendingAbility;
+  delete snap.lanPendingSpawn;
   delete snap.lanSeq;
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.activeMap !== mapName) setActiveMap(mapName);
   state = snap;
+  pendingAbility = pendAb || null;
+  pendingSpawn = pendSp || null;
   lanApplySelection(sel);
   hideHome();
   const boardSection = document.getElementById("tab-board");
@@ -4933,18 +4948,37 @@ function lanExpandArgs(fn, args) {
   return args;
 }
 
+function lanRemoteActsNow() {
+  if (state.winner) return false;
+  if (state.phase === "placement") return state.placingPlayer === "B";
+  return state.turn === "B";
+}
+
 function handleLanMessage(msg) {
   if (!msg) return;
   if (msg.type === "state" && lanRole === "client") {
     lanOnState(msg.state);
     return;
   }
+  if (msg.type === "char-dialog" && lanRole === "client") {
+    const c = charById(msg.charId);
+    if (c) openCharDialogOrig(c, msg.hp);
+    return;
+  }
   if (msg.type === "action" && lanRole === "host") {
+    const a = msg.action || {};
+    const viewOnly = a.kind === "tokenClick";
+    if (!viewOnly && !lanRemoteActsNow()) {
+      lanBroadcast();
+      return;
+    }
     lanApplying = true;
     try {
-      const a = msg.action || {};
       if (a.kind === "cellClick") {
         cellClick(a.x, a.y);
+      } else if (a.kind === "tokenClick") {
+        const tok = tokenById(a.id);
+        if (tok) handleTokenClick(tok);
       } else if (a.kind === "endTurn") {
         pushUndo();
         endPlayerTurn();
@@ -5081,8 +5115,32 @@ lanPatchFn("cellClick");
 lanPatchFn("useAbility");
 lanPatchFn("swapChampion");
 lanPatchFn("changeHP");
+lanPatchFn("attackAt");
+lanPatchFn("resolvePendingOnCell");
 lanPatchFn("fieldFromReserve", (a) => [a[0], state.reserve[a[0]].indexOf(a[1])]);
 lanPatchFn("endPlayerTurn");
+
+const openCharDialogOrig = openCharDialog;
+const handleTokenClickOrig = handleTokenClick;
+
+window.handleTokenClick = function (t) {
+  if (lanMode && !lanApplying) {
+    if (lanRole === "client") {
+      if (t && t.id) lanSendAction({ kind: "tokenClick", id: t.id });
+      return;
+    }
+    if (!lanIsActingPlayer()) return;
+  }
+  return handleTokenClickOrig.apply(this, arguments);
+};
+
+window.openCharDialog = function (c, hp) {
+  if (lanMode && lanApplying && lanRole === "host" && c) {
+    lanSend({ type: "char-dialog", charId: c.id, hp: hp });
+    return;
+  }
+  return openCharDialogOrig.apply(this, arguments);
+};
 
 /* ================= fin Partie LAN ================= */
 
