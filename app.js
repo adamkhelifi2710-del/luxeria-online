@@ -3231,7 +3231,7 @@ async function useAbility(tokenId) {
     }
     case "braut": {
       tok.buffs.braut = true;
-      tok.cd = 6;
+      tok.cd = 5;
       fxAbility(tok.id);
       log(`BRAUT prépare sa prochaine attaque : 7 dégâts (ou AT si Colosse).`);
       renderBoard();
