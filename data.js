@@ -260,7 +260,7 @@ const GAME = {
       range: 1,
       ability: {
         name: "Dôme de Verre",
-        desc: "Cd 5 — Crée pendant 3 tours une zone impénétrable de 3×3 cases (centrée sur lui). Elle bloque les déplacements (de ceux qui sont dedans et de ceux qui voudraient y entrer) et toutes les attaques. GUARD ne peut plus se déplacer tant que la zone est active."
+        desc: "Cd 5 — Crée pendant 3 manches complètes une zone impénétrable de 3×3 cases (centrée sur lui). Elle bloque les déplacements (de ceux qui sont dedans et de ceux qui voudraient y entrer) et toutes les attaques. GUARD ne peut plus se déplacer tant que la zone est active."
       },
       passive: { name: "", desc: "" }
     },
