@@ -500,23 +500,42 @@ function openPlayMode() {
   askChoicePrompt({
     icon: "🎮",
     title: "Nouvelle partie",
-    text: "Choisissez un mode de jeu.",
-    hint: "Normal : choisir le terrain puis composer les équipes (1 champion de chaque classe). Aléatoire : terrain et équipes tirés au sort. Rampage : 3c3 sans réserve ni objectif, éliminez toute l'équipe adverse.",
+    text: "Choisissez le mode de jeu.",
+    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
     cancel: "Annuler",
     options: [
-      { label: "Mode normal", value: "normal" },
-      { label: "🎲 Mode aléatoire", value: "random" },
-      { label: "💥 Rampage (3c3)", value: "rampage" }
+      { label: "🎯 Mode Objectif", value: "classic" },
+      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
     ]
-  }).then((val) => {
-    if (val === "normal") openTerrainPicker("classic");
-    else if (val === "random") startRandomGame("classic");
-    else if (val === "rampage") openTerrainPicker("rampage");
-    else showHome();
+  }).then((mode) => {
+    if (!mode) { showHome(); return; }
+    askSelectionMethod(mode);
   });
 }
 
-function openTerrainPicker(mode) {
+/* Aléatoire / Normal (composition libre) / Draft. */
+function askSelectionMethod(mode) {
+  askChoicePrompt({
+    icon: "🧩",
+    title: "Sélection des champions",
+    text: mode === "rampage"
+      ? "Rampage : 3 champions (3 classes différentes)."
+      : "Objectif : 5 champions (1 par classe).",
+    hint: "Aléatoire : équipes tirées au sort. Normal : composez librement. Draft : chacun choisit à son tour.",
+    cancel: "Annuler",
+    options: [
+      { label: "🎲 Aléatoire", value: "random" },
+      { label: "✍️ Normal", value: "free" },
+      { label: "🔁 Draft", value: "draft" }
+    ]
+  }).then((method) => {
+    if (!method) { showHome(); return; }
+    if (method === "random") { startRandomGame(mode); return; }
+    openTerrainPicker(mode, method);
+  });
+}
+
+function openTerrainPicker(mode, method) {
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) {
     alert("Aucun terrain disponible.");
@@ -528,23 +547,18 @@ function openTerrainPicker(mode) {
   askChoicePrompt({
     icon: "🗺️",
     title: mode === "rampage" ? "Rampage — choisir le terrain" : "Choisir le terrain",
-    text: mode === "rampage"
-      ? "Terrain de la partie Rampage (3c3, sans réserve ni objectif)."
-      : "Sur quel terrain voulez-vous jouer ?",
+    text: "Sur quel terrain voulez-vous jouer ?",
     cancel: "Annuler",
     options
   }).then((val) => {
-    if (!val) {
-      showHome();
-      return;
-    }
+    if (!val) { showHome(); return; }
     let id = val;
     if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
-    startNormalGame(id, mode === "rampage" ? "rampage" : "classic");
+    startConfiguredGame(id, mode, method);
   });
 }
 
-function startNormalGame(mapId, mode) {
+function startConfiguredGame(mapId, mode, method) {
   setActiveMap(mapId);
   state = defaultState();
   state.mode = mode === "rampage" ? "rampage" : "classic";
@@ -557,30 +571,9 @@ function startNormalGame(mapId, mode) {
   save();
   renderDecks();
   refreshMapSelectOptions();
-  chooseSelectionMethod();
-}
-
-/* Choix de la méthode de composition des équipes : draft, aléatoire, libre. */
-function chooseSelectionMethod() {
-  askChoicePrompt({
-    icon: "🧩",
-    title: "Sélection des champions",
-    text: isRampage()
-      ? "Rampage : 3 champions de 3 classes différentes."
-      : "Mode normal : 5 champions, un par classe.",
-    hint: "Tour par tour : chacun choisit à son tour (sans doublon de classe). Aléatoire : équipes tirées au sort. Libre : chaque équipe se compose librement.",
-    cancel: "Annuler",
-    options: [
-      { label: "🔁 Tour par tour (draft)", value: "draft" },
-      { label: "🎲 Aléatoire", value: "random" },
-      { label: "✍️ Composition libre", value: "free" }
-    ]
-  }).then((val) => {
-    if (val === "draft") beginDraft();
-    else if (val === "random") randomSelectTeams();
-    else if (val === "free") beginTeamBuild();
-    else showHome();
-  });
+  if (method === "draft") beginDraft();
+  else if (method === "random") randomSelectTeams();
+  else beginTeamBuild();
 }
 
 function randomSelectTeams() {
@@ -5243,109 +5236,7 @@ function lanPatchFn(name, sendArgs) {
   };
 }
 
-async function lanHostCreate() {
-  try {
-    lanMode = true;
-    lanRole = "host";
-    lanConnected = false;
-    rtcPc = new RTCPeerConnection(LAN_ICE);
-    rtcDc = rtcPc.createDataChannel("luxeria");
-    rtcDc.onopen = () => {
-      lanConnected = true;
-      document.getElementById("lan-host-start").disabled = false;
-      lanSetStatus("lan-host-status", "Connecté. Cliquez « Lancer la partie ».");
-      lanBroadcast();
-    };
-    rtcDc.onclose = () => { lanConnected = false; lanSetStatus("lan-host-status", "Connexion fermée."); };
-    rtcDc.onmessage = (e) => {
-      let m = null;
-      try { m = JSON.parse(e.data); } catch (err) {}
-      handleLanMessage(m);
-    };
-    const offer = await rtcPc.createOffer();
-    await rtcPc.setLocalDescription(offer);
-    await lanWaitIce(rtcPc);
-    document.getElementById("lan-offer").value = JSON.stringify(rtcPc.localDescription);
-    lanSetStatus("lan-host-status", "Offre prête. Copiez-la vers le client.");
-  } catch (e) {
-    lanSetStatus("lan-host-status", "Erreur lors de la création de l'offre.");
-  }
-}
-
-async function lanHostConnect() {
-  try {
-    const ans = JSON.parse(document.getElementById("lan-answer-in").value);
-    await rtcPc.setRemoteDescription(ans);
-    lanSetStatus("lan-host-status", "Réponse enregistrée. En attente de connexion…");
-  } catch (e) {
-    lanSetStatus("lan-host-status", "Réponse invalide.");
-  }
-}
-
-function lanHostStart() {
-  if (lanRole !== "host") return;
-  if (!lanConnected) {
-    lanSetStatus("lan-host-status", "Le client n'est pas encore connecté.");
-    return;
-  }
-  document.getElementById("lan-dialog").close();
-  openPlayMode();
-}
-
-async function lanJoinGen() {
-  try {
-    const offer = JSON.parse(document.getElementById("lan-offer-in").value);
-    lanMode = true;
-    lanRole = "client";
-    lanConnected = false;
-    rtcPc = new RTCPeerConnection(LAN_ICE);
-    rtcPc.ondatachannel = (e) => {
-      rtcDc = e.channel;
-      rtcDc.onopen = () => {
-        lanConnected = true;
-        lanSetStatus("lan-join-status", "Connecté à l'hôte. En attente du lancement de la partie…");
-      };
-      rtcDc.onclose = () => { lanConnected = false; lanSetStatus("lan-join-status", "Connexion fermée."); };
-      rtcDc.onmessage = (ev) => {
-        let m = null;
-        try { m = JSON.parse(ev.data); } catch (err) {}
-        handleLanMessage(m);
-      };
-    };
-    await rtcPc.setRemoteDescription(offer);
-    const answer = await rtcPc.createAnswer();
-    await rtcPc.setLocalDescription(answer);
-    await lanWaitIce(rtcPc);
-    document.getElementById("lan-answer-out").value = JSON.stringify(rtcPc.localDescription);
-    lanSetStatus("lan-join-status", "Réponse prête. Copiez-la vers l'hôte.");
-  } catch (e) {
-    lanSetStatus("lan-join-status", "Offre invalide.");
-  }
-}
-
-document.getElementById("home-lan").addEventListener("click", () => {
-  const dlg = document.getElementById("lan-dialog");
-  if (dlg) dlg.showModal();
-});
-
-document.querySelectorAll(".lan-tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".lan-tab").forEach((b) => b.classList.toggle("active", b === btn));
-    document.getElementById("lan-host").style.display = btn.dataset.lantab === "host" ? "flex" : "none";
-    document.getElementById("lan-join").style.display = btn.dataset.lantab === "join" ? "flex" : "none";
-  });
-});
-
-document.getElementById("lan-close").addEventListener("click", () => {
-  const dlg = document.getElementById("lan-dialog");
-  if (dlg) dlg.close();
-});
-document.getElementById("lan-host-create").addEventListener("click", lanHostCreate);
-document.getElementById("lan-host-connect").addEventListener("click", lanHostConnect);
-document.getElementById("lan-host-start").addEventListener("click", lanHostStart);
-document.getElementById("lan-offer-copy").addEventListener("click", () => lanCopy("lan-offer"));
-document.getElementById("lan-answer-copy").addEventListener("click", () => lanCopy("lan-answer-out"));
-document.getElementById("lan-join-gen").addEventListener("click", lanJoinGen);
+/* ---------- Relais temps réel (utilisé par la partie en ligne) ---------- */
 
 lanPatchFn("cellClick");
 lanPatchFn("useAbility");
