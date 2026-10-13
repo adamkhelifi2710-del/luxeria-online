@@ -3215,7 +3215,7 @@ async function useAbility(tokenId) {
         tok.cd = 5;
         fxAbility(tok.id);
         fxCell(tok.x, tok.y, "guard");
-        log(`GUARD crée une zone impénétrable 3×3 pendant 3 tours. Il est immobilisé.`);
+        log(`GUARD crée une zone impénétrable 3×3 pendant 3 manches complètes. Il est immobilisé.`);
       }
       renderBoard();
       break;
@@ -3962,15 +3962,6 @@ document.getElementById("undo-btn").addEventListener("click", undoLast);
 
 function endPlayerTurn() {
   const current = state.turn;
-  state.guardZones.forEach((z) => {
-    if (z.player === current) {
-      z.turnsLeft--;
-      if (z.turnsLeft <= 0) {
-        log("La zone impénétrable de GUARD se dissipe.");
-      }
-    }
-  });
-  state.guardZones = state.guardZones.filter((z) => z.turnsLeft > 0);
   state.rapidoBuff = null;
 
   state.tokens.forEach((t) => {
@@ -3988,6 +3979,20 @@ function endPlayerTurn() {
     state.turnCount++;
     applyShrinkRound(completedRound);
   }
+
+  /* Le dôme de GUARD dure 3 manches complètes (A+B). Le décompte se fait au
+     début du tour de son propriétaire, pas au tour où il l'a lancé : activé en
+     A1, il couvre A1 B1 A2 B2 A3 B3, puis disparaît en A4. */
+  state.guardZones.forEach((z) => {
+    if (z.player === state.turn) {
+      z.turnsLeft--;
+      if (z.turnsLeft <= 0) {
+        log("La zone impénétrable de GUARD se dissipe.");
+      }
+    }
+  });
+  state.guardZones = state.guardZones.filter((z) => z.turnsLeft > 0);
+
   if (state.swapCd && state.swapCd[current] > 0) state.swapCd[current]--;
   selectedTokenId = null;
   reachable = [];
