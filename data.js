@@ -125,7 +125,7 @@ const GAME = {
       range: 1,
       ability: {
         name: "Frappe dévastatrice",
-        desc: "Cd 6 — Sa prochaine attaque inflige 7 dégâts contre un champion de rôle Colosse, ou 6 dégâts contre les autres champions."
+        desc: "Cd 5 — Sa prochaine attaque inflige 7 dégâts contre un champion de rôle Colosse, ou 6 dégâts contre les autres champions."
       },
       passive: { name: "", desc: "" }
     },
