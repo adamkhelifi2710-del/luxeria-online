@@ -18,7 +18,6 @@
       <h1 class="home-title">Luxeria</h1>
       <button id="home-play" class="home-btn">Lancer une partie</button>
       <button id="home-online" class="home-btn">Partie en ligne</button>
-      <button id="home-lan" class="home-btn">Partie LAN (1v1)</button>
       <button id="home-create" class="home-btn">Terrains</button>
       <button id="home-maps" class="home-btn">Voir les champions</button>
     </div>
@@ -89,42 +88,6 @@
     <h2>Choisir les titulaires</h2>
     <div id="starter-content"></div>
     <button id="starter-confirm">Déployer les équipes</button>
-  </dialog>
-
-  <dialog id="lan-dialog" class="lan-dialog">
-    <div class="lan-dialog-inner">
-      <h2>Partie LAN (1v1)</h2>
-      <div class="lan-tabs">
-        <button type="button" class="lan-tab active" data-lantab="host">Héberger</button>
-        <button type="button" class="lan-tab" data-lantab="join">Rejoindre</button>
-      </div>
-      <div id="lan-host" class="lan-panel">
-        <p class="lan-help">Host = Équipe A · Client = Équipe B</p>
-        <button type="button" id="lan-host-create" class="home-btn lan-small">Créer l'offre WebRTC</button>
-        <label class="lan-label">Offre (à copier vers le client)</label>
-        <textarea id="lan-offer" class="lan-text" readonly spellcheck="false"></textarea>
-        <button type="button" id="lan-offer-copy" class="lan-btn">Copier l'offre</button>
-        <label class="lan-label">Réponse du client (à coller ici)</label>
-        <textarea id="lan-answer-in" class="lan-text" spellcheck="false"></textarea>
-        <div class="lan-row">
-          <button type="button" id="lan-host-connect" class="lan-btn lan-primary">Connecter</button>
-          <button type="button" id="lan-host-start" class="lan-btn lan-primary" disabled>Lancer la partie</button>
-        </div>
-        <div id="lan-host-status" class="lan-status"></div>
-      </div>
-      <div id="lan-join" class="lan-panel" style="display:none">
-        <label class="lan-label">Offre du host (à coller ici)</label>
-        <textarea id="lan-offer-in" class="lan-text" spellcheck="false"></textarea>
-        <button type="button" id="lan-join-gen" class="lan-btn">Générer la réponse</button>
-        <label class="lan-label">Réponse (à copier vers le host)</label>
-        <textarea id="lan-answer-out" class="lan-text" readonly spellcheck="false"></textarea>
-        <button type="button" id="lan-answer-copy" class="lan-btn">Copier la réponse</button>
-        <div id="lan-join-status" class="lan-status"></div>
-      </div>
-      <div class="lan-actions">
-        <button type="button" id="lan-close" class="lan-btn">Fermer</button>
-      </div>
-    </div>
   </dialog>
 
   <dialog id="online-dialog">
