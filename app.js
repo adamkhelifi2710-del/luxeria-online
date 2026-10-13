@@ -446,21 +446,45 @@ function teamHasRole(player, role) {
   return state.decks[player].some((id) => charRole(id) === role);
 }
 
+/* Taille d'équipe : 3 champions (3 classes distinctes) en Rampage, sinon
+   une équipe de 5 (une championne par classe). */
+function teamSizeTarget() {
+  return isRampage() ? 3 : CLASS_ORDER.length;
+}
+
 function teamComplete(player) {
+  const deck = state.decks[player] || [];
+  if (deck.length < teamSizeTarget()) return false;
+  if (isRampage()) {
+    const roles = new Set(deck.map((id) => charRole(id)));
+    return roles.size === deck.length;
+  }
   return CLASS_ORDER.every((r) => teamHasRole(player, r));
 }
 
-function randomFullTeam(exclude) {
+/* Équipe aléatoire de `size` champions de classes distinctes (au moins 3
+   classes disponibles par champion, donc toujours satisfiable). */
+function randomTeam(size, exclude) {
   const used = new Set(exclude || []);
+  const roles = CLASS_ORDER.slice();
+  for (let i = roles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [roles[i], roles[j]] = [roles[j], roles[i]];
+  }
   const team = [];
-  CLASS_ORDER.forEach((role) => {
+  for (const role of roles) {
+    if (team.length >= size) break;
     const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id));
-    if (!pool.length) return;
+    if (!pool.length) continue;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     team.push(pick.id);
     used.add(pick.id);
-  });
+  }
   return team;
+}
+
+function randomFullTeam(exclude) {
+  return randomTeam(CLASS_ORDER.length, exclude);
 }
 
 function randomStarters(team) {
@@ -533,7 +557,43 @@ function startNormalGame(mapId, mode) {
   save();
   renderDecks();
   refreshMapSelectOptions();
-  beginTeamBuild();
+  chooseSelectionMethod();
+}
+
+/* Choix de la méthode de composition des équipes : draft, aléatoire, libre. */
+function chooseSelectionMethod() {
+  askChoicePrompt({
+    icon: "🧩",
+    title: "Sélection des champions",
+    text: isRampage()
+      ? "Rampage : 3 champions de 3 classes différentes."
+      : "Mode normal : 5 champions, un par classe.",
+    hint: "Tour par tour : chacun choisit à son tour (sans doublon de classe). Aléatoire : équipes tirées au sort. Libre : chaque équipe se compose librement.",
+    cancel: "Annuler",
+    options: [
+      { label: "🔁 Tour par tour (draft)", value: "draft" },
+      { label: "🎲 Aléatoire", value: "random" },
+      { label: "✍️ Composition libre", value: "free" }
+    ]
+  }).then((val) => {
+    if (val === "draft") beginDraft();
+    else if (val === "random") randomSelectTeams();
+    else if (val === "free") beginTeamBuild();
+    else showHome();
+  });
+}
+
+function randomSelectTeams() {
+  state.decks = { A: randomTeam(teamSizeTarget(), null) };
+  state.decks.B = randomTeam(teamSizeTarget(), state.decks.A);
+  state.starters = isRampage()
+    ? { A: state.decks.A.slice(), B: state.decks.B.slice() }
+    : { A: randomStarters(state.decks.A), B: randomStarters(state.decks.B) };
+  buildMode = null;
+  renderBuildBanner();
+  save();
+  renderDecks();
+  startGame();
 }
 
 function beginTeamBuild() {
@@ -554,8 +614,10 @@ function renderBuildBanner() {
     banner.innerHTML = "";
     return;
   }
-  if (onlineMode) buildMode.player = lanLocalTeam();
+  if (onlineMode && !buildMode.draft) buildMode.player = lanLocalTeam();
   const cur = buildMode.player;
+  const draft = !!buildMode.draft;
+  const target = teamSizeTarget();
   const filled = state.decks[cur].length;
   const remaining = CLASS_ORDER.filter((r) => !teamHasRole(cur, r)).map(roleLabel);
   const doneA = teamComplete("A");
@@ -563,29 +625,38 @@ function renderBuildBanner() {
   banner.style.display = "flex";
   const teamsHtml = onlineMode
     ? `<span class="build-teams"><span class="build-team-btn active">Équipe ${cur}</span></span>`
-    : `<span class="build-teams">
+    : draft
+      ? `<span class="build-teams"><button class="build-cancel">Annuler</button></span>`
+      : `<span class="build-teams">
       <button class="build-team-btn ${cur === "A" ? "active" : ""} ${doneA ? "done" : ""}" data-team="A">A${doneA ? " ✓" : ""}</button>
       <button class="build-team-btn ${cur === "B" ? "active" : ""} ${doneB ? "done" : ""}" data-team="B">B${doneB ? " ✓" : ""}</button>
       <button class="build-cancel">Annuler</button>
     </span>`;
+  const progressText = isRampage()
+    ? `${filled}/${target} champions · 3 classes différentes`
+    : (remaining.length ? `Classes restantes : <strong>${remaining.join(", ")}</strong>` : "Équipe complète !");
   banner.innerHTML = `
-    <span class="build-title player-${cur.toLowerCase()}">Équipe ${cur} — ${filled}/${CLASS_ORDER.length}</span>
-    <span class="build-progress">${remaining.length ? `Classes restantes : <strong>${remaining.join(", ")}</strong>` : "Équipe complète !"}</span>
+    <span class="build-title player-${cur.toLowerCase()}">${draft ? "Draft — " : ""}Équipe ${cur} — ${filled}/${target}</span>
+    <span class="build-progress">${progressText}</span>
     ${teamsHtml}
   `;
-  if (!onlineMode) {
+  if (!onlineMode && !draft) {
     banner.querySelectorAll(".build-team-btn").forEach((b) => {
       b.addEventListener("click", () => {
         buildMode.player = b.dataset.team;
         renderLibrary();
       });
     });
-    banner.querySelector(".build-cancel").addEventListener("click", cancelBuild);
+  }
+  if (!onlineMode) {
+    const cb = banner.querySelector(".build-cancel");
+    if (cb) cb.addEventListener("click", cancelBuild);
   }
 }
 
 function pickForBuild(charId) {
   if (!buildMode) return;
+  if (buildMode.draft) return draftPick(charId);
   const cur = buildMode.player;
   const other = cur === "A" ? "B" : "A";
   const deck = state.decks[cur];
@@ -602,7 +673,7 @@ function pickForBuild(charId) {
       alert(`L'équipe ${cur} a déjà un ${roleLabel(c.role)}.`);
       return;
     }
-    if (deck.length >= CLASS_ORDER.length) {
+    if (deck.length >= teamSizeTarget()) {
       alert(`L'équipe ${cur} est déjà complète.`);
       return;
     }
@@ -621,6 +692,81 @@ function pickForBuild(charId) {
   if (teamComplete("A") && teamComplete("B")) finishBuild();
 }
 
+/* ---------- Draft (sélection tour par tour) ---------- */
+
+function beginDraft() {
+  state.decks = { A: [], B: [] };
+  state.starters = { A: [], B: [] };
+  buildMode = { player: "A", draft: true };
+  save();
+  renderDecks();
+  hideHome();
+  const tab = document.querySelector('[data-tab="library"]');
+  if (tab) tab.click();
+  renderLibrary();
+}
+
+/* Valide un choix de draft : champion libre, classe non déjà possédée. */
+function draftCanPick(player, charId) {
+  const other = player === "A" ? "B" : "A";
+  const c = charById(charId);
+  if (!c) return false;
+  const deck = state.decks[player] || [];
+  if (deck.includes(charId)) return false;
+  if ((state.decks[other] || []).includes(charId)) return false;
+  if (teamHasRole(player, c.role)) return false;
+  if (deck.length >= teamSizeTarget()) return false;
+  return true;
+}
+
+function draftPick(charId) {
+  if (!buildMode || !buildMode.draft) return;
+  const cur = buildMode.player;
+  if (onlineMode && cur !== lanLocalTeam()) return;
+  const other = cur === "A" ? "B" : "A";
+  if (state.decks[cur].includes(charId)) return;
+  if (state.decks[other].includes(charId)) {
+    alert("Ce Champion est déjà pris par l'adversaire.");
+    return;
+  }
+  const c = charById(charId);
+  if (teamHasRole(cur, c.role)) {
+    alert(`L'équipe ${cur} a déjà un ${roleLabel(c.role)}.`);
+    return;
+  }
+  if (state.decks[cur].length >= teamSizeTarget()) return;
+
+  if (onlineMode && lanRole === "client") {
+    onlineSend({ type: "draft-pick", charId });
+    return;
+  }
+  state.decks[cur].push(charId);
+  save();
+  if (onlineMode) { onlineDraftAfterPick(); return; }
+  afterDraftPickLocal();
+}
+
+/* En local, bascule vers l'autre équipe tant qu'elle n'est pas complète. */
+function afterDraftPickLocal() {
+  if (teamComplete("A") && teamComplete("B")) { finishDraft(); return; }
+  const cur = buildMode.player;
+  const other = cur === "A" ? "B" : "A";
+  buildMode.player = teamComplete(other) ? cur : other;
+  renderLibrary();
+}
+
+function finishDraft() {
+  buildMode = null;
+  renderBuildBanner();
+  if (isRampage()) {
+    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+    save();
+    startGame();
+  } else {
+    openStarterDialog({ askMap: false });
+  }
+}
+
 function cancelBuild() {
   buildMode = null;
   renderBuildBanner();
@@ -634,7 +780,13 @@ function finishBuild() {
   renderBuildBanner();
   renderDecks();
   save();
-  openStarterDialog({ askMap: false });
+  if (isRampage()) {
+    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+    save();
+    startGame();
+  } else {
+    openStarterDialog({ askMap: false });
+  }
 }
 
 function startRandomGame(mode) {
@@ -650,12 +802,11 @@ function startRandomGame(mode) {
   state.mode = mode === "rampage" ? "rampage" : "classic";
   buildMode = null;
   renderBuildBanner();
-  state.decks = { A: randomFullTeam(null) };
-  state.decks.B = randomFullTeam(state.decks.A);
-  state.starters = {
-    A: randomStarters(state.decks.A),
-    B: randomStarters(state.decks.B)
-  };
+  state.decks = { A: randomTeam(teamSizeTarget(), null) };
+  state.decks.B = randomTeam(teamSizeTarget(), state.decks.A);
+  state.starters = isRampage()
+    ? { A: state.decks.A.slice(), B: state.decks.B.slice() }
+    : { A: randomStarters(state.decks.A), B: randomStarters(state.decks.B) };
   undoStack = [];
   selectedTokenId = null;
   reachable = [];
@@ -981,7 +1132,12 @@ function renderLibrary() {
       const inCurrent = state.decks[cur].includes(c.id);
       const inOther = state.decks[other].includes(c.id);
       const roleFull = teamHasRole(cur, c.role);
-      if (inCurrent) {
+      const notMyTurn = buildMode.draft && onlineMode && cur !== lanLocalTeam();
+      if (notMyTurn) {
+        card.classList.add("build-disabled");
+        btnLabel = "Tour de l'adversaire";
+        btnDisabled = true;
+      } else if (inCurrent) {
         card.classList.add("build-picked");
         btnLabel = `Retirer de l'équipe ${cur}`;
       } else if (inOther || roleFull) {
@@ -2428,6 +2584,20 @@ const SHRINK_SCHEDULE = [
   { round: 45, axis: "width", layer: 3 }
 ];
 
+/* Rampage : le feu démarre au tour 5 puis avance tous les 5 tours. */
+const SHRINK_SCHEDULE_RAMPAGE = [
+  { round: 5, axis: "length", layer: 1 },
+  { round: 10, axis: "length", layer: 2 },
+  { round: 15, axis: "width", layer: 1 },
+  { round: 20, axis: "length", layer: 3 },
+  { round: 25, axis: "width", layer: 2 },
+  { round: 30, axis: "width", layer: 3 }
+];
+
+function activeShrinkSchedule() {
+  return isRampage() ? SHRINK_SCHEDULE_RAMPAGE : SHRINK_SCHEDULE;
+}
+
 function shrinkCellsFor(entry) {
   const cells = [];
   const rows = GAME.map.rows;
@@ -2454,12 +2624,13 @@ function shrinkCellsFor(entry) {
 let _burnCache = null;
 let _burnCacheKey = "";
 function burnedCellSet() {
-  const key = (state && state.shrinkStep) + "|" + (GAME.activeMap || "") + "|" + (GAME.map.cols || 0) + "x" + (GAME.map.rows || 0);
+  const key = (state && state.shrinkStep) + "|" + (state && state.mode) + "|" + (GAME.activeMap || "") + "|" + (GAME.map.cols || 0) + "x" + (GAME.map.rows || 0);
   if (_burnCacheKey !== key) {
     _burnCache = new Set();
     const s = state && state.shrinkStep || 0;
-    for (let k = 0; k < s && k < SHRINK_SCHEDULE.length; k++) {
-      shrinkCellsFor(SHRINK_SCHEDULE[k]).forEach(([x, y]) => _burnCache.add(x + "," + y));
+    const schedule = activeShrinkSchedule();
+    for (let k = 0; k < s && k < schedule.length; k++) {
+      shrinkCellsFor(schedule[k]).forEach(([x, y]) => _burnCache.add(x + "," + y));
     }
     _burnCacheKey = key;
   }
@@ -2481,7 +2652,7 @@ function dangerCellSet() {
     if (!state) return { size: 0, has: function () { return false; } };
     var step = state.shrinkStep;
     if (step < 0) step = 0;
-    var next = SHRINK_SCHEDULE[step];
+    var next = activeShrinkSchedule()[step];
     if (!next) return { size: 0, has: function () { return false; } };
     var tcount = (typeof state.turnCount === "number") ? state.turnCount : 0;
     var diff = next.round - tcount;
@@ -2505,7 +2676,7 @@ function dangerCellSet() {
 }
 
 function nextShrinkInfo() {
-  return SHRINK_SCHEDULE[state.shrinkStep] || null;
+  return activeShrinkSchedule()[state.shrinkStep] || null;
 }
 
 /* Le feu frappe les objectifs de façon symétrique : dès que l'un des deux
@@ -2542,9 +2713,11 @@ function burnObjectivesSimultaneous() {
 
 /* Applique, en fin de tour complet, toutes les couches dont le tour est atteint. */
 function applyShrinkRound(completedRound) {
-  while (state.shrinkStep < SHRINK_SCHEDULE.length && SHRINK_SCHEDULE[state.shrinkStep].round <= completedRound) {
-    const ev = SHRINK_SCHEDULE[state.shrinkStep];
+  const schedule = activeShrinkSchedule();
+  while (state.shrinkStep < schedule.length && schedule[state.shrinkStep].round <= completedRound) {
+    const ev = schedule[state.shrinkStep];
     state.shrinkStep++;
+    if (state.winner) break;
     log(`Le feu gagne du terrain — ${ev.axis === "length" ? "bords haut/bas" : "bords gauche/droite"} (couche ${ev.layer}).`);
     if (state.winner) break;
   }
@@ -5330,8 +5503,17 @@ function onlineOnMessage(ev) {
     case "peer-left":
       onlinePeerLeft();
       return;
-case "setup":
-        if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode);
+    case "setup":
+      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method);
+      return;
+    case "draft-pick":
+      if (lanRole === "host") onlineHostDraftPick(msg.charId);
+      return;
+    case "draft-state":
+      if (lanRole === "client") onlineClientDraftState(msg);
+      return;
+    case "teams":
+      if (lanRole === "client") onlineClientTeams(msg);
       return;
     case "live-deck":
       if (msg.team && msg.team !== lanLocalTeam()) onlineApplyLiveDeck(msg.team, msg.deck);
@@ -5400,19 +5582,150 @@ function onlineHostChooseMap() {
       if (!val) { onlineAbort("Partie annulée."); return; }
       let id = val;
       if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
-      setActiveMap(id);
-      state = defaultState();
-      state.mode = mode;
-      state.decks = { A: [], B: [] };
-      buildMode = null;
-      undoStack = [];
-      onlineSend({ type: "setup", mapName: id, map: mapSnapshot(GAME.maps[id]), mode });
-      onlineBeginBuildFor("A");
+      askChoicePrompt({
+        icon: "🧩",
+        title: "Sélection des champions",
+        text: mode === "rampage"
+          ? "Rampage : 3 champions de 3 classes différentes."
+          : "Mode normal : 5 champions, un par classe.",
+        cancel: "Quitter la partie",
+        options: [
+          { label: "🔁 Tour par tour (draft)", value: "draft" },
+          { label: "🎲 Aléatoire", value: "random" },
+          { label: "✍️ Composition libre", value: "free" }
+        ]
+      }).then((methodVal) => {
+        if (!onlineMode) return;
+        if (!methodVal) { onlineAbort("Partie annulée."); return; }
+        setActiveMap(id);
+        state = defaultState();
+        state.mode = mode;
+        state.decks = { A: [], B: [] };
+        buildMode = null;
+        undoStack = [];
+        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal });
+        onlineInitMethod(methodVal, "host");
+      });
     });
   });
 }
 
-function onlineClientSetup(mapName, mapData, mode) {
+/* Initialise la méthode de composition côté hôte / client. */
+function onlineInitMethod(method, role) {
+  if (method === "draft") {
+    onlineBeginDraft(role);
+  } else if (method === "random") {
+    if (role === "host") onlineRandomHost();
+    else onlineShowWaiting("Équipes tirées au sort. En attente du début…");
+  } else {
+    onlineBeginBuildFor(role === "host" ? "A" : "B");
+  }
+}
+
+function onlineBeginDraft(role) {
+  buildMode = { player: "A", draft: true };
+  state.decks = { A: [], B: [] };
+  state.starters = { A: [], B: [] };
+  save();
+  renderDecks();
+  hideHome();
+  const tab = document.querySelector('[data-tab="library"]');
+  if (tab) tab.click();
+  renderBuildBanner();
+  renderLibrary();
+  onlineShowWaiting(role === "client"
+    ? "Draft — en attente du premier choix adverse…"
+    : "Draft — à vous de choisir (équipe A).");
+}
+
+function onlineRandomHost() {
+  state.decks = { A: randomTeam(teamSizeTarget(), null) };
+  state.decks.B = randomTeam(teamSizeTarget(), state.decks.A);
+  state.starters = isRampage()
+    ? { A: state.decks.A.slice(), B: state.decks.B.slice() }
+    : { A: randomStarters(state.decks.A), B: randomStarters(state.decks.B) };
+  onlineSend({ type: "teams", decks: state.decks, starters: state.starters });
+  save();
+  renderDecks();
+  buildMode = null;
+  onlineSetupPhase = false;
+  onlineHideWaiting();
+  onlineSend({ type: "start" });
+  startGame();
+}
+
+function onlineClientTeams(msg) {
+  state.decks = { A: ((msg.decks && msg.decks.A) || []).slice(), B: ((msg.decks && msg.decks.B) || []).slice() };
+  state.starters = {
+    A: ((msg.starters && msg.starters.A) || []).slice(),
+    B: ((msg.starters && msg.starters.B) || []).slice()
+  };
+  save();
+  renderDecks();
+}
+
+/* Hôte : reçoit un choix du client (équipe B). */
+function onlineHostDraftPick(charId) {
+  if (!buildMode || !buildMode.draft) return;
+  if (buildMode.player !== "B") return;
+  if (!draftCanPick("B", charId)) return;
+  state.decks.B.push(charId);
+  save();
+  onlineDraftAfterPick();
+}
+
+/* Hôte : avance le tour et transmet l'état du draft. */
+function onlineDraftAfterPick() {
+  if (teamComplete("A") && teamComplete("B")) {
+    onlineSend({ type: "draft-state", decks: { A: state.decks.A.slice(), B: state.decks.B.slice() }, turn: null, done: true });
+    onlineDraftFinishHost();
+    return;
+  }
+  const cur = buildMode.player;
+  const other = cur === "A" ? "B" : "A";
+  buildMode.player = teamComplete(other) ? cur : other;
+  renderBuildBanner();
+  renderLibrary();
+  onlineSend({ type: "draft-state", decks: { A: state.decks.A.slice(), B: state.decks.B.slice() }, turn: buildMode.player, done: false });
+}
+
+function onlineClientDraftState(msg) {
+  state.decks = { A: ((msg.decks && msg.decks.A) || []).slice(), B: ((msg.decks && msg.decks.B) || []).slice() };
+  save();
+  if (msg.done) {
+    buildMode = null;
+    renderBuildBanner();
+    renderLibrary();
+    onlineShowWaiting("Draft terminé. En attente du début…");
+    return;
+  }
+  buildMode = { player: msg.turn, draft: true };
+  renderBuildBanner();
+  renderLibrary();
+  onlineShowWaiting(msg.turn === lanLocalTeam()
+    ? "Draft — à vous de choisir !"
+    : "Draft — au tour de l'adversaire…");
+}
+
+function onlineDraftFinishHost() {
+  renderBuildBanner();
+  renderLibrary();
+  if (isRampage()) {
+    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+    save();
+    buildMode = null;
+    onlineSetupPhase = false;
+    onlineHideWaiting();
+    onlineSend({ type: "start" });
+    startGame();
+  } else {
+    buildMode = null;
+    onlineRemoteDeck = state.decks.B.slice();
+    onlineMaybeProceedHost();
+  }
+}
+
+function onlineClientSetup(mapName, mapData, mode, method) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
@@ -5424,7 +5737,7 @@ function onlineClientSetup(mapName, mapData, mode) {
   state.decks = { A: [], B: [] };
   buildMode = null;
   undoStack = [];
-  onlineBeginBuildFor("B");
+  onlineInitMethod(method || "free", "client");
 }
 
 function onlineBeginBuildFor(team) {
@@ -5434,7 +5747,7 @@ function onlineBeginBuildFor(team) {
   const tab = document.querySelector('[data-tab="library"]');
   if (tab) tab.click();
   renderLibrary();
-  onlineShowWaiting("Composez votre équipe (" + CLASS_ORDER.length + " champions).");
+  onlineShowWaiting("Composez votre équipe (" + teamSizeTarget() + " champions).");
 }
 
 function onlineApplyLiveDeck(team, deck) {
@@ -5458,7 +5771,7 @@ function onlineLocalBuildDone() {
 }
 
 function onlineHostReceiveDeck(deck) {
-  if (!Array.isArray(deck) || deck.length < CLASS_ORDER.length) {
+  if (!Array.isArray(deck) || deck.length < teamSizeTarget()) {
     onlineAbort("L'équipe adverse est invalide.");
     return;
   }
@@ -5469,7 +5782,7 @@ function onlineHostReceiveDeck(deck) {
 function onlineMaybeProceedHost() {
   if (lanRole !== "host" || onlineStartersRequested) return;
   if (!teamComplete("A")) return;
-  if (!onlineRemoteDeck || onlineRemoteDeck.length < CLASS_ORDER.length) {
+  if (!onlineRemoteDeck || onlineRemoteDeck.length < teamSizeTarget()) {
     onlineShowWaiting("En attente de l'équipe adverse…");
     return;
   }
@@ -5477,6 +5790,16 @@ function onlineMaybeProceedHost() {
   renderBuildBanner();
   onlineStartersRequested = true;
   onlineHideWaiting();
+  if (isRampage()) {
+    renderDecks();
+    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+    save();
+    buildMode = null;
+    onlineSetupPhase = false;
+    onlineSend({ type: "start" });
+    startGame();
+    return;
+  }
   onlineSend({ type: "starters-request" });
   onlineOpenStarterPicker("A");
 }
