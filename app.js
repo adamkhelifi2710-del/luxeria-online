@@ -2045,7 +2045,7 @@ if (t.charId === "cazou") {
     const shrinkNext = nextShrinkInfo();
     const shrinkHint = shrinkNext ? ` · Feu au tour ${shrinkNext.round}` : "";
     turnLabel.textContent = state.winner
-      ? `Victoire de l'équipe ${state.winner} !`
+      ? (state.winner === "draw" ? "Match nul !" : `Victoire de l'équipe ${state.winner} !`)
       : `Tour ${state.turnCount} — Équipe ${state.turn}${shrinkHint}`;
     turnLabel.className = "player-" + state.turn.toLowerCase();
   }
@@ -2063,8 +2063,13 @@ if (t.charId === "cazou") {
   if (state.winner) {
     const winTitle = win.querySelector("h2");
     const winText = win.querySelector(".win-text");
-    winTitle.textContent = `Victoire de l'équipe ${state.winner} !`;
-    winText.textContent = `L'équipe ${state.winner} détruit l'objectif adverse et remporte la partie !`;
+    if (state.winner === "draw") {
+      winTitle.textContent = "Match nul !";
+      winText.textContent = "Les deux objectifs ont été détruits par le feu au même moment.";
+    } else {
+      winTitle.textContent = `Victoire de l'équipe ${state.winner} !`;
+      winText.textContent = `L'équipe ${state.winner} détruit l'objectif adverse et remporte la partie !`;
+    }
   }
 
   const blockBtn = document.getElementById("reserve-block");
@@ -2471,20 +2476,29 @@ function nextShrinkInfo() {
   return SHRINK_SCHEDULE[state.shrinkStep] || null;
 }
 
+/* Le feu frappe les objectifs de façon symétrique : dès que l'un des deux
+   objectifs est atteint par le feu, les DEUX subissent 1 dégât au même moment,
+   afin qu'aucun ne meure avant l'autre (égalité au temps). */
 function burnObjectivesSimultaneous() {
   var sides = ["A", "B"];
+  var anyFire = false;
   for (var i = 0; i < sides.length; i++) {
     var s = sides[i];
     var pos = state.objectivePos ? state.objectivePos[s] : null;
     if (!pos) continue;
     if (state.objectives[s] <= 0) continue;
-    if (isFire(pos.x, pos.y)) {
-      state.objectives[s] = Math.max(0, state.objectives[s] - 1);
-      log(`L'objectif de l'équipe ${s} est sur une case en feu : 1 dégât (${state.objectives[s]} PV).`);
-    }
+    if (isFire(pos.x, pos.y)) { anyFire = true; break; }
+  }
+  if (!anyFire) return;
+  for (var j = 0; j < sides.length; j++) {
+    var t = sides[j];
+    if (state.objectives[t] <= 0) continue;
+    state.objectives[t] = Math.max(0, state.objectives[t] - 1);
+    log(`L'objectif de l'équipe ${t} est sur une case en feu : 1 dégât (${state.objectives[t]} PV).`);
   }
   if (state.objectives.A <= 0 && state.objectives.B <= 0) {
-    if (!state.winner) state.winner = "A";
+    if (!state.winner) state.winner = "draw";
+    log(`Les deux objectifs sont détruits en même temps par le feu : match nul !`);
   } else if (state.objectives.A <= 0 && !state.winner) {
     state.winner = "B";
     log(`L'objectif de l'équipe A est détruit par le feu ! Victoire de l'équipe B.`);
@@ -2500,21 +2514,7 @@ function applyShrinkRound(completedRound) {
     const ev = SHRINK_SCHEDULE[state.shrinkStep];
     state.shrinkStep++;
     log(`Le feu gagne du terrain — ${ev.axis === "length" ? "bords haut/bas" : "bords gauche/droite"} (couche ${ev.layer}).`);
-    burnObjectivesSimultaneous();
     if (state.winner) break;
-  }
-}
-
-/* L'objectif de l'équipe dont le tour commence subit le feu s'il est dessus. */
-function burnObjective(side) {
-  const pos = state.objectivePos ? state.objectivePos[side] : null;
-  if (!pos || !isFire(pos.x, pos.y)) return;
-  if (state.objectives[side] <= 0) return;
-  state.objectives[side] = Math.max(0, state.objectives[side] - 1);
-  log(`L'objectif de l'équipe ${side} est sur une case en feu : 1 dégât (${state.objectives[side]} PV).`);
-  if (state.objectives[side] <= 0) {
-    state.winner = turnOfOther(side);
-    log(`L'objectif de l'équipe ${side} est détruit par le feu ! Victoire de l'équipe ${turnOfOther(side)}.`);
   }
 }
 
@@ -4075,7 +4075,9 @@ function endPlayerTurn() {
     fireAt(t, t.x, t.y, true);
   });
 
-  burnObjective(side);
+  /* Dégâts de feu aux objectifs, une fois par manche (début du tour de A) et
+     de façon symétrique : les deux objectifs tombent en même temps. */
+  if (side === "A") burnObjectivesSimultaneous();
 
   log(`Au tour de l'équipe ${side}.`);
   save();
