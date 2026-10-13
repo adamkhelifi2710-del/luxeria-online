@@ -307,8 +307,20 @@ function defaultState() {
     scrabTriggered: {},
     specialCells: [],
     swapCd: { A: 0, B: 0 },
+    mode: "classic",
     winner: null
   };
+}
+
+/* Mode Rampage : 3 champions contre 3, sans réserve ni objectif. La partie se
+   gagne en éliminant tous les champions adverses ; à chaque élimination, les
+   alliés du champion tombé remontent à 75 % de leurs PV (arrondi au supérieur). */
+function isRampage() {
+  return state.mode === "rampage";
+}
+
+function rampageFloor(hp) {
+  return Math.ceil(hp * 0.75);
 }
 
 function save() {
@@ -378,6 +390,7 @@ function load() {
         parsed.scrabTriggered = parsed.scrabTriggered || {};
         parsed.specialCells = parsed.specialCells || [];
         parsed.swapCd = parsed.swapCd || { A: 0, B: 0 };
+        parsed.mode = parsed.mode === "rampage" ? "rampage" : "classic";
         parsed.winner = parsed.winner || null;
         parsed.tokens.forEach((t) => {
           t.cd = t.cd || 0;
@@ -464,20 +477,22 @@ function openPlayMode() {
     icon: "🎮",
     title: "Nouvelle partie",
     text: "Choisissez un mode de jeu.",
-    hint: "Normal : choisir le terrain puis composer les équipes (1 champion de chaque classe). Aléatoire : terrain et équipes tirés au sort.",
+    hint: "Normal : choisir le terrain puis composer les équipes (1 champion de chaque classe). Aléatoire : terrain et équipes tirés au sort. Rampage : 3c3 sans réserve ni objectif, éliminez toute l'équipe adverse.",
     cancel: "Annuler",
     options: [
       { label: "Mode normal", value: "normal" },
-      { label: "🎲 Mode aléatoire", value: "random" }
+      { label: "🎲 Mode aléatoire", value: "random" },
+      { label: "💥 Rampage (3c3)", value: "rampage" }
     ]
   }).then((val) => {
-    if (val === "normal") openTerrainPicker();
-    else if (val === "random") startRandomGame();
+    if (val === "normal") openTerrainPicker("classic");
+    else if (val === "random") startRandomGame("classic");
+    else if (val === "rampage") openTerrainPicker("rampage");
     else showHome();
   });
 }
 
-function openTerrainPicker() {
+function openTerrainPicker(mode) {
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) {
     alert("Aucun terrain disponible.");
@@ -488,8 +503,10 @@ function openTerrainPicker() {
   options.push({ label: "🎲 Au hasard", value: "__random__" });
   askChoicePrompt({
     icon: "🗺️",
-    title: "Choisir le terrain",
-    text: "Sur quel terrain voulez-vous jouer ?",
+    title: mode === "rampage" ? "Rampage — choisir le terrain" : "Choisir le terrain",
+    text: mode === "rampage"
+      ? "Terrain de la partie Rampage (3c3, sans réserve ni objectif)."
+      : "Sur quel terrain voulez-vous jouer ?",
     cancel: "Annuler",
     options
   }).then((val) => {
@@ -499,13 +516,14 @@ function openTerrainPicker() {
     }
     let id = val;
     if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
-    startNormalGame(id);
+    startNormalGame(id, mode === "rampage" ? "rampage" : "classic");
   });
 }
 
-function startNormalGame(mapId) {
+function startNormalGame(mapId, mode) {
   setActiveMap(mapId);
   state = defaultState();
+  state.mode = mode === "rampage" ? "rampage" : "classic";
   undoStack = [];
   selectedTokenId = null;
   reachable = [];
@@ -619,7 +637,7 @@ function finishBuild() {
   openStarterDialog({ askMap: false });
 }
 
-function startRandomGame() {
+function startRandomGame(mode) {
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) {
     alert("Aucun terrain disponible.");
@@ -629,6 +647,7 @@ function startRandomGame() {
   const id = ids[Math.floor(Math.random() * ids.length)];
   setActiveMap(id);
   state = defaultState();
+  state.mode = mode === "rampage" ? "rampage" : "classic";
   buildMode = null;
   renderBuildBanner();
   state.decks = { A: randomFullTeam(null) };
@@ -1245,7 +1264,7 @@ function startGame() {
   state.phase = "placement";
   state.placement = { A: false, B: false };
   state.placingPlayer = "A";
-  state.placingStage = "objective";
+  state.placingStage = isRampage() ? "champion" : "objective";
   state.placingQueue = {
     A: state.starters.A.slice(),
     B: state.starters.B.slice()
@@ -1256,15 +1275,19 @@ function startGame() {
   state.specialCells = [];
   state.swapCd = { A: 0, B: 0 };
   state.winner = null;
-  ["A", "B"].forEach((player) => {
-    const inReserve = state.decks[player].filter((id) => !state.starters[player].includes(id));
-    inReserve.forEach((charId) => {
-      const c = charById(charId);
-      if (!c) return;
-      state.reserve[player].push({ charId, hp: c.hp });
+  if (!isRampage()) {
+    ["A", "B"].forEach((player) => {
+      const inReserve = state.decks[player].filter((id) => !state.starters[player].includes(id));
+      inReserve.forEach((charId) => {
+        const c = charById(charId);
+        if (!c) return;
+        state.reserve[player].push({ charId, hp: c.hp });
+      });
     });
-  });
-  log("Phase de placement : chaque équipe doit placer son objectif puis ses 3 titulaires dans sa zone.");
+    log("Phase de placement : chaque équipe doit placer son objectif puis ses 3 titulaires dans sa zone.");
+  } else {
+    log("Rampage (3c3) : pas d'objectif ni de réserve. Placez vos 3 champions, éliminez toute l'équipe adverse.");
+  }
   selectedTokenId = null;
     reachable = [];
     attackCells = [];
@@ -1278,14 +1301,14 @@ function startGame() {
 function objectiveDef(player) {
   const o = GAME.objectives[player];
   const pos = state.objectivePos ? state.objectivePos[player] : null;
-  return {
-    x: pos ? pos.x : o.x,
-    y: pos ? pos.y : o.y,
-    hp: o.hp
-  };
+  /* Sans objectif posé (notamment en Rampage) on renvoie une case impossible,
+     pour qu'aucune attaque ne puisse viser un objectif fantôme. */
+  if (!pos) return { x: -1, y: -1, hp: o.hp };
+  return { x: pos.x, y: pos.y, hp: o.hp };
 }
 
 function checkWinnerFromObjective(attackerPlayer) {
+  if (isRampage()) return;
   const defeated = turnOfOther(attackerPlayer);
   if (state.objectives[defeated] <= 0) {
     state.winner = attackerPlayer;
@@ -2051,11 +2074,16 @@ if (t.charId === "cazou") {
   }
 
   const objEl = document.getElementById("objective-hp");
-  objEl.innerHTML = `
+  if (isRampage()) {
+    objEl.style.display = "none";
+  } else {
+    objEl.style.display = "";
+    objEl.innerHTML = `
     Objectif <span class="player-a-txt">A</span> : <strong class="a">${state.objectives.A}</strong>/${GAME.objectives.A.hp}
     &nbsp;·&nbsp;
     Objectif <span class="player-b-txt">B</span> : <strong class="b">${state.objectives.B}</strong>/${GAME.objectives.B.hp}
   `;
+  }
   const win = document.getElementById("win-overlay");
   win.classList.toggle("show", !!state.winner);
   win.classList.toggle("team-a", state.winner === "A");
@@ -2068,7 +2096,9 @@ if (t.charId === "cazou") {
       winText.textContent = "Les deux objectifs ont été détruits par le feu au même moment.";
     } else {
       winTitle.textContent = `Victoire de l'équipe ${state.winner} !`;
-      winText.textContent = `L'équipe ${state.winner} détruit l'objectif adverse et remporte la partie !`;
+      winText.textContent = isRampage()
+        ? `L'équipe ${state.winner} élimine tous les champions adverses et remporte la partie !`
+        : `L'équipe ${state.winner} détruit l'objectif adverse et remporte la partie !`;
     }
   }
 
@@ -2219,15 +2249,17 @@ function placeAt(x, y) {
     fxEnter(newId);
     log(`Équipe ${player} place ${c.name} en (${x + 1}, ${y + 1}).`);
     if (!queue.length) {
-      state.placingStage = "objective";
+      state.placingStage = isRampage() ? "champion" : "objective";
       state.placement[player] = true;
       if (player === "A") {
         state.placingPlayer = "B";
-        log("Équipe A terminée. Équipe B : placez votre objectif puis vos titulaires.");
+        log(isRampage()
+          ? "Équipe A terminée. Équipe B : placez vos 3 champions."
+          : "Équipe A terminée. Équipe B : placez votre objectif puis vos titulaires.");
       } else {
         state.phase = "playing";
         state.placingPlayer = "A";
-        log("Placement terminé. La partie commence !");
+        log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
       }
     }
   }
@@ -2830,11 +2862,7 @@ if (target.hp <= 0 && !target.dead) {
     log(`${charById(target.charId).name} (${target.player}) est éliminé.`);
     applyEliminationSideEffects(target);
     handleReserveReplacementOnDeath(target);
-    /* Un remplacement en zone de départ est en cours : le champion qui va entrer
-       n'est pas encore posé, l'équipe n'est donc pas vaincue. */
-    if (!(pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === target.player)) {
-      checkTeamWipe();
-    }
+    checkDeathWipe(target);
   }
   save();
   renderBoard();
@@ -2963,6 +2991,32 @@ function handleReserveReplacementOnDeath(deadToken) {
       log(`CALIX est éliminé : ses ${removed.length} case(s) spéciale(s) sont retirées du terrain.`);
     }
   }
+  if (isRampage()) rampageHealAllies(deadToken.player);
+}
+
+/* Rampage : quand un champion tombe, les champions alliés encore en jeu
+   remontent à 75 % de leurs PV maximum (arrondi au supérieur). Ceux qui sont
+   déjà au-dessus ne sont pas touchés. */
+function rampageHealAllies(team) {
+  state.tokens.forEach((t) => {
+    if (t.dead || t.player !== team) return;
+    const max = charById(t.charId).hp;
+    const floor = rampageFloor(max);
+    if (t.hp < floor) {
+      const before = t.hp;
+      t.hp = floor;
+      fxHeal(t.id, t.hp - before);
+      log(`${charById(t.charId).name} (${team}) se remobilise : ${before}→${t.hp} PV (75 % de ${max}).`);
+    }
+  });
+}
+
+/* Fin de partie par élimination : déclenchée à chaque mort, sauf si un
+   remplacement en zone de départ est en cours (le champion n'est pas encore
+   posé, l'équipe n'est donc pas encore vaincue). */
+function checkDeathWipe(deadToken) {
+  if (pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === deadToken.player) return;
+  checkTeamWipe();
 }
 
 function rapidoFlurryStep(tok, target) {
@@ -3390,6 +3444,7 @@ async function useAbility(tokenId) {
           fxDeath(tok.id);
           log("SE7EN est éliminé par son propre dé.");
           applyEliminationSideEffects(tok);
+          checkDeathWipe(tok);
         }
         save();
         renderBoard();
@@ -4437,6 +4492,7 @@ function changeHP(id, delta) {
     log(`${charById(tok.charId).name} (${tok.player}) est éliminé.`);
     applyEliminationSideEffects(tok);
     handleReserveReplacementOnDeath(tok);
+    checkDeathWipe(tok);
   }
   save();
   renderBoard();
@@ -5274,8 +5330,8 @@ function onlineOnMessage(ev) {
     case "peer-left":
       onlinePeerLeft();
       return;
-    case "setup":
-      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map);
+case "setup":
+        if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode);
       return;
     case "live-deck":
       if (msg.team && msg.team !== lanLocalTeam()) onlineApplyLiveDeck(msg.team, msg.deck);
@@ -5316,30 +5372,47 @@ function onlineOnMatched(role) {
 function onlineHostChooseMap() {
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) { onlineAbort("Aucun terrain disponible."); return; }
-  const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
-  options.push({ label: "🎲 Au hasard", value: "__random__" });
   askChoicePrompt({
     icon: "🌐",
-    title: "Terrain en ligne",
-    text: "Choisissez le terrain de la partie.",
+    title: "Mode de jeu en ligne",
+    text: "Choisissez le mode de la partie.",
     cancel: "Quitter la partie",
-    options
-  }).then((val) => {
+    options: [
+      { label: "Mode normal", value: "classic" },
+      { label: "💥 Rampage (3c3)", value: "rampage" }
+    ]
+  }).then((modeVal) => {
     if (!onlineMode) return;
-    if (!val) { onlineAbort("Partie annulée."); return; }
-    let id = val;
-    if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
-    setActiveMap(id);
-    state = defaultState();
-    state.decks = { A: [], B: [] };
-    buildMode = null;
-    undoStack = [];
-    onlineSend({ type: "setup", mapName: id, map: mapSnapshot(GAME.maps[id]) });
-    onlineBeginBuildFor("A");
+    if (!modeVal) { onlineAbort("Partie annulée."); return; }
+    const mode = modeVal === "rampage" ? "rampage" : "classic";
+    const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
+    options.push({ label: "🎲 Au hasard", value: "__random__" });
+    askChoicePrompt({
+      icon: "🌐",
+      title: "Terrain en ligne",
+      text: mode === "rampage"
+        ? "Rampage (3c3, sans réserve ni objectif). Choisissez le terrain."
+        : "Choisissez le terrain de la partie.",
+      cancel: "Quitter la partie",
+      options
+    }).then((val) => {
+      if (!onlineMode) return;
+      if (!val) { onlineAbort("Partie annulée."); return; }
+      let id = val;
+      if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
+      setActiveMap(id);
+      state = defaultState();
+      state.mode = mode;
+      state.decks = { A: [], B: [] };
+      buildMode = null;
+      undoStack = [];
+      onlineSend({ type: "setup", mapName: id, map: mapSnapshot(GAME.maps[id]), mode });
+      onlineBeginBuildFor("A");
+    });
   });
 }
 
-function onlineClientSetup(mapName, mapData) {
+function onlineClientSetup(mapName, mapData, mode) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
@@ -5347,6 +5420,7 @@ function onlineClientSetup(mapName, mapData) {
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.maps[mapName]) setActiveMap(mapName);
   state = defaultState();
+  state.mode = mode === "rampage" ? "rampage" : "classic";
   state.decks = { A: [], B: [] };
   buildMode = null;
   undoStack = [];
