@@ -2218,7 +2218,7 @@ if (t.charId === "cazou") {
 
   const turnLabel = document.getElementById("turn-label");
   if (state.phase === "placement") {
-    turnLabel.textContent = `Placement — Équipe ${state.placingPlayer}`;
+    turnLabel.textContent = `Tour 0 — Placement — Équipe ${state.placingPlayer}`;
     turnLabel.className = "player-" + state.placingPlayer.toLowerCase();
   } else {
     const shrinkNext = nextShrinkInfo();
