@@ -2584,14 +2584,14 @@ const SHRINK_SCHEDULE = [
   { round: 45, axis: "width", layer: 3 }
 ];
 
-/* Rampage : le feu démarre au tour 5 puis avance tous les 5 tours. */
+/* Rampage : le feu démarre au tour 3 puis avance tous les 3 tours. */
 const SHRINK_SCHEDULE_RAMPAGE = [
-  { round: 5, axis: "length", layer: 1 },
-  { round: 10, axis: "length", layer: 2 },
-  { round: 15, axis: "width", layer: 1 },
-  { round: 20, axis: "length", layer: 3 },
-  { round: 25, axis: "width", layer: 2 },
-  { round: 30, axis: "width", layer: 3 }
+  { round: 3, axis: "length", layer: 1 },
+  { round: 6, axis: "length", layer: 2 },
+  { round: 9, axis: "width", layer: 1 },
+  { round: 12, axis: "length", layer: 3 },
+  { round: 15, axis: "width", layer: 2 },
+  { round: 18, axis: "width", layer: 3 }
 ];
 
 function activeShrinkSchedule() {
