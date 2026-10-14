@@ -307,6 +307,7 @@ function defaultState() {
     scrabTriggered: {},
     specialCells: [],
     swapCd: { A: 0, B: 0 },
+    activatedTokenId: null,
     mode: "classic",
     winner: null
   };
@@ -1443,6 +1444,7 @@ function startGame() {
   state.scrabTriggered = {};
   state.specialCells = [];
   state.swapCd = { A: 0, B: 0 };
+  state.activatedTokenId = null;
   state.winner = null;
   if (!isRampage()) {
     ["A", "B"].forEach((player) => {
@@ -2559,15 +2561,27 @@ function cellClick(x, y) {
   else if (selectedTokenId) deselect();
 }
 
+/* Un seul champion par tour : dès qu'un champion effectue une action (déplacement,
+   attaque ou capacité), il devient le champion « activé » du tour ; aucun autre
+   champion de la même équipe ne peut plus agir avant le tour suivant. */
+function markActivated(tok) {
+  if (tok && !state.activatedTokenId) state.activatedTokenId = tok.id;
+}
+
+function championAlreadyActed(tok) {
+  return !!tok && !!state.activatedTokenId && state.activatedTokenId !== tok.id;
+}
+
 function selectToken(id) {
   const tok = tokenById(id);
   if (!tok) return;
   selectedTokenId = id;
   if (isTurnOf(tok.player)) {
+    const blocked = championAlreadyActed(tok);
     const spent = tok.hasAttacked || tok.abilityUsed;
     const frozen = state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1);
-    reachable = frozen || tok.abilityUsed ? [] : reachableFrom(tok.x, tok.y, movementBudget(tok), tok.player);
-    attackCells = spent ? [] : attackCellsOf(tok);
+    reachable = frozen || tok.abilityUsed || blocked ? [] : reachableFrom(tok.x, tok.y, movementBudget(tok), tok.player);
+    attackCells = spent || blocked ? [] : attackCellsOf(tok);
   } else {
     reachable = [];
     attackCells = [];
@@ -2974,6 +2988,11 @@ function moveToken(id, x, y) {
     alert(`${c.name} a déjà utilisé sa capacité ce tour : il ne peut plus se déplacer.`);
     return;
   }
+  if (championAlreadyActed(tok)) {
+    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
   if (cellHasEntity(x, y)) {
     alert("Case déjà occupée par un champion ou un objectif.");
     return;
@@ -2984,6 +3003,7 @@ function moveToken(id, x, y) {
     return;
   }
   pushUndo();
+  markActivated(tok);
   const steps = path.length - 1;
   log(`${c.name} (${tok.player}) se déplace en (${x + 1}, ${y + 1}).`);
   tok.x = x;
@@ -3266,11 +3286,17 @@ function attackAt(x, y) {
     alert("Vous êtes dans une zone impénétrable (GUARD).");
     return;
   }
+  if (championAlreadyActed(tok)) {
+    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
   const wall = inStraightLine(tok.x, tok.y, x, y, c.range)
     ? firstArkWallOnLine(tok.x, tok.y, x, y, c.range)
     : null;
   if (wall) {
     pushUndo();
+    markActivated(tok);
     const idx = (state.arkWalls || []).indexOf(wall);
     if (idx >= 0) state.arkWalls.splice(idx, 1);
     tok.hasAttacked = true;
@@ -3288,6 +3314,7 @@ function attackAt(x, y) {
     return;
   }
   pushUndo();
+  markActivated(tok);
 
   const dw = state.walls.find((w) => w.x === x && w.y === y);
   if (dw) {
@@ -3470,8 +3497,14 @@ async function useAbility(tokenId) {
     renderBoard();
     return;
   }
+  if (championAlreadyActed(tok)) {
+    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
   pendingAbility = null;
   pushUndo();
+  markActivated(tok);
   if (c.id !== "rapido") tok.abilityUsed = true;
 
   if (c.id !== "koga" && c.id !== "betta" && c.id !== "guard") {
@@ -4287,6 +4320,7 @@ function endPlayerTurn() {
   attackCells = [];
   pendingAbility = null;
   pendingSpawn = null;
+  state.activatedTokenId = null;
   checkTeamWipe();
 
   const side = state.turn;
@@ -4550,6 +4584,10 @@ function openSwapDialog(player, token) {
     alert(`Changement indisponible : encore ${swapCooldown(player)} tour(s) avant de pouvoir refaire un changement.`);
     return;
   }
+  if (championAlreadyActed(token)) {
+    alert("Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
+    return;
+  }
   if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
     alert("Impossible de remplacer un champion enfermé dans un Dôme de Verre (GUARD).");
     return;
@@ -4584,6 +4622,10 @@ function fieldFromReserve(player, reserveEntry) {
 function swapChampion(player, tokenId, reserveIdx) {
   const token = tokenById(tokenId);
   if (!token) return;
+  if (championAlreadyActed(token)) {
+    alert("Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
+    return;
+  }
   if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
     alert("Impossible de remplacer un champion enfermé dans un Dôme de Verre (GUARD).");
     return;
@@ -4652,6 +4694,19 @@ function commitSpawnPlacement(x, y) {
       }
       save();
     }
+    /* Le champion remplacé/entré ne doit pas offrir une nouvelle action au tour
+       en cours : un seul champion agit par tour. Si le champion déjà activé a
+       quitté le terrain (échange ou élimination), le nouveau prend son verrou. */
+    const lockedTok = state.activatedTokenId ? tokenById(state.activatedTokenId) : null;
+    if (state.activatedTokenId && (!lockedTok || lockedTok.dead)) {
+      const nt = tokenById(newId);
+      if (nt) {
+        nt.hasMoved = true;
+        nt.hasAttacked = true;
+        nt.abilityUsed = true;
+      }
+      state.activatedTokenId = newId;
+    }
     renderBoard();
     checkTeamWipe();
   }
@@ -4673,6 +4728,7 @@ function openTokenPanel() {
   /* Champion enfermé dans un Dôme de Verre : aucune action possible (ni capacité,
      ni remplacement), le temps que le dôme soit actif. */
   const guarded = state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1);
+  const blocked = myTurn && championAlreadyActed(tok);
 
   const scrabReady = false;
 
@@ -4697,9 +4753,10 @@ function openTokenPanel() {
       <button data-delta="1">+1 PV</button>
       <button data-delta="5">+5</button>
     </div>
-    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
-    <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
+    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
+    <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded || blocked ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : blocked ? " (un seul champion par tour)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
     ${myTurn && tok.abilityUsed && !isAuto ? `<div class="cd-badge">Capacité déjà utilisée ce tour : plus aucune action possible.</div>` : ""}
+    ${blocked ? `<div class="cd-badge">Un seul champion peut agir par tour : passez au tour suivant pour en jouer un autre.</div>` : ""}
     ${scrabReady ? `<button class="btn-swap scrab-fire" data-token="${tok.id}">Déclencher la Riposte de SCRAB</button>` : ""}
     <div class="char-ability"><strong>${esc(c.ability.name)}</strong> — ${esc(c.ability.desc)}</div>
     ${c.passive && c.passive.name ? `<div class="char-passive"><strong>Passif : ${esc(c.passive.name)}</strong> — ${esc(c.passive.desc)}</div>` : ""}
@@ -4715,7 +4772,7 @@ function openTokenPanel() {
   const abilityBtn = box.querySelector("#panel-ability");
   if (abilityBtn) abilityBtn.addEventListener("click", () => useAbility(tok.id));
   const swapBtn = box.querySelector("#panel-swap");
-  swapBtn.disabled = guarded || state.reserve[tok.player].length === 0 || (tok.stunned || 0) > 0 || swapCooldown(tok.player) > 0;
+  swapBtn.disabled = guarded || blocked || state.reserve[tok.player].length === 0 || (tok.stunned || 0) > 0 || swapCooldown(tok.player) > 0;
   swapBtn.addEventListener("click", () => openSwapDialog(tok.player, tok));
   const scrabBtn = box.querySelector(".scrab-fire");
   panel.appendChild(box);
@@ -5216,10 +5273,11 @@ function lanApplySelection(id) {
   if (!tok || tok.dead) return;
   selectedTokenId = id;
   if (isTurnOf(tok.player)) {
+    const blocked = championAlreadyActed(tok);
     const spent = tok.hasAttacked || tok.abilityUsed;
     const frozen = state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1);
-    reachable = frozen || tok.abilityUsed ? [] : reachableFrom(tok.x, tok.y, movementBudget(tok), tok.player);
-    attackCells = spent ? [] : attackCellsOf(tok);
+    reachable = frozen || tok.abilityUsed || blocked ? [] : reachableFrom(tok.x, tok.y, movementBudget(tok), tok.player);
+    attackCells = spent || blocked ? [] : attackCellsOf(tok);
   }
 }
 
