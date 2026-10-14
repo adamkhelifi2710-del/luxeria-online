@@ -271,7 +271,7 @@ const GAME = {
       role: "ravageur",
       hp: 10,
       atk: 3,
-      mouvement: 4,
+      mouvement: 3,
       range: 2,
       ability: {
         name: "Déferlement",
@@ -322,7 +322,10 @@ const GAME = {
         name: "Transfusion",
         desc: "Cd 4 — MOM'S cède jusqu'à 8 de ses propres PV à un allié blessé situé à 2 cases max. Une fenêtre s'ouvre pour choisir la quantité (1 à 8 PV). Elle ne peut rien céder si elle n'a plus aucun PV, et l'allié ne peut pas dépasser ses PV maximum."
       },
-      passive: { name: "", desc: "" }
+      passive: {
+        name: "Régénération",
+        desc: "Si MOM'S a moins de 10 PV et que TOUS ses alliés encore sur le terrain sont à leurs PV maximum, elle récupère 1 PV au début de chaque tour de son équipe. Elle ne se régénère jamais au-delà de 10 PV."
+      }
     },
     {
       id: "se7en",
