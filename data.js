@@ -80,7 +80,7 @@ const GAME = {
       range: 3,
       ability: {
         name: "Permutation",
-        desc: "Cd 5 — Échange sa position avec n'importe quel champion adverse sur le terrain : l'adversaire subit 2 dégâts. Cette capacité ignore les murs."
+        desc: "Cd 6 — Échange sa position avec n'importe quel champion adverse sur le terrain : l'adversaire subit 2 dégâts. Cette capacité ignore les murs."
       },
       passive: { name: "", desc: "" }
     },
@@ -195,7 +195,7 @@ const GAME = {
       number: 13,
       role: "expert",
       hp: 11,
-      atk: 4,
+      atk: 3,
       mouvement: 3,
       range: 1,
       ability: {
@@ -230,7 +230,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Tir précis",
-        desc: "Cd 6 — Inflige 8 dégâts à un ennemi situé à 5 cases horizontalement ou verticalement (jamais en diagonale). Sa ligne de vue doit être dégagée."
+        desc: "Cd 6 — Inflige 8 dégâts à un ennemi situé exactement à 5 cases horizontalement ou verticalement (jamais en diagonale). Sa ligne de vue doit être dégagée."
       },
       passive: { name: "", desc: "" }
     },
