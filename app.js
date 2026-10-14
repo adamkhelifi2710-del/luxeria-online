@@ -2219,10 +2219,20 @@ if (t.charId === "cazou") {
   }
 
   if (pendingSpawn) {
-    freeSpawnCells(pendingSpawn.player).forEach(([sx, sy]) => {
+    /* On utilise spawnChoiceAt : pour un échange, la case du champion sortant est
+       comptée comme libre (il sera retiré juste avant la pose de l'entrant). */
+    (GAME.startZones[pendingSpawn.player] || []).forEach(([sx, sy]) => {
+      if (!spawnChoiceAt(sx, sy)) return;
       const el = board.querySelector(`.cell[data-x="${sx}"][data-y="${sy}"]`);
       if (el) el.classList.add("spawn-choice");
     });
+    if (pendingSpawn.mode === "swap" && pendingSpawn.tokenId) {
+      const outTok = tokenById(pendingSpawn.tokenId);
+      if (outTok) {
+        const el = board.querySelector(`.cell[data-x="${outTok.x}"][data-y="${outTok.y}"]`);
+        if (el) el.classList.add("spawn-choice");
+      }
+    }
   }
 
   /* Manipulation de CAZOU : 1er clic = surligne les champions adverses
@@ -3164,20 +3174,10 @@ function enterFromReserve(player, incoming, px, py) {
 /* Cases réellement posables d'une zone de départ : libres, praticables, sans
    objectif dessus. Sert au placement automatique et au choix à la souris. */
 function freeSpawnCells(player, excludeTokenId) {
-  const excludeSet = new Set();
-  (state.tokens || [])
-    .filter((t) => !t.dead)
-    .forEach((t) => {
-      if (excludeTokenId && t.id === excludeTokenId) return;
-      excludeSet.add(`${t.x},${t.y}`);
-    });
   const occupied = new Set();
   (state.tokens || [])
-    .filter((t) => !t.dead)
-    .forEach((t) => {
-      if (excludeTokenId && t.id === excludeTokenId) return;
-      occupied.add(`${t.x},${t.y}`);
-    });
+    .filter((t) => !t.dead && t.id !== excludeTokenId)
+    .forEach((t) => occupied.add(`${t.x},${t.y}`));
   if (state.objectivePos) {
     for (const p of ["A", "B"]) {
       const o = state.objectivePos[p];
@@ -3197,8 +3197,24 @@ function findFreeSpawnCell(player) {
 
 function spawnChoiceAt(x, y) {
   if (!pendingSpawn) return false;
-  const excludeId = (pendingSpawn.mode === "swap" || pendingSpawn.mode === "replace" || pendingSpawn.mode === "enter") ? pendingSpawn.tokenId : undefined;
-  return freeSpawnCells(pendingSpawn.player, excludeId).some(([sx, sy]) => sx === x && sy === y);
+  /* Échange : la case du champion sortant est toujours autorisée, même hors de
+     la zone de départ, pour que l'entrant puisse « prendre sa place ». */
+  if (pendingSpawn.mode === "swap" && pendingSpawn.tokenId) {
+    const outTok = tokenById(pendingSpawn.tokenId);
+    if (outTok && outTok.x === x && outTok.y === y) return true;
+  }
+  const player = pendingSpawn.player;
+  const excludeId = pendingSpawn.tokenId;
+  if (!GAME.startZones[player].some(([sx, sy]) => sx === x && sy === y)) return false;
+  if (!isPassable(x, y, player)) return false;
+  if ((state.tokens || []).some((t) => !t.dead && t.id !== excludeId && t.x === x && t.y === y)) return false;
+  if (state.objectivePos) {
+    for (const p of ["A", "B"]) {
+      const o = state.objectivePos[p];
+      if (o && o.x === x && o.y === y) return false;
+    }
+  }
+  return true;
 }
 
 /* Vérifie qu'une équipe n'a plus aucun champion en jeu. Renvoyée à chaque mort,
@@ -3224,7 +3240,7 @@ function handleReserveReplacementOnDeath(deadToken) {
   if (chosen === null) return;
   const idx = parseInt(chosen, 10) - 1;
   if (isNaN(idx) || idx < 0 || idx >= reserve.length) return;
-  if (!freeSpawnCells(player, token.id).length) {
+  if (!freeSpawnCells(player).length) {
     alert("Aucune case libre dans la zone de départ pour le remplaçant.");
     return;
   }
@@ -4599,11 +4615,12 @@ function renderRosters() {
       row.className = "roster-row field";
       row.textContent = `${c.name} — ${t.hp}/${c.hp} PV${t.cd > 0 ? " · Cd " + t.cd : ""}`;
 const swap = document.createElement("button");
-        swap.textContent = "↻";
+        swap.textContent = "↻ Remplacer";
+        swap.className = "roster-btn roster-swap";
         const swapCd = swapCooldown(player);
         swap.title = swapCd > 0
           ? `Changement indisponible : encore ${swapCd} tour(s)`
-          : "Remplacer par la réserve (le remplaçant se pose en zone de départ)";
+          : "Remplacer par la réserve : le sortant quitte sa case, l'entrant se pose sur sa case ou une case libre de la zone de départ";
       swap.disabled =
         state.reserve[player].length === 0 ||
         swapCd > 0 ||
@@ -4703,12 +4720,8 @@ function swapChampion(player, tokenId, reserveIdx) {
   }
   const incoming = state.reserve[player][reserveIdx];
   if (!incoming) return;
-  if (!freeSpawnCells(player, token.id).length) {
-    alert("Aucune case libre dans la zone de départ pour le remplaçant.");
-    return;
-  }
   pendingSpawn = { mode: "swap", player, reserveIdx, tokenId: token.id };
-  log(`${charById(token.charId).name} va quitter sa case : il sort d'abord, puis vous poserez ${charById(incoming.charId).name} à l'endroit choisi. (Échap pour annuler)`);
+  log(`${charById(token.charId).name} va quitter sa case : il sort d'abord, puis vous poserez ${charById(incoming.charId).name} sur sa case ou une autre case libre de la zone de départ. (Échap pour annuler)`);
   renderBoard();
 }
 
@@ -4718,6 +4731,7 @@ function swapChampion(player, tokenId, reserveIdx) {
 function commitSpawnPlacement(x, y) {
   const ps = pendingSpawn;
   if (!ps) return;
+  if (!spawnChoiceAt(x, y)) return;
   const reserveEntries = state.reserve[ps.player];
   const incoming = reserveEntries[ps.reserveIdx];
   if (!incoming) {
@@ -4733,16 +4747,17 @@ function commitSpawnPlacement(x, y) {
       renderBoard();
       return;
     }
-    // Retire le sortant immédiatement pour libérer sa case
     const tx = token.x, ty = token.y;
     const outgoingChar = charById(token.charId);
     const outgoingHp = token.hp;
+    pushUndo();
+    pendingSpawn = null;
+    /* Le champion sortant quitte le plateau EN PREMIER : sa case se libère et
+       l'entrant peut alors être posé dessus (ou ailleurs dans la zone). */
     state.tokens = state.tokens.filter((t) => t.id !== token.id);
     reserveEntries.splice(ps.reserveIdx, 1);
     reserveEntries.push({ charId: outgoingChar.id, hp: outgoingHp });
-    pendingSpawn = null;
-    if (ps.mode !== "replace") pushUndo();
-    let newId = enterFromReserve(ps.player, incoming, x, y);
+    const newId = enterFromReserve(ps.player, incoming, x, y);
     log(`${outgoingChar.name} sort de (${tx + 1}, ${ty + 1}) et retourne en réserve. ${charById(incoming.charId).name} entre en (${x + 1}, ${y + 1}).`);
     setSwapCooldown(ps.player, 5);
     selectedTokenId = null;
@@ -4761,40 +4776,33 @@ function commitSpawnPlacement(x, y) {
     checkTeamWipe();
     return;
   }
-      selectedTokenId = null;
-      reachable = [];
-      attackCells = [];
-      pendingAbility = null;
-      save();
-      checkFire(tokenById(newId));
-    } else {
-      reserveEntries.splice(ps.reserveIdx, 1);
-      newId = enterFromReserve(ps.player, incoming, x, y);
-      if (ps.mode === "replace") {
-        log(`${charById(incoming.charId).name} le remplace sur le terrain.`);
-        const prevSuppress = suppressReplacePrompt;
-        suppressReplacePrompt = true;
-        checkFire(tokenById(newId));
-        suppressReplacePrompt = prevSuppress;
-      }
-      save();
-    }
-    /* Le champion remplacé/entré ne doit pas offrir une nouvelle action au tour
-       en cours : un seul champion agit par tour. Si le champion déjà activé a
-       quitté le terrain (échange ou élimination), le nouveau prend son verrou. */
-    const lockedTok = state.activatedTokenId ? tokenById(state.activatedTokenId) : null;
-    if (state.activatedTokenId && (!lockedTok || lockedTok.dead)) {
-      const nt = tokenById(newId);
-      if (nt) {
-        nt.hasMoved = true;
-        nt.hasAttacked = true;
-        nt.abilityUsed = true;
-      }
-      state.activatedTokenId = newId;
-    }
-    renderBoard();
-    checkTeamWipe();
+
+  /* Modes "enter" et "replace" : le champion arrive simplement en zone de départ. */
+  if (ps.mode !== "replace") pushUndo();
+  pendingSpawn = null;
+  reserveEntries.splice(ps.reserveIdx, 1);
+  const newId = enterFromReserve(ps.player, incoming, x, y);
+  if (ps.mode === "replace") {
+    log(`${charById(incoming.charId).name} le remplace sur le terrain.`);
+    const prevSuppress = suppressReplacePrompt;
+    suppressReplacePrompt = true;
+    checkFire(tokenById(newId));
+    suppressReplacePrompt = prevSuppress;
   }
+  const lockedTok = state.activatedTokenId ? tokenById(state.activatedTokenId) : null;
+  if (state.activatedTokenId && (!lockedTok || lockedTok.dead)) {
+    const nt = tokenById(newId);
+    if (nt) {
+      nt.hasMoved = true;
+      nt.hasAttacked = true;
+      nt.abilityUsed = true;
+    }
+    state.activatedTokenId = newId;
+  }
+  save();
+  renderBoard();
+  checkTeamWipe();
+}
 
 /* ---------- Panneau & log ---------- */
 
