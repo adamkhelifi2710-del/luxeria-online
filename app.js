@@ -830,9 +830,8 @@ function passiveBlockHere(x, y, forPlayer) {
   if (isVoidCell(x, y)) return true;
   for (const w of state.walls) if (w.x === x && w.y === y) return true;
   for (const gz of state.guardZones) {
-    if (Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1) {
-      if (gz.player !== forPlayer) return true;
-    }
+    /* Dôme de Verre : impénétrable pour TOUT champion extérieur, allié compris. */
+    if (Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1) return true;
   }
   const sp = specialCellAt(x, y);
   if (sp && sp.type === "block") return true;
@@ -887,18 +886,45 @@ function hasClearLoS(x1, y1, x2, y2) {
   const sx = dx === 0 ? 0 : x1 < x2 ? 1 : -1;
   const sy = dy === 0 ? 0 : y1 < y2 ? 1 : -1;
   const steps = Math.max(dx, dy);
-  for (let i = 1; i < steps; i++) {
-    const cx = x1 + i * sx;
-    const cy = y1 + i * sy;
+  /* On teste tous les bords traversés, y compris le DERNIER bord qui entre dans
+     la case cible : sinon un mur de bordure (ARK) collé au défenseur ne bloquait
+     pas la ligne de vue. Les cases intermédiaires (jamais la cible) bloquent si
+     elles contiennent un mur, un champion ou un dôme. */
+  for (let i = 1; i <= steps; i++) {
     const px = x1 + (i - 1) * sx;
     const py = y1 + (i - 1) * sy;
+    const cx = x1 + i * sx;
+    const cy = y1 + i * sy;
     if (edgeWalled(px, py, cx, cy)) return false;
     if (sx !== 0 && sy !== 0) {
       if (edgeWalled(px, py, cx, py) && edgeWalled(px, py, px, cy)) return false;
     }
-    if (isBlockedLoS(cx, cy)) return false;
+    if (i < steps && isBlockedLoS(cx, cy)) return false;
   }
   return true;
+}
+
+/* Premier mur d'ARK rencontré sur la ligne droite (tok -> cible) dans la portée.
+   Renvoie le mur seulement s'il est la PREMIÈRE obstruction : un mur de décor,
+   un champion ou un dôme avant lui annule le tir (renvoie null). */
+function firstArkWallOnLine(x1, y1, x2, y2, maxStep) {
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+  if (dx === 0 && dy === 0) return null;
+  if (dx !== 0 && dy !== 0) return null; /* aucune diagonale */
+  const sx = dx === 0 ? 0 : x2 > x1 ? 1 : -1;
+  const sy = dy === 0 ? 0 : y2 > y1 ? 1 : -1;
+  const steps = Math.max(dx, dy);
+  for (let i = 1; i <= steps && i <= maxStep; i++) {
+    const px = x1 + (i - 1) * sx;
+    const py = y1 + (i - 1) * sy;
+    const cx = x1 + i * sx;
+    const cy = y1 + i * sy;
+    const w = arkWallBetween(px, py, cx, cy);
+    if (w) return w;
+    if (i < steps && isBlockedLoS(cx, cy)) return null;
+  }
+  return null;
 }
 
 function distanceCheb(x1, y1, x2, y2) {
@@ -1028,7 +1054,9 @@ function speedBoostAvailable(tok) {
 
 function movementOf(tok) {
   const c = charById(tok.charId);
-  if (state.guardZones.some((z) => z.ownerId === tok.id)) return 0;
+  /* Tout champion (GUARD ou non, allié compris) enfermé dans un Dôme de Verre
+     est totalement immobilisé tant que le dôme est actif. */
+  if (state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1)) return 0;
   let m = c.mouvement;
   if (tok.speedTurnBoost) m *= 2;
   return m;
@@ -1044,24 +1072,16 @@ function attackCellsOf(tok) {
     for (let x = 0; x < GAME.map.cols; x++) {
       if (state.guardZones.some((z) => Math.abs(z.x - x) <= 1 && Math.abs(z.y - y) <= 1)) continue;
       if (x === tok.x && y === tok.y) continue;
-      if (inStraightLine(tok.x, tok.y, x, y, c.range)) {
-        if (hasClearLoS(tok.x, tok.y, x, y)) cells.push([x, y]);
+      if (!inStraightLine(tok.x, tok.y, x, y, c.range)) continue;
+      if (hasClearLoS(tok.x, tok.y, x, y)) {
+        cells.push([x, y]);
+      } else if (firstArkWallOnLine(tok.x, tok.y, x, y, c.range)) {
+        /* Un mur d'ARK barre la ligne : cliquer cette case détruit le mur
+           (qu'il soit adjacent ou à plusieurs cases du tireur). */
+        cells.push([x, y]);
       }
     }
   }
-  (state.arkWalls || []).forEach((w) => {
-    if (!w) return;
-    const [ka, kb] = w.key.split("-");
-    if (!ka || !kb) return;
-    const [ax, ay] = ka.split(",").map(Number);
-    const [bx, by] = kb.split(",").map(Number);
-    const near = tok.x === ax && tok.y === ay;
-    const farX = near ? bx : tok.x === bx && tok.y === by ? ax : -1;
-    const farY = near ? by : tok.x === bx && tok.y === by ? ay : -1;
-    if (farX < 0) return;
-    if (state.guardZones.some((z) => Math.abs(z.x - farX) <= 1 && Math.abs(z.y - farY) <= 1)) return;
-    if (!cells.some(([cx, cy]) => cx === farX && cy === farY)) cells.push([farX, farY]);
-  });
   return cells;
 }
 
@@ -3214,7 +3234,9 @@ function attackAt(x, y) {
     alert("Vous êtes dans une zone impénétrable (GUARD).");
     return;
   }
-  const wall = arkWallBetween(tok.x, tok.y, x, y);
+  const wall = inStraightLine(tok.x, tok.y, x, y, c.range)
+    ? firstArkWallOnLine(tok.x, tok.y, x, y, c.range)
+    : null;
   if (wall) {
     pushUndo();
     const idx = (state.arkWalls || []).indexOf(wall);
@@ -3411,6 +3433,11 @@ async function useAbility(tokenId) {
     renderBoard();
     return;
   }
+  if (state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1)) {
+    alert("Ce champion est enfermé dans un Dôme de Verre (GUARD) : il ne peut rien faire tant que le dôme est actif.");
+    renderBoard();
+    return;
+  }
   pendingAbility = null;
   pushUndo();
   if (c.id !== "rapido") tok.abilityUsed = true;
@@ -3467,7 +3494,7 @@ async function useAbility(tokenId) {
     case "dicrum": {
       pendingAbility = { tokenId, type: "dicrum" };
       fxAbility(tok.id);
-      log("Choisissez un ennemi à 5 cases max, en ligne horizontale ou verticale uniquement (aucune diagonale), avec ligne de vue dégagée.");
+      log("Choisissez un ennemi à exactement 5 cases, en ligne horizontale ou verticale uniquement (aucune diagonale), avec ligne de vue dégagée.");
       renderBoard();
       break;
     }
@@ -3711,6 +3738,10 @@ async function resolvePendingOnCell(x, y) {
       alert("Seuls les champions adverses peuvent être manipulés.");
       return;
     }
+    if (state.guardZones.some((z) => Math.abs(z.x - target.x) <= 1 && Math.abs(z.y - target.y) <= 1)) {
+      alert("Ce champion est enfermé dans un Dôme de Verre (GUARD) : impossible de le manipuler.");
+      return;
+    }
     pa.selected = target.id;
     log(`${charById(target.charId).name} est saisi : cliquez la case libre où le porter.`);
     renderBoard();
@@ -3942,7 +3973,11 @@ async function resolvePendingOnCell(x, y) {
       alert("Cible invalide.");
       return;
     }
-    tok.cd = 5;
+    if (state.guardZones.some((z) => Math.abs(z.x - target.x) <= 1 && Math.abs(z.y - target.y) <= 1)) {
+      alert("Ce champion est enfermé dans un Dôme de Verre (GUARD) : impossible de permuter avec lui.");
+      return;
+    }
+    tok.cd = 6;
     pendingAbility = null;
     busy = true;
     fxCell(tok.x, tok.y, "portal");
@@ -4065,8 +4100,8 @@ async function resolvePendingOnCell(x, y) {
     }
     const dx = Math.abs(x - tok.x);
     const dy = Math.abs(y - tok.y);
-    if (Math.max(dx, dy) > 5 || (dx !== 0 && dy !== 0)) {
-      alert("Cible hors ligne : DICRUM tire uniquement en ligne horizontale ou verticale (aucune diagonale), jusqu'à 5 cases.");
+    if (Math.max(dx, dy) !== 5 || (dx !== 0 && dy !== 0)) {
+      alert("Cible hors ligne : DICRUM tire uniquement en ligne horizontale ou verticale (aucune diagonale), sur un ennemi situé exactement à 5 cases.");
       return;
     }
     if (!hasClearLoS(tok.x, tok.y, x, y)) {
@@ -4483,6 +4518,10 @@ function openSwapDialog(player, token) {
     alert(`Changement indisponible : encore ${swapCooldown(player)} tour(s) avant de pouvoir refaire un changement.`);
     return;
   }
+  if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
+    alert("Impossible de remplacer un champion enfermé dans un Dôme de Verre (GUARD).");
+    return;
+  }
   const fieldChar = charById(token.charId);
   const entries = state.reserve[player];
   const chosen = prompt(
@@ -4513,6 +4552,10 @@ function fieldFromReserve(player, reserveEntry) {
 function swapChampion(player, tokenId, reserveIdx) {
   const token = tokenById(tokenId);
   if (!token) return;
+  if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
+    alert("Impossible de remplacer un champion enfermé dans un Dôme de Verre (GUARD).");
+    return;
+  }
   const incoming = state.reserve[player][reserveIdx];
   if (!incoming) return;
   if (!freeSpawnCells(player).length) {
@@ -4595,6 +4638,9 @@ function openTokenPanel() {
   box.style.setProperty("--card-color", cc);
   box.style.setProperty("--card-tint", cc + "26");
   const myTurn = isTurnOf(tok.player);
+  /* Champion enfermé dans un Dôme de Verre : aucune action possible (ni capacité,
+     ni remplacement), le temps que le dôme soit actif. */
+  const guarded = state.guardZones.some((z) => Math.abs(z.x - tok.x) <= 1 && Math.abs(z.y - tok.y) <= 1);
 
   const scrabReady = false;
 
@@ -4619,8 +4665,8 @@ function openTokenPanel() {
       <button data-delta="1">+1 PV</button>
       <button data-delta="5">+5</button>
     </div>
-    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
-    <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 ? "disabled" : ""}>Remplacer par la réserve${swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
+    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
+    <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
     ${myTurn && tok.abilityUsed && !isAuto ? `<div class="cd-badge">Capacité déjà utilisée ce tour : plus aucune action possible.</div>` : ""}
     ${scrabReady ? `<button class="btn-swap scrab-fire" data-token="${tok.id}">Déclencher la Riposte de SCRAB</button>` : ""}
     <div class="char-ability"><strong>${esc(c.ability.name)}</strong> — ${esc(c.ability.desc)}</div>
@@ -4637,7 +4683,7 @@ function openTokenPanel() {
   const abilityBtn = box.querySelector("#panel-ability");
   if (abilityBtn) abilityBtn.addEventListener("click", () => useAbility(tok.id));
   const swapBtn = box.querySelector("#panel-swap");
-  swapBtn.disabled = state.reserve[tok.player].length === 0 || (tok.stunned || 0) > 0 || swapCooldown(tok.player) > 0;
+  swapBtn.disabled = guarded || state.reserve[tok.player].length === 0 || (tok.stunned || 0) > 0 || swapCooldown(tok.player) > 0;
   swapBtn.addEventListener("click", () => openSwapDialog(tok.player, tok));
   const scrabBtn = box.querySelector(".scrab-fire");
   panel.appendChild(box);
