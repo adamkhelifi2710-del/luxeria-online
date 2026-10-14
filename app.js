@@ -2597,8 +2597,12 @@ const SHRINK_SCHEDULE = [
   { round: 45, axis: "width", layer: 3 }
 ];
 
-/* Rampage : le feu démarre au tour 3 puis avance tous les 3 tours. */
-const SHRINK_SCHEDULE_RAMPAGE = [
+/* Rampage : le feu démarre au tour 3 puis avance tous les 3 tours. Passé le
+   tour 18, la contraction continue sans fin (toujours tous les 3 tours) en
+   suivant le cycle [largeur, largeur, largeur, longueur, largeur] à répétition,
+   en sautant les couches déjà brûlées, jusqu'à ce que TOUT le plateau soit en
+   feu (toutes les colonnes ET toutes les lignes atteintes). */
+const RAMPAGE_SHRINK_BASE = [
   { round: 3, axis: "length", layer: 1 },
   { round: 6, axis: "length", layer: 2 },
   { round: 9, axis: "width", layer: 1 },
@@ -2606,9 +2610,37 @@ const SHRINK_SCHEDULE_RAMPAGE = [
   { round: 15, axis: "width", layer: 2 },
   { round: 18, axis: "width", layer: 3 }
 ];
+const RAMPAGE_SHRINK_CYCLE = ["width", "width", "width", "length", "width"];
+
+let _rampageSchedule = null;
+let _rampageScheduleKey = "";
+
+function rampageShrinkSchedule() {
+  const rows = (GAME.map && GAME.map.rows) || 0;
+  const cols = (GAME.map && GAME.map.cols) || 0;
+  const sched = RAMPAGE_SHRINK_BASE.map((e) => ({ round: e.round, axis: e.axis, layer: e.layer }));
+  if (!rows || !cols) return sched;
+  const key = rows + "x" + cols;
+  if (_rampageScheduleKey === key && _rampageSchedule) return _rampageSchedule;
+  const maxW = Math.ceil(cols / 2);
+  const maxL = Math.ceil(rows / 2);
+  let nextW = 4, nextL = 4, ci = 0, round = 21;
+  while ((nextW <= maxW || nextL <= maxL) && sched.length < 400) {
+    let axis = RAMPAGE_SHRINK_CYCLE[ci % RAMPAGE_SHRINK_CYCLE.length];
+    ci++;
+    if (axis === "width" && nextW > maxW) axis = "length";
+    else if (axis === "length" && nextL > maxL) axis = "width";
+    if (axis === "width") sched.push({ round: round, axis: "width", layer: nextW++ });
+    else sched.push({ round: round, axis: "length", layer: nextL++ });
+    round += 3;
+  }
+  _rampageSchedule = sched;
+  _rampageScheduleKey = key;
+  return sched;
+}
 
 function activeShrinkSchedule() {
-  return isRampage() ? SHRINK_SCHEDULE_RAMPAGE : SHRINK_SCHEDULE;
+  return isRampage() ? rampageShrinkSchedule() : SHRINK_SCHEDULE;
 }
 
 function shrinkCellsFor(entry) {
