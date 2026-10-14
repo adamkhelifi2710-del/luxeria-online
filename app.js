@@ -688,10 +688,29 @@ function pickForBuild(charId) {
 
 /* ---------- Draft (sélection tour par tour) ---------- */
 
+/* Ordre de choix des joueurs : cycle A, B, B, A répété (A puis B puis B puis A
+   puis A puis B…). L'équipe A ouvre toujours le draft. */
+const DRAFT_ORDER_CYCLE = ["A", "B", "B", "A"];
+
+/* Renvoie le joueur du prochain choix en suivant le cycle et en sautant les
+   équipes déjà complètes. buildMode.pickCount = index du prochain cran du cycle. */
+function nextDraftPlayer() {
+  if (!buildMode) return null;
+  const idx = buildMode.pickCount || 0;
+  for (let i = 0; i < 16; i++) {
+    const p = DRAFT_ORDER_CYCLE[(idx + i) % DRAFT_ORDER_CYCLE.length];
+    if (!teamComplete(p)) {
+      buildMode.pickCount = idx + i + 1;
+      return p;
+    }
+  }
+  return null;
+}
+
 function beginDraft() {
   state.decks = { A: [], B: [] };
   state.starters = { A: [], B: [] };
-  buildMode = { player: "A", draft: true };
+  buildMode = { player: "A", draft: true, pickCount: 1 };
   save();
   renderDecks();
   hideHome();
@@ -740,12 +759,11 @@ function draftPick(charId) {
   afterDraftPickLocal();
 }
 
-/* En local, bascule vers l'autre équipe tant qu'elle n'est pas complète. */
+/* En local, on suit le cycle de draft (A, B, B, A, A, B…). */
 function afterDraftPickLocal() {
   if (teamComplete("A") && teamComplete("B")) { finishDraft(); return; }
-  const cur = buildMode.player;
-  const other = cur === "A" ? "B" : "A";
-  buildMode.player = teamComplete(other) ? cur : other;
+  const next = nextDraftPlayer();
+  if (next) buildMode.player = next;
   renderLibrary();
 }
 
@@ -3099,6 +3117,7 @@ if (target.hp <= 0 && !target.dead) {
     fxDeath(target.id);
     log(`${charById(target.charId).name} (${target.player}) est éliminé.`);
     applyEliminationSideEffects(target);
+    state.tokens = state.tokens.filter((t) => t.id !== target.id);
     handleReserveReplacementOnDeath(target);
     checkDeathWipe(target);
   }
@@ -3144,10 +3163,21 @@ function enterFromReserve(player, incoming, px, py) {
 
 /* Cases réellement posables d'une zone de départ : libres, praticables, sans
    objectif dessus. Sert au placement automatique et au choix à la souris. */
-function freeSpawnCells(player) {
-  const occupied = new Set(
-    state.tokens.filter((t) => !t.dead).map((t) => `${t.x},${t.y}`)
-  );
+function freeSpawnCells(player, excludeTokenId) {
+  const excludeSet = new Set();
+  (state.tokens || [])
+    .filter((t) => !t.dead)
+    .forEach((t) => {
+      if (excludeTokenId && t.id === excludeTokenId) return;
+      excludeSet.add(`${t.x},${t.y}`);
+    });
+  const occupied = new Set();
+  (state.tokens || [])
+    .filter((t) => !t.dead)
+    .forEach((t) => {
+      if (excludeTokenId && t.id === excludeTokenId) return;
+      occupied.add(`${t.x},${t.y}`);
+    });
   if (state.objectivePos) {
     for (const p of ["A", "B"]) {
       const o = state.objectivePos[p];
@@ -3167,7 +3197,8 @@ function findFreeSpawnCell(player) {
 
 function spawnChoiceAt(x, y) {
   if (!pendingSpawn) return false;
-  return freeSpawnCells(pendingSpawn.player).some(([sx, sy]) => sx === x && sy === y);
+  const excludeId = (pendingSpawn.mode === "swap" || pendingSpawn.mode === "replace" || pendingSpawn.mode === "enter") ? pendingSpawn.tokenId : undefined;
+  return freeSpawnCells(pendingSpawn.player, excludeId).some(([sx, sy]) => sx === x && sy === y);
 }
 
 /* Vérifie qu'une équipe n'a plus aucun champion en jeu. Renvoyée à chaque mort,
@@ -3193,11 +3224,11 @@ function handleReserveReplacementOnDeath(deadToken) {
   if (chosen === null) return;
   const idx = parseInt(chosen, 10) - 1;
   if (isNaN(idx) || idx < 0 || idx >= reserve.length) return;
-  if (!freeSpawnCells(player).length) {
+  if (!freeSpawnCells(player, token.id).length) {
     alert("Aucune case libre dans la zone de départ pour le remplaçant.");
     return;
   }
-  pendingSpawn = { mode: "replace", player, reserveIdx: idx };
+  pendingSpawn = { mode: "replace", player, reserveIdx: idx, tokenId: deadToken.id };
   log(`${charById(reserve[idx].charId).name} va remplacer ${charById(deadToken.charId).name} : cliquez une case libre de la zone de départ pour le poser. (Échap pour annuler)`);
   renderBoard();
 }
@@ -3306,7 +3337,7 @@ function attackAt(x, y) {
     const continuing = rapidoFlurryStep(tok, null);
     save();
     renderBoard();
-    if (continuing) reselectAfter();
+    reselectAfter();
     return;
   }
   if (!inStraightLine(tok.x, tok.y, x, y, c.range) || !hasClearLoS(tok.x, tok.y, x, y)) {
@@ -3326,6 +3357,7 @@ function attackAt(x, y) {
     rapidoFlurryStep(tok, null);
     save();
     renderBoard();
+    reselectAfter();
     return;
   }
 
@@ -3345,7 +3377,7 @@ function attackAt(x, y) {
       const continuing = rapidoFlurryStep(tok, null);
       checkWinnerFromObjective(tok.player);
       renderBoard();
-      if (continuing) reselectAfter();
+      reselectAfter();
     });
     return;
   }
@@ -3365,7 +3397,7 @@ function attackAt(x, y) {
       kogaAttackHeal(tok);
       const continuing = rapidoFlurryStep(tok, target);
       applyDamageToToken(target, dmg, tok);
-      if (continuing) reselectAfter();
+      reselectAfter();
     });
     return;
   }
@@ -3499,6 +3531,11 @@ async function useAbility(tokenId) {
   }
   if (championAlreadyActed(tok)) {
     alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
+  if (tok.hasAttacked) {
+    alert("Un tour autorise : avancer puis attaquer, avancer puis ult, attaquer puis avancer, ou l'ult seul. Un champion qui a déjà attaqué ne peut plus utiliser sa capacité ce tour.");
     renderBoard();
     return;
   }
@@ -3702,6 +3739,8 @@ async function useAbility(tokenId) {
           fxDeath(tok.id);
           log("SE7EN est éliminé par son propre dé.");
           applyEliminationSideEffects(tok);
+          // Champ libéré immédiatement, même sans remplacement
+          state.tokens = state.tokens.filter((t) => t.id !== tok.id);
           checkDeathWipe(tok);
         }
         save();
@@ -4249,6 +4288,20 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  if (e.key === "Enter") {
+    e.preventDefault();
+    blurFocused();
+    const tok = tokenById(selectedTokenId);
+    if (
+      tok && isTurnOf(tok.player) && !championAlreadyActed(tok) &&
+      !pendingSpawn && !pendingAbility && state.phase === "playing" && !state.winner &&
+      (state.reserve[tok.player] || []).length
+    ) {
+      openSwapDialog(tok.player, tok);
+    }
+    return;
+  }
+
   if (e.key === "Escape") {
     e.preventDefault();
     if (document.body.classList.contains("bigscreen")) {
@@ -4387,6 +4440,24 @@ function endPlayerTurn() {
           t.healCellUsed = true;
           fxHeal(t.id, 1);
           log(`${charById(t.charId).name} récupère 1 PV sur la case soin (${t.hp}/${charById(t.charId).hp} PV).`);
+        }
+      }
+      // Régénération passive de MOM'S : si hp < 10 et TOUS les alliés encore vivants
+      // sont à leur PV maximum, elle récupère 1 PV par tour (jusqu'à 10 PV).
+      if (t.charId === "moms") {
+        const mc = charById("moms");
+        if (t.hp < 10 && t.hp < mc.hp) {
+          const alliesAllFull = state.tokens
+            .filter((a) => !a.dead && a.player === side)
+            .every((a) => a.hp >= charById(a.charId).hp);
+          if (alliesAllFull) {
+            const before = t.hp;
+            t.hp = Math.min(10, t.hp + 1);
+            if (t.hp > before) {
+              fxHeal(t.id, 1);
+              log(`MOM'S se régénère : ${before}→${t.hp} PV (passif).`);
+            }
+          }
         }
       }
     });
@@ -4632,11 +4703,11 @@ function swapChampion(player, tokenId, reserveIdx) {
   }
   const incoming = state.reserve[player][reserveIdx];
   if (!incoming) return;
-  if (!freeSpawnCells(player).length) {
+  if (!freeSpawnCells(player, token.id).length) {
     alert("Aucune case libre dans la zone de départ pour le remplaçant.");
     return;
   }
-  pendingSpawn = { mode: "swap", player, reserveIdx, tokenId };
+  pendingSpawn = { mode: "swap", player, reserveIdx, tokenId: token.id };
   log(`${charById(token.charId).name} cède sa place : cliquez une case libre de la zone de départ pour poser ${charById(incoming.charId).name}. (Échap pour annuler)`);
   renderBoard();
 }
@@ -4753,7 +4824,7 @@ function openTokenPanel() {
       <button data-delta="1">+1 PV</button>
       <button data-delta="5">+5</button>
     </div>
-    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
+    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && !tok.hasAttacked && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
     <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded || blocked ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : blocked ? " (un seul champion par tour)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
     ${myTurn && tok.abilityUsed && !isAuto ? `<div class="cd-badge">Capacité déjà utilisée ce tour : plus aucune action possible.</div>` : ""}
     ${blocked ? `<div class="cd-badge">Un seul champion peut agir par tour : passez au tour suivant pour en jouer un autre.</div>` : ""}
@@ -4792,6 +4863,7 @@ function changeHP(id, delta) {
     }
     log(`${charById(tok.charId).name} (${tok.player}) est éliminé.`);
     applyEliminationSideEffects(tok);
+    state.tokens = state.tokens.filter((t) => t.id !== tok.id);
     handleReserveReplacementOnDeath(tok);
     checkDeathWipe(tok);
   }
@@ -5650,7 +5722,7 @@ function onlineInitMethod(method, role) {
 }
 
 function onlineBeginDraft(role) {
-  buildMode = { player: "A", draft: true };
+  buildMode = { player: "A", draft: true, pickCount: 1 };
   state.decks = { A: [], B: [] };
   state.starters = { A: [], B: [] };
   save();
@@ -5708,9 +5780,8 @@ function onlineDraftAfterPick() {
     onlineDraftFinishHost();
     return;
   }
-  const cur = buildMode.player;
-  const other = cur === "A" ? "B" : "A";
-  buildMode.player = teamComplete(other) ? cur : other;
+  const next = nextDraftPlayer();
+  if (next) buildMode.player = next;
   renderBuildBanner();
   renderLibrary();
   onlineSend({ type: "draft-state", decks: { A: state.decks.A.slice(), B: state.decks.B.slice() }, turn: buildMode.player, done: false });
