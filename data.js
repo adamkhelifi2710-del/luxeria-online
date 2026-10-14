@@ -271,8 +271,8 @@ const GAME = {
       role: "ravageur",
       hp: 10,
       atk: 3,
-      mouvement: 3,
-      range: 2,
+      mouvement: 2,
+      range: 1,
       ability: {
         name: "Déferlement",
         desc: "Cd 6 — RAPIDO attaque deux fois dans le même tour : chaque attaque inflige 3 dégâts, que ce soit sur un champion ou sur un objectif. Il doit lancer Déferlement avant tout déplacement. La 1ère attaque peut être portée après déplacement ou non ; entre les deux il peut de nouveau se déplacer, puis porter une 2ème attaque (même cible ou non), qui paralyse la cible pendant un tour."
