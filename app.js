@@ -4708,7 +4708,7 @@ function swapChampion(player, tokenId, reserveIdx) {
     return;
   }
   pendingSpawn = { mode: "swap", player, reserveIdx, tokenId: token.id };
-  log(`${charById(token.charId).name} cède sa place : cliquez une case libre de la zone de départ pour poser ${charById(incoming.charId).name}. (Échap pour annuler)`);
+  log(`${charById(token.charId).name} va quitter sa case : il sort d'abord, puis vous poserez ${charById(incoming.charId).name} à l'endroit choisi. (Échap pour annuler)`);
   renderBoard();
 }
 
@@ -4718,7 +4718,6 @@ function swapChampion(player, tokenId, reserveIdx) {
 function commitSpawnPlacement(x, y) {
   const ps = pendingSpawn;
   if (!ps) return;
-  if (!spawnChoiceAt(x, y)) return;
   const reserveEntries = state.reserve[ps.player];
   const incoming = reserveEntries[ps.reserveIdx];
   if (!incoming) {
@@ -4727,26 +4726,41 @@ function commitSpawnPlacement(x, y) {
     return;
   }
 
-    /* Un remplacement suite à une élimination n'est pas annulable : le mort l'est
-       déjà. Les actions volontaires (entrer, échanger) restent annulables. */
-    if (ps.mode !== "replace") pushUndo();
+  if (ps.mode === "swap") {
+    const token = tokenById(ps.tokenId);
+    if (!token) {
+      pendingSpawn = null;
+      renderBoard();
+      return;
+    }
+    // Retire le sortant immédiatement pour libérer sa case
+    const tx = token.x, ty = token.y;
+    const outgoingChar = charById(token.charId);
+    const outgoingHp = token.hp;
+    state.tokens = state.tokens.filter((t) => t.id !== token.id);
+    reserveEntries.splice(ps.reserveIdx, 1);
+    reserveEntries.push({ charId: outgoingChar.id, hp: outgoingHp });
     pendingSpawn = null;
-
-    let newId;
-    if (ps.mode === "swap") {
-      const token = tokenById(ps.tokenId);
-      if (!token) {
-        renderBoard();
-        return;
-      }
-      const outgoingChar = charById(token.charId);
-      const outgoingHp = token.hp;
-      state.tokens = state.tokens.filter((t) => t.id !== token.id);
-      reserveEntries.splice(ps.reserveIdx, 1);
-      reserveEntries.push({ charId: outgoingChar.id, hp: outgoingHp });
-      newId = enterFromReserve(ps.player, incoming, x, y);
-      log(`${outgoingChar.name} retourne en réserve.`);
-      setSwapCooldown(ps.player, 5);
+    if (ps.mode !== "replace") pushUndo();
+    let newId = enterFromReserve(ps.player, incoming, x, y);
+    log(`${outgoingChar.name} sort de (${tx + 1}, ${ty + 1}) et retourne en réserve. ${charById(incoming.charId).name} entre en (${x + 1}, ${y + 1}).`);
+    setSwapCooldown(ps.player, 5);
+    selectedTokenId = null;
+    reachable = [];
+    attackCells = [];
+    pendingAbility = null;
+    save();
+    checkFire(tokenById(newId));
+    const lockedTok = state.activatedTokenId ? tokenById(state.activatedTokenId) : null;
+    if (state.activatedTokenId && (!lockedTok || lockedTok.dead)) {
+      const nt = tokenById(newId);
+      if (nt) { nt.hasMoved = true; nt.hasAttacked = true; nt.abilityUsed = true; }
+      state.activatedTokenId = newId;
+    }
+    renderBoard();
+    checkTeamWipe();
+    return;
+  }
       selectedTokenId = null;
       reachable = [];
       attackCells = [];
