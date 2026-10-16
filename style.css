@@ -4663,3 +4663,32 @@ button:hover, .btn-random-inline:hover {
   from { opacity: 0; transform: translate(-50%, 20px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* Bandeau d'état de l'IA (mode Jouer contre l'IA) */
+#ai-status {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translate(-50%, -14px);
+  z-index: 3600;
+  display: none;
+  max-width: 90vw;
+  padding: 10px 20px;
+  border-radius: 14px;
+  background: #16202d;
+  border: 1px solid rgba(167, 139, 250, 0.55);
+  color: #e2d9f7;
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+#ai-status.show {
+  display: block;
+  animation: ai-status-in 0.25s ease-out;
+}
+@keyframes ai-status-in {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
