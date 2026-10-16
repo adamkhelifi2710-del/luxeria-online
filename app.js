@@ -13,6 +13,13 @@ let busy = false;
 let undoStack = [];
 let buildMode = null;
 
+/* ---- Mode IA : l'ordinateur contrôle l'équipe B ---- */
+let aiMode = false;
+let aiPlayer = "B";
+let aiDifficulty = "normal";
+let aiRunning = false;
+let aiAutoChoice = undefined;
+
 /* ---- Partie LAN (WebRTC 1v1) : hôte = Équipe A, client = Équipe B ---- */
 let lanMode = false;
 let lanRole = null;
@@ -341,6 +348,7 @@ function pushUndo() {
 function undoLast() {
   if (lanMode && lanRole === "client") return;
   if (busy) return;
+  if (aiBlocksInput()) return;
   if (!undoStack.length) {
     alert("Rien à annuler.");
     return;
@@ -498,6 +506,7 @@ function randomStarters(team) {
 }
 
 function openPlayMode() {
+  aiMode = false;
   askChoicePrompt({
     icon: "🎮",
     title: "Nouvelle partie",
@@ -681,7 +690,15 @@ function pickForBuild(charId) {
     if (teamComplete(cur)) onlineLocalBuildDone();
     return;
   }
-  if (teamComplete(cur) && cur === "A") buildMode.player = "B";
+  if (teamComplete(cur) && cur === "A") {
+    /* Mode IA : l'ordinateur compose toute seul son équipe dès que la vôtre est
+       prête, puis on part directement au choix des titulaires. */
+    if (aiMode) {
+      aiBuildTeamB();
+      return;
+    }
+    buildMode.player = "B";
+  }
   renderLibrary();
   if (teamComplete("A") && teamComplete("B")) finishBuild();
 }
@@ -1289,6 +1306,13 @@ function askChoicePrompt(opts) {
     b.addEventListener("click", () => closeAsk(opt.value));
     askChoice.appendChild(b);
   });
+  /* IA : si un choix est déjà préparé (transfusion de MOM'S), on l'applique
+     sans ouvrir la fenêtre. */
+  if (aiRunning && aiAutoChoice !== undefined && aiAutoChoice !== null) {
+    const v = aiAutoChoice;
+    aiAutoChoice = undefined;
+    return Promise.resolve(v);
+  }
   askDialog.showModal();
   return new Promise((resolve) => {
     askResolver = resolve;
@@ -1309,6 +1333,17 @@ function closeAsk(value) {
 
 /* CALIX : deux temps (type, puis case) sans await, comme les autres capacités. */
 function askCalixType(tokenId, avail) {
+  /* IA : le type est décidé par le plan (aiAutoChoice), pas par une fenêtre. */
+  if (aiRunning) {
+    const pick = aiAutoChoice && avail.indexOf(aiAutoChoice) >= 0 ? aiAutoChoice : avail[0];
+    aiAutoChoice = undefined;
+    if (pendingAbility && pendingAbility.type === "calix") {
+      pendingAbility.cellType = pick;
+      log(`CALIX va poser une case ${CALIX_TYPE_LABEL[pick]} : choisissez une case libre du terrain.`);
+      renderBoard();
+    }
+    return;
+  }
   askTitle.textContent = "Création";
   askText.textContent = "Quelle case spéciale CALIX pose-t-il ?";
   askHint.textContent = avail
@@ -1417,6 +1452,8 @@ function openStarterDialog(opts) {
     startGame();
   };
   updateStarterConfirm();
+  /* Mode IA : l'ordinateur choisit lui-même ses 3 titulaires. */
+  if (aiMode) aiPickStartersInDialog();
   starterDialog.showModal();
 }
 
@@ -1485,6 +1522,7 @@ function startGame() {
     save();
     renderBoard();
     document.querySelector('[data-tab="board"]').click();
+    if (aiMode) aiOnGameStart();
 }
 
 function objectiveDef(player) {
@@ -2464,6 +2502,7 @@ function placeAt(x, y) {
   }
   save();
   renderBoard();
+  if (aiMode) aiMaybeSchedulePlacement();
 }
 
 function updatePlacementBanner() {
@@ -2519,6 +2558,7 @@ function canAttackAt(x, y) {
 
 function handleTokenClick(t) {
   if (busy) return;
+  if (aiBlocksInput()) return;
   if (editMode) return;
   if (pendingAbility) {
     resolvePendingOnCell(t.x, t.y);
@@ -2552,6 +2592,7 @@ function handleTokenClick(t) {
 
 function cellClick(x, y) {
   if (busy) return;
+  if (aiBlocksInput()) return;
   if (editMode) return;
   if (pendingSpawn) {
     commitSpawnPlacement(x, y);
@@ -2835,7 +2876,7 @@ function isVoidCell(x, y) {
   return (GAME.map.voidCells || []).some(([vx, vy]) => vx === x && vy === y);
 }
 
-function kogaDeathZone(x, y) {
+function kogaDeathZone(x, y, player) {
   const order = ["block", "heal", "fire", "speed"];
   const labels = {
     block: "case vide (impassable)",
@@ -2844,7 +2885,14 @@ function kogaDeathZone(x, y) {
     speed: "case de vitesse"
   };
   let type = "block";
-  try {
+  /* IA : l'ordinateur choisit tout seul la case laissée par KOGA (feu pour
+     punir les adversaires proches, sinon obstacle). Aucune fenêtre bloquante. */
+  if (aiMode && player === aiPlayer) {
+    const enemy = aiPlayer === "A" ? "B" : "A";
+    const nearEnemy = state.tokens.some((t) =>
+      !t.dead && t.player === enemy && Math.abs(t.x - x) <= 1 && Math.abs(t.y - y) <= 1);
+    type = nearEnemy ? "fire" : "block";
+  } else try {
     const ans = prompt(
       "KOGA est éliminé : quelle case laisse-t-il sur sa case de mort ?\n\n" +
         order.map((t, i) => `${i + 1}. ${labels[t]}`).join("\n")
@@ -3230,6 +3278,12 @@ function checkTeamWipe() {
 
 function handleReserveReplacementOnDeath(deadToken) {
   if (suppressReplacePrompt) return;
+  /* IA : l'ordinateur remplace lui-même, sans fenêtre, en choisissant le meilleur
+     remplaçant et une case libre. */
+  if (aiMode && deadToken.player === aiPlayer) {
+    aiReplaceOnDeath(deadToken);
+    return;
+  }
   const player = deadToken.player;
   const reserve = state.reserve[player];
   if (!reserve.length) return;
@@ -3268,7 +3322,7 @@ function handleReserveReplacementOnDeath(deadToken) {
     log("Un champion est éliminé : les soins de nouveau possibles (PRINCE). Le cooldown de PRINCE (7) commence maintenant.");
   }
   if (deadToken.charId === "koga") {
-    kogaDeathZone(deadToken.x, deadToken.y);
+    kogaDeathZone(deadToken.x, deadToken.y, deadToken.player);
   }
   if (deadToken.charId === "calix") {
     const removed = calixRemoveCells(deadToken.id);
@@ -4259,6 +4313,7 @@ async function resolvePendingOnCell(x, y) {
 
 document.getElementById("next-turn").addEventListener("click", () => {
   if (busy) return;
+  if (aiBlocksInput()) return;
   if (state.winner) return;
   if (state.phase === "placement") {
     alert("La partie ne commence pas tant que chaque équipe n'a pas placé son objectif et ses 3 titulaires.");
@@ -4274,6 +4329,8 @@ document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.repeat) return;
   const k = (e.key || "").toLowerCase();
+  /* Mode IA : le clavier ne pilote pas l'équipe adverse pendant son tour. */
+  if (aiBlocksInput() && k !== "f" && e.key !== "Escape") return;
 
   if (e.code === "Space" || e.key === " " || k === "z") {
     e.preventDefault();
@@ -4496,11 +4553,15 @@ function endPlayerTurn() {
   log(`Au tour de l'équipe ${side}.`);
   save();
   renderBoard();
+  if (aiMode && state.turn === aiPlayer && !state.winner && state.phase === "playing") {
+    aiScheduleTurn();
+  }
 }
 
 document.getElementById("reset-board").addEventListener("click", () => {
   if (lanMode && lanRole === "client") return;
   if (!confirm("Réinitialiser la partie ? Toutes les positions, PV et états seront perdus.")) return;
+  aiMode = false;
   const keep = confirm("Conserver les decks actuels ? (Non = tout vider)");
   if (keep) {
     state.starters = { A: [], B: [] };
@@ -5530,6 +5591,7 @@ function onlineIsHost() {
 }
 
 function openOnlineLobby() {
+  aiMode = false;
   const dlg = document.getElementById("online-dialog");
   if (!dlg) return;
   onlineSetLobbyStatus(
@@ -6023,7 +6085,1091 @@ renderRoleOptions();
 renderLibrary();
 renderBoard();
 showHome();
-renderRoleOptions();
-renderLibrary();
-renderBoard();
-showHome();
+
+/* ============================ MODE IA ============================ */
+
+/* L'ordinateur contrôle l'équipe B. Il n'a aucun accès caché et n'agit QUE par
+   les mêmes fonctions que le joueur (moveToken / attackAt / useAbility /
+   commitSpawnPlacement), donc les mêmes règles de validation s'appliquent. Son
+   « cerveau » (évaluation heuristique + lookahead) ne voit que l'information
+   publiquement affichée : positions, PV, cooldowns, objectifs. */
+
+const AI_DIFF = {
+  facile:    { depth: 1, reply: 0,   noise: 3.2, maxMoves: 6,  abilityChance: 0.3,  aggro: 0.55 },
+  normal:    { depth: 1, reply: 0,   noise: 0.7, maxMoves: 12, abilityChance: 0.85, aggro: 0.85 },
+  difficile: { depth: 1, reply: 0,   noise: 0.12,maxMoves: 20, abilityChance: 1,    aggro: 1.05 },
+  expert:    { depth: 2, reply: 0.9, noise: 0,   maxMoves: 24, abilityChance: 1,    aggro: 1.2 }
+};
+
+const AI_PASSIVE = ["koga", "xixz"]; // passifs : aucune capacité manuelle
+
+function aiOther(p) { return p === "A" ? "B" : "A"; }
+
+/* Vérrou : l'humain ne pilote rien pendant qu'un tour / placement IA. */
+function aiBlocksInput() {
+  return aiMode && !state.winner &&
+    (aiRunning || (state.phase === "playing" && state.turn === aiPlayer));
+}
+
+/* ---------- Simulation sur clone (évaluation uniquement) ---------- */
+
+function aiCloneState(s) { return JSON.parse(JSON.stringify(s)); }
+function aiWithState(s, fn) {
+  const real = state;
+  state = s;
+  try { return fn(); } finally { state = real; }
+}
+function aiTok(s, id) { return (s.tokens || []).find((t) => t.id === id) || null; }
+
+function aiPacifActive(s, target) {
+  return (s.tokens || []).some(
+    (t) => !t.dead && t.player === target.player && t.charId === "xixz" &&
+      distanceCheb(t.x, t.y, target.x, target.y) <= 1
+  );
+}
+
+function aiApplyDamage(s, target, amount, source) {
+  if (!target || target.dead || amount <= 0) return 0;
+  let dmg = amount;
+  if (target.buffs && target.buffs.abyss) {
+    dmg = Math.floor(dmg / 2);
+    target.buffs.abyss = false;
+  }
+  if (aiPacifActive(s, target)) dmg = Math.max(0, dmg - 1);
+  const before = target.hp;
+  target.hp = Math.max(0, target.hp - dmg);
+  const dealt = before - target.hp;
+  if (target.buffs && target.buffs.vini && dealt > 0 && source && source.id !== target.id) {
+    target.buffs.vini = false;
+    aiApplyDamage(s, source, dealt, null);
+  }
+  if (target.hp <= 0) target.dead = true;
+  return dealt;
+}
+
+function aiAttackValue(s, tok, target) {
+  const c = charById(tok.charId);
+  if (tok.charId === "rapido" && tok.flurry) return 3;
+  if (!target) return c.atk;
+  if (tok.buffs && tok.buffs.braut) {
+    tok.buffs.braut = false;
+    return charById(target.charId).role === "colosse" ? 7 : 6;
+  }
+  return c.atk;
+}
+
+/* ---------- Évaluation heuristique (du point de vue de « me ») ---------- */
+
+function aiEvaluate(s, me, aggro) {
+  const foe = aiOther(me);
+  if (aggro == null) aggro = 1;
+  let v = 0;
+  const rampage = s.mode === "rampage";
+  const myNexus = (s.objectivePos && s.objectivePos[me]) || null;
+  const foeNexus = (s.objectivePos && s.objectivePos[foe]) || null;
+
+  if (!rampage && s.objectives) {
+    v += 1.25 * (s.objectives[me] || 0);
+    v -= 1.45 * (s.objectives[foe] || 0);
+  }
+
+  const myAlive = (s.tokens || []).filter((t) => !t.dead && t.player === me);
+  const foeAlive = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+
+  if (rampage) {
+    v += 13 * myAlive.length - 13.6 * foeAlive.length;
+  } else {
+    if (!foeAlive.length) v += 60;
+    if (!myAlive.length) v -= 60;
+  }
+
+  const champVal = (t) => {
+    const c = charById(t.charId);
+    const frac = c.hp ? t.hp / c.hp : 0;
+    return 1.8 + 0.18 * c.atk + 0.95 * frac;
+  };
+  myAlive.forEach((t) => (v += champVal(t)));
+  foeAlive.forEach((t) => (v -= champVal(t) * 1.04));
+
+  if (foeNexus) {
+    myAlive.forEach((t) => {
+      const d = distanceCheb(t.x, t.y, foeNexus.x, foeNexus.y);
+      v += 0.5 * aggro * Math.max(0, 7 - d);
+    });
+    if (myNexus) {
+      foeAlive.forEach((t) => {
+        const d = distanceCheb(t.x, t.y, myNexus.x, myNexus.y);
+        v -= 0.55 * aggro * Math.max(0, 7 - d);
+      });
+    }
+  }
+  return v;
+}
+
+/* ---------- Génération de coups légaux (sur clone) ---------- */
+
+function aiReachable(s, tk) {
+  if ((s.guardZones || []).some((z) => Math.abs(z.x - tk.x) <= 1 && Math.abs(z.y - tk.y) <= 1)) return [];
+  const c = charById(tk.charId);
+  let m = c.mouvement;
+  if (tk.speedTurnBoost) m *= 2;
+  return aiWithState(s, () => reachableFrom(tk.x, tk.y, m, tk.player));
+}
+
+function aiAttackCellsAt(s, tk, x, y) {
+  if ((s.guardZones || []).some((z) => Math.abs(z.x - x) <= 1 && Math.abs(z.y - y) <= 1)) return [];
+  const ox = tk.x, oy = tk.y;
+  tk.x = x; tk.y = y;
+  const cells = aiWithState(s, () => attackCellsOf(tk));
+  tk.x = ox; tk.y = oy;
+  return cells;
+}
+
+function aiIsTargetCell(s, me, x, y) {
+  const foe = aiOther(me);
+  if ((s.tokens || []).some((t) => !t.dead && t.player === foe && t.x === x && t.y === y)) return true;
+  if (s.mode !== "rampage") {
+    const o = s.objectivePos && s.objectivePos[foe];
+    if (o && o.x === x && o.y === y) return true;
+  }
+  return false;
+}
+
+/* Idem mais sur l'état réel (exécution). */
+function aiIsTargetCellReal(me, x, y) {
+  const foe = aiOther(me);
+  if (state.tokens.some((t) => !t.dead && t.player === foe && t.x === x && t.y === y)) return true;
+  if (!isRampage()) {
+    const o = state.objectivePos && state.objectivePos[foe];
+    if (o && o.x === x && o.y === y) return true;
+  }
+  return false;
+}
+
+function aiAbilityReady(s, tk) {
+  if (AI_PASSIVE.indexOf(tk.charId) >= 0) return false;
+  if (tk.cd > 0) return false;
+  if (tk.abilityUsed || tk.hasAttacked) return false;
+  if ((tk.stunned || 0) > 0) return false;
+  if ((s.guardZones || []).some((z) => Math.abs(z.x - tk.x) <= 1 && Math.abs(z.y - tk.y) <= 1)) return false;
+  if (tk.charId === "betta" && (s.bettaCharges || 0) <= 0) return false;
+  if (tk.charId === "rapido" && (tk.hasMoved || tk.hasAttacked || tk.abilityUsed)) return false;
+  if (tk.charId === "jay" && tk.jayAura) return false;
+  if (tk.charId === "abyss" && tk.buffs && tk.buffs.abyss) return false;
+  if (tk.charId === "braut" && tk.buffs && tk.buffs.braut) return false;
+  if (tk.charId === "vini" && tk.buffs && tk.buffs.vini) return false;
+  if (tk.charId === "moms" && tk.hp <= 1) return false;
+  if (tk.charId === "cazou" && tk.hp <= 5) return false;
+  if (tk.charId === "guard" && (s.guardZones || []).some((z) => z.ownerId === tk.id)) return false;
+  if (tk.charId === "prince" && s.healingBlocked) return false;
+  return true;
+}
+
+function aiBestCazouCell(s, me, enemy) {
+  const mine = (s.tokens || []).filter((t) => !t.dead && t.player === me);
+  let cx = 0, cy = 0;
+  if (mine.length) {
+    mine.forEach((t) => { cx += t.x; cy += t.y; });
+    cx = Math.round(cx / mine.length); cy = Math.round(cy / mine.length);
+  }
+  let best = null, bestD = Infinity;
+  for (let y = 0; y < GAME.map.rows; y++) {
+    for (let x = 0; x < GAME.map.cols; x++) {
+      if (!aiWithState(s, () => cazouCellFree(x, y, me))) continue;
+      const d = distanceCheb(x, y, cx, cy);
+      if (d < bestD) { bestD = d; best = [x, y]; }
+    }
+  }
+  return best;
+}
+
+function aiAbilityOptions(s, me, tk) {
+  const out = [];
+  const foe = aiOther(me);
+  const add = (ability) => out.push({ ability });
+  switch (tk.charId) {
+    case "ark": {
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+        const x = tk.x + dx, y = tk.y + dy;
+        if (x < 0 || y < 0 || x >= GAME.map.cols || y >= GAME.map.rows) return;
+        if (aiWithState(s, () => objectiveCellAt(x, y))) return;
+        const key = edgeKey(tk.x, tk.y, x, y);
+        if (GAME.edgeSet.has(key)) return;
+        if ((s.arkWalls || []).some((w) => w && w.key === key)) return;
+        add({ cell: [x, y] });
+      });
+      break;
+    }
+    case "guard": case "abyss": case "braut": case "vini": case "jay": case "prince":
+      add({});
+      break;
+    case "se7en": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if (!inStraightLine(tk.x, tk.y, t.x, t.y, 2)) return;
+        if (aiWithState(s, () => hasClearLoS(tk.x, tk.y, t.x, t.y))) add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "fakie": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if ((s.guardZones || []).some((z) => Math.abs(z.x - t.x) <= 1 && Math.abs(z.y - t.y) <= 1)) return;
+        add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "dicrum": {
+      const enemy = me === "A" ? "B" : "A";
+      const dicrumShotOk = (x, y) => {
+        const dx = Math.abs(x - tk.x), dy = Math.abs(y - tk.y);
+        if (dx !== 0 && dy !== 0) return false;      // aucune diagonale
+        if (Math.max(dx, dy) !== 5) return false;    // exactement 5 cases
+        return aiWithState(s, () =>
+          hasClearLoS(tk.x, tk.y, x, y) &&
+          !inGuardZone(tk.x, tk.y) && !inGuardZone(x, y) &&
+          !lineCrossesGuardZone(tk.x, tk.y, x, y));
+      };
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if (dicrumShotOk(t.x, t.y)) add({ cell: [t.x, t.y] });
+      });
+      const eo = aiWithState(s, () => objectiveDef(enemy));
+      if (eo && dicrumShotOk(eo.x, eo.y)) add({ cell: [eo.x, eo.y] });
+      break;
+    }
+    case "ad": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player !== me || t.id === tk.id) return;
+        if (t.hp >= charById(t.charId).hp) return;
+        if (!inStraightLine(tk.x, tk.y, t.x, t.y, 4)) return;
+        if (aiWithState(s, () => hasClearLoS(tk.x, tk.y, t.x, t.y))) add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "cazou": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if ((s.guardZones || []).some((z) => Math.abs(z.x - t.x) <= 1 && Math.abs(z.y - t.y) <= 1)) return;
+        const cell = aiBestCazouCell(s, me, t);
+        if (cell) add({ targetCell: [t.x, t.y], cell });
+      });
+      break;
+    }
+    case "scrab": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if (Math.abs(t.x - tk.x) <= 3 && Math.abs(t.y - tk.y) <= 3) add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "betta": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player !== me) return;
+        if ((t.bettaRegen || 0) > 0) return;
+        if (!inStraightLine(tk.x, tk.y, t.x, t.y, 2)) return;
+        if (aiWithState(s, () => hasClearLoS(tk.x, tk.y, t.x, t.y))) add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "moms": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player !== me || t.id === tk.id) return;
+        if (t.hp >= charById(t.charId).hp) return;
+        if (distanceCheb(tk.x, tk.y, t.x, t.y) > 2) return;
+        const max = Math.min(MOMS_MAX_TRANSFUSION, tk.hp - 1, charById(t.charId).hp - t.hp);
+        if (max >= 1) add({ cell: [t.x, t.y], amount: max });
+      });
+      break;
+    }
+    case "ranium": {
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player === me) return;
+        if (distanceCheb(tk.x, tk.y, t.x, t.y) > 1) return;
+        add({ cell: [t.x, t.y] });
+      });
+      break;
+    }
+    case "calix": {
+      const avail = aiWithState(s, () => calixAvailableTypes(tk.id));
+      const cells = aiCalixCells(s, me, tk);
+      avail.forEach((tp) => {
+        cells.forEach((cell) => add({ cell, calixType: tp }));
+      });
+      break;
+    }
+    default: break;
+  }
+  return out;
+}
+
+/* Cases où CALIX (clone) peut poser une case spéciale : dans sa portée en ligne
+   droite et validées exactement comme le jeu réel (calixCanPlace). */
+function aiCalixCells(s, me, tk) {
+  return aiWithState(s, () => {
+    const range = charById(tk.charId).range;
+    const list = [];
+    for (let dx = -range; dx <= range; dx++) {
+      for (let dy = -range; dy <= range; dy++) {
+        if (!dx && !dy) continue;
+        const x = tk.x + dx, y = tk.y + dy;
+        if (x < 0 || y < 0 || x >= GAME.map.cols || y >= GAME.map.rows) continue;
+        if (calixCanPlace(x, y, tk.player, tk)) list.push([x, y]);
+      }
+    }
+    return list.slice(0, 16);
+  });
+}
+
+function aiAbilityOptionsAt(s, me, tk, x, y) {
+  const ox = tk.x, oy = tk.y;
+  tk.x = x; tk.y = y;
+  const opts = aiAbilityOptions(s, me, tk);
+  tk.x = ox; tk.y = oy;
+  return opts;
+}
+
+/* Choisit la meilleure cible/type pour une capacité donnée (sur clone). */
+function aiBestAbilityOption(s, me, tk, x, y, opts, cfg) {
+  if (!opts.length) return null;
+  if (cfg.abilityChance < 1 && Math.random() > cfg.abilityChance) return null;
+  let best = null, bestScore = -Infinity;
+  for (const o of opts) {
+    const s2 = aiCloneState(s);
+    const t2 = aiTok(s2, tk.id);
+    if (!t2) continue;
+    t2.x = x; t2.y = y;
+    const before = aiEvaluate(s2, me, cfg.aggro);
+    const bonus = aiApplyAbility(s2, t2, me, o.ability);
+    const after = aiEvaluate(s2, me, cfg.aggro);
+    const sc = after - before + (bonus || 0);
+    if (sc > bestScore) { bestScore = sc; best = o.ability; }
+  }
+  return best;
+}
+
+/* Applique la capacité sur un clone. Renvoie un « bonus » heuristique pour les
+   effets qui ne se voient qu'au tour suivant (buffs défensifs, etc.). */
+function aiApplyAbility(s, tk, me, ab) {
+  const foe = aiOther(me);
+  const cell = (ab && ab.cell) || null;
+  switch (tk.charId) {
+    case "guard":
+      s.guardZones.push({ player: me, x: tk.x, y: tk.y, turnsLeft: 3, ownerId: tk.id });
+      tk.cd = 5;
+      return 2.0;
+    case "abyss": tk.buffs.abyss = true; tk.cd = 6; return 1.4;
+    case "braut": tk.buffs.braut = true; tk.cd = 5; return 1.6;
+    case "vini": tk.buffs.vini = true; tk.cd = 5; return 1.3;
+    case "jay": {
+      tk.jayAura = true; tk.jayAuraTurns = 8;
+      const hurt = (s.tokens || []).filter(
+        (t) => !t.dead && t.player === me && t.hp < charById(t.charId).hp && distanceCheb(tk.x, tk.y, t.x, t.y) <= 2
+      ).length;
+      return 1.0 + 0.8 * hurt;
+    }
+    case "prince": s.healingBlocked = true; tk.rainActive = true; tk.cd = 7; return 2.0;
+    case "ark":
+      if (cell) {
+        if (!s.arkWalls) s.arkWalls = [];
+        s.arkWalls.push({ key: edgeKey(tk.x, tk.y, cell[0], cell[1]), hp: 1 });
+      }
+      tk.cd = 5;
+      return 0.6;
+    case "fakie": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1] && t.player === foe);
+      if (target) {
+        const ox = tk.x, oy = tk.y;
+        tk.x = target.x; tk.y = target.y;
+        target.x = ox; target.y = oy;
+        aiApplyDamage(s, target, 2, tk);
+      }
+      tk.cd = 5;
+      return 0;
+    }
+    case "dicrum": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) aiApplyDamage(s, target, 8, tk);
+      tk.cd = 5;
+      return 0;
+    }
+    case "ad": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) target.hp = Math.min(charById(target.charId).hp, target.hp + 4);
+      tk.cd = 4;
+      return 0;
+    }
+    case "cazou": {
+      const target = (s.tokens || []).find(
+        (t) => !t.dead && ab.targetCell && t.x === ab.targetCell[0] && t.y === ab.targetCell[1]
+      );
+      tk.hp = Math.max(1, tk.hp - 4);
+      if (target && cell) { target.x = cell[0]; target.y = cell[1]; }
+      return 0;
+    }
+    case "scrab": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) target.stunned = 1;
+      tk.cd = 5;
+      return 0.4;
+    }
+    case "betta": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) { target.bettaRegen = 5; target.bettaRoundsLeft = 8; target.bettaOwnerId = tk.id; }
+      s.bettaCharges = Math.max(0, (s.bettaCharges || 0) - 1);
+      return 0.5;
+    }
+    case "moms": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) {
+        const amt = Math.min(ab.amount || 1, tk.hp - 1, charById(target.charId).hp - target.hp);
+        if (amt > 0) { tk.hp -= amt; target.hp += amt; }
+      }
+      tk.cd = 4;
+      return 0;
+    }
+    case "ranium": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) target.poison = (target.poison || 0) + 1;
+      tk.cd = 4;
+      return 0.3;
+    }
+    case "se7en": {
+      const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      if (target) aiApplyDamage(s, target, 5, tk);
+      tk.cd = 4;
+      return 0;
+    }
+    case "calix": {
+      if (!s.specialCells) s.specialCells = [];
+      if (cell) s.specialCells.push({ x: cell[0], y: cell[1], type: ab.calixType, ownerId: tk.id });
+      tk.cd = 5;
+      return 0.4;
+    }
+    default: break;
+  }
+  return 0;
+}
+
+function aiSampleMoves(s, tk, rc, max) {
+  if (rc.length <= max) return rc;
+  const scored = rc.map(([x, y]) => ({ c: [x, y], s: aiMoveHeuristic(s, tk, x, y) }));
+  scored.sort((a, b) => b.s - a.s);
+  return scored.slice(0, max).map((o) => o.c);
+}
+
+function aiMoveHeuristic(s, tk, x, y) {
+  const ac = aiAttackCellsAt(s, tk, x, y);
+  const targets = ac.filter(([ax, ay]) => aiIsTargetCell(s, tk.player, ax, ay)).length;
+  let sc = targets * 3;
+  const foe = aiOther(tk.player);
+  const nexus = s.objectivePos && s.objectivePos[foe];
+  if (nexus) sc += Math.max(0, 8 - distanceCheb(x, y, nexus.x, nexus.y));
+  return sc;
+}
+
+function aiGeneratePlans(s, me, cfg) {
+  const out = [];
+  const my = (s.tokens || []).filter((t) => !t.dead && t.player === me);
+  for (const tk of my) {
+    if ((tk.stunned || 0) > 0) continue;
+    if ((s.guardZones || []).some((z) => Math.abs(z.x - tk.x) <= 1 && Math.abs(z.y - tk.y) <= 1)) continue;
+    const canMove = !tk.abilityUsed;
+    const canAct = !(tk.hasAttacked && tk.abilityUsed);
+    if (!canAct) continue;
+
+    const rc = canMove ? aiReachable(s, tk) : [];
+    const moves = aiSampleMoves(s, tk, rc, cfg.maxMoves);
+
+    if (!tk.hasAttacked && !tk.abilityUsed) {
+      const ac = aiAttackCellsAt(s, tk, tk.x, tk.y);
+      for (const [ax, ay] of ac) {
+        if (!aiIsTargetCell(s, me, ax, ay)) continue;
+        out.push({ type: "attack", tokenId: tk.id, target: [ax, ay] });
+      }
+    }
+
+    for (const [mx, myy] of moves) {
+      out.push({ type: "move", tokenId: tk.id, to: [mx, myy] });
+      if (!tk.hasAttacked && !tk.abilityUsed) {
+        const ac2 = aiAttackCellsAt(s, tk, mx, myy);
+        for (const [ax, ay] of ac2) {
+          if (!aiIsTargetCell(s, me, ax, ay)) continue;
+          out.push({ type: "move_attack", tokenId: tk.id, to: [mx, myy], target: [ax, ay] });
+        }
+      }
+      if (aiAbilityReady(s, tk)) {
+        const opts = aiAbilityOptionsAt(s, me, tk, mx, myy);
+        const best = aiBestAbilityOption(s, me, tk, mx, myy, opts, cfg);
+        if (best) out.push({ type: "move_ability", tokenId: tk.id, to: [mx, myy], ability: best });
+      }
+    }
+
+    if (aiAbilityReady(s, tk)) {
+      const opts = aiAbilityOptionsAt(s, me, tk, tk.x, tk.y);
+      const best = aiBestAbilityOption(s, me, tk, tk.x, tk.y, opts, cfg);
+      if (best) out.push({ type: "ability", tokenId: tk.id, ability: best });
+    }
+  }
+  return out;
+}
+
+function aiApplyPlan(s, me, p) {
+  const tok = aiTok(s, p.tokenId);
+  if (!tok) return;
+  if (p.to) { tok.x = p.to[0]; tok.y = p.to[1]; tok.hasMoved = true; }
+  if (p.type === "move") return;
+  if (p.type === "attack" || p.type === "move_attack") {
+    aiResolveAttack(s, tok, p.target[0], p.target[1]);
+    return;
+  }
+  if (p.type === "ability" || p.type === "move_ability") {
+    aiApplyAbility(s, tok, me, p.ability);
+  }
+}
+
+function aiResolveAttack(s, tok, x, y) {
+  const foe = aiOther(tok.player);
+  const nexus = (s.objectivePos && s.objectivePos[foe]) || null;
+  if (nexus && nexus.x === x && nexus.y === y && s.objectives) {
+    const dmg = aiAttackValue(s, tok, null);
+    s.objectives[foe] = Math.max(0, (s.objectives[foe] || 0) - dmg);
+    return;
+  }
+  const target = (s.tokens || []).find((t) => !t.dead && t.x === x && t.y === y);
+  if (target) aiApplyDamage(s, target, aiAttackValue(s, tok, target), tok);
+}
+
+function aiBestReply(s, foe, cfg) {
+  const base = aiEvaluate(s, foe, cfg.aggro);
+  const cfg2 = {
+    depth: 1, reply: 0, noise: 0,
+    maxMoves: Math.min(10, cfg.maxMoves),
+    abilityChance: cfg.abilityChance, aggro: cfg.aggro
+  };
+  const plans = aiGeneratePlans(s, foe, cfg2);
+  let bestGain = 0;
+  for (const p of plans) {
+    const s3 = aiCloneState(s);
+    aiApplyPlan(s3, foe, p);
+    const g = aiEvaluate(s3, foe, cfg.aggro) - base;
+    if (g > bestGain) bestGain = g;
+  }
+  return bestGain;
+}
+
+function aiScorePlan(s, me, p, cfg) {
+  const s2 = aiCloneState(s);
+  aiApplyPlan(s2, me, p);
+  let sc = aiEvaluate(s2, me, cfg.aggro);
+  if (cfg.depth >= 2 && cfg.reply > 0) {
+    const foe = aiOther(me);
+    sc -= cfg.reply * aiBestReply(s2, foe, cfg);
+  }
+  return sc;
+}
+
+function aiChoosePlan(me, diff) {
+  const cfg = AI_DIFF[diff] || AI_DIFF.normal;
+  const s = aiCloneState(state);
+  const plans = aiGeneratePlans(s, me, cfg);
+  if (!plans.length) return null;
+  const scored = plans.map((p) => ({
+    p,
+    sc: aiScorePlan(s, me, p, cfg) + (cfg.noise ? (Math.random() * 2 - 1) * cfg.noise : 0)
+  }));
+  scored.sort((a, b) => b.sc - a.sc);
+  if (diff === "facile" && scored.length > 1 && Math.random() < 0.4) {
+    return scored[Math.floor(Math.random() * scored.length)].p;
+  }
+  return scored[0].p;
+}
+
+/* ---------- Exécution (uniquement via les fonctions du jeu) ---------- */
+
+function aiStatus(text) {
+  const el = document.getElementById("ai-status");
+  if (!el) return;
+  if (!text) { el.classList.remove("show"); return; }
+  el.textContent = text;
+  el.classList.add("show");
+}
+
+function aiWaitIdle() {
+  return new Promise((res) => {
+    const t0 = Date.now();
+    (function loop() {
+      if ((!busy && !pendingAbility) || Date.now() - t0 > 8000) return res();
+      setTimeout(loop, 50);
+    })();
+  });
+}
+
+async function aiPerformAttack(id, x, y) {
+  const t = tokenById(id);
+  if (!t || t.dead) return;
+  selectedTokenId = id;
+  attackAt(x, y);
+  await aiWaitIdle();
+}
+
+async function aiPerformAbility(id, ability) {
+  const t = tokenById(id);
+  if (!t || t.dead) return;
+  selectedTokenId = id;
+  renderBoard();
+  if (t.charId === "calix" && ability.calixType) aiAutoChoice = ability.calixType;
+  if (t.charId === "moms" && ability.amount) aiAutoChoice = ability.amount;
+  await useAbility(id);
+  if (state.winner) return;
+  if (!pendingAbility) return; // capacité auto (guard, abyss…) ou se7en mort de son dé
+  if (!ability.cell) { pendingAbility = null; return; }
+  if (pendingAbility.type === "cazou" && !pendingAbility.selected) {
+    if (!ability.targetCell) { pendingAbility = null; return; }
+    /* 1er clic : saisir le champion adverse. Cela ne met pas busy et laisse
+       pendingAbility actif -> surtout PAS de aiWaitIdle ici (il attendrait 8 s). */
+    resolvePendingOnCell(ability.targetCell[0], ability.targetCell[1]);
+    if (!pendingAbility || !pendingAbility.selected) { pendingAbility = null; return; }
+  }
+  resolvePendingOnCell(ability.cell[0], ability.cell[1]);
+  await aiWaitIdle();
+}
+
+async function aiRapidoFollowUp(id) {
+  let t = tokenById(id);
+  if (!t || t.dead || t.charId !== "rapido" || !t.flurry) return;
+  await aiWaitIdle();
+  t = tokenById(id);
+  if (!t || t.dead || !t.flurry) return;
+  const targets = attackCellsOf(t).filter(([ax, ay]) => aiIsTargetCellReal(t.player, ax, ay));
+  if (targets.length) {
+    await aiPerformAttack(id, targets[0][0], targets[0][1]);
+    return;
+  }
+  const rc = reachableFrom(t.x, t.y, movementBudget(t), t.player);
+  let best = null;
+  for (const [mx, myy] of rc) {
+    const ox = t.x, oy = t.y;
+    t.x = mx; t.y = myy;
+    const ac = attackCellsOf(t);
+    t.x = ox; t.y = oy;
+    if (ac.filter(([ax, ay]) => aiIsTargetCellReal(t.player, ax, ay)).length) { best = [mx, myy]; break; }
+  }
+  if (best) {
+    moveToken(id, best[0], best[1]);
+    await aiWaitIdle();
+  }
+  const t2 = tokenById(id);
+  if (t2 && !t2.dead) {
+    const tg = attackCellsOf(t2).filter(([ax, ay]) => aiIsTargetCellReal(t2.player, ax, ay));
+    if (tg.length) await aiPerformAttack(id, tg[0][0], tg[0][1]);
+  }
+}
+
+async function aiExecutePlan(plan) {
+  const tok = tokenById(plan.tokenId);
+  if (!tok || tok.dead) return;
+  aiStatus("🤖 L'IA joue : " + charById(tok.charId).name);
+  selectedTokenId = tok.id;
+  reachable = [];
+  attackCells = [];
+  renderBoard();
+
+  if (plan.to) {
+    moveToken(plan.tokenId, plan.to[0], plan.to[1]);
+    await aiWaitIdle();
+    if (state.winner) return;
+  }
+
+  if (plan.type === "attack" || plan.type === "move_attack") {
+    await aiPerformAttack(plan.tokenId, plan.target[0], plan.target[1]);
+    await aiWaitIdle();
+    if (state.winner) return;
+    await aiRapidoFollowUp(plan.tokenId);
+    return;
+  }
+
+  if (plan.type === "ability" || plan.type === "move_ability") {
+    await aiPerformAbility(plan.tokenId, plan.ability);
+    await aiWaitIdle();
+    if (state.winner) return;
+    await aiRapidoFollowUp(plan.tokenId);
+    return;
+  }
+
+  /* Simple déplacement : si une attaque vient de s'ouvrir, on en profite. */
+  if (plan.type === "move") {
+    const t = tokenById(plan.tokenId);
+    if (t && !t.dead && !t.hasAttacked && !t.abilityUsed) {
+      const ac = attackCellsOf(t).filter(([ax, ay]) => aiIsTargetCellReal(t.player, ax, ay));
+      if (ac.length) {
+        await aiPerformAttack(plan.tokenId, ac[0][0], ac[0][1]);
+        await aiWaitIdle();
+        if (state.winner) return;
+        await aiRapidoFollowUp(plan.tokenId);
+      }
+    }
+  }
+}
+
+/* ---------- Boucle de tour IA ---------- */
+
+function aiScheduleTurn() {
+  if (!aiMode || state.turn !== aiPlayer || state.winner) return;
+  if (aiRunning) return;
+  aiRunning = true;
+  setTimeout(aiTurnLoop, 420);
+}
+
+async function aiTurnLoop() {
+  try {
+    if (!aiMode || state.turn !== aiPlayer || state.winner || state.phase !== "playing") {
+      aiStatus(null);
+      return;
+    }
+    await aiWaitIdle();
+    if (state.winner) { aiStatus(null); return; }
+
+    const plan = aiChoosePlan(aiPlayer, aiDifficulty);
+    if (plan) {
+      await aiExecutePlan(plan);
+      await aiWaitIdle();
+    }
+    if (state.winner) { aiStatus(null); return; }
+
+    aiStatus(null);
+    pushUndo();
+    endPlayerTurn(); // repasse le tour à A (ne re-déclenche pas l'IA)
+  } catch (e) {
+    try { aiStatus(null); } catch (e2) {}
+    try { pendingAbility = null; } catch (e3) {}
+    try { if (state.turn === aiPlayer && !state.winner) { aiRunning = false; endPlayerTurn(); } } catch (e4) {}
+  } finally {
+    aiRunning = false;
+    renderBoard();
+  }
+}
+
+/* ---------- Placement IA ---------- */
+
+function aiOnGameStart() {
+  aiRunning = false;
+  aiMaybeSchedulePlacement();
+}
+
+function aiMaybeSchedulePlacement() {
+  if (!aiMode || state.phase !== "placement") return;
+  if (state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) return;
+  if (aiRunning) return;
+  aiRunning = true;
+  setTimeout(aiPlacementStep, 350);
+}
+
+function aiChoosePlacementCell() {
+  const player = state.placingPlayer;
+  const cells = GAME.startZones[player].filter(([x, y]) => {
+    if (!isPassable(x, y, player)) return false;
+    if (state.tokens.some((t) => !t.dead && t.x === x && t.y === y)) return false;
+    if (state.objectivePos) {
+      for (const p of ["A", "B"]) {
+        const o = state.objectivePos[p];
+        if (o && o.x === x && o.y === y) return false;
+      }
+    }
+    return true;
+  });
+  if (!cells.length) return null;
+  const foe = aiOther(player);
+  const nexus = state.objectivePos && state.objectivePos[foe];
+  if (state.placingStage === "objective") {
+    // l'objectif reste au fond de la zone, le plus loin de l'ennemi
+    cells.sort((a, b) => {
+      const da = nexus ? distanceCheb(a[0], a[1], nexus.x, nexus.y) : 0;
+      const db = nexus ? distanceCheb(b[0], b[1], nexus.x, nexus.y) : 0;
+      return db - da;
+    });
+    return cells[0];
+  }
+  // champions : au front, mais pas sur la même case (les cases occupées sont déjà exclues)
+  cells.sort((a, b) => {
+    const da = nexus ? distanceCheb(a[0], a[1], nexus.x, nexus.y) : 0;
+    const db = nexus ? distanceCheb(b[0], b[1], nexus.x, nexus.y) : 0;
+    return da - db;
+  });
+  return cells[0];
+}
+
+function aiPlacementStep() {
+  try {
+    if (!aiMode || state.phase !== "placement" || state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) {
+      aiRunning = false;
+      aiStatus(null);
+      return;
+    }
+    aiStatus("🤖 L'IA déploie…");
+    const cell = aiChoosePlacementCell();
+    if (!cell) { aiRunning = false; aiStatus(null); return; }
+    placeAt(cell[0], cell[1]);
+    aiRunning = false;
+    if (state.phase === "placement" && state.placingPlayer === aiPlayer && !state.placement[aiPlayer]) {
+      aiRunning = true;
+      setTimeout(aiPlacementStep, 280);
+    } else {
+      aiStatus(null);
+    }
+  } catch (e) {
+    aiRunning = false;
+    aiStatus(null);
+  }
+}
+
+/* ---------- Remplacement automatique (mort d'un champion IA) ---------- */
+
+function aiPickSpawnCell() {
+  const cells = freeSpawnCells(aiPlayer);
+  if (!cells.length) return null;
+  const foe = aiOther(aiPlayer);
+  const nexus = state.objectivePos && state.objectivePos[foe];
+  if (nexus) {
+    cells.sort((a, b) => distanceCheb(a[0], a[1], nexus.x, nexus.y) - distanceCheb(b[0], b[1], nexus.x, nexus.y));
+    return cells[0];
+  }
+  const enemies = state.tokens.filter((t) => !t.dead && t.player === foe);
+  if (enemies.length) {
+    let cx = 0, cy = 0;
+    enemies.forEach((t) => { cx += t.x; cy += t.y; });
+    cx = Math.round(cx / enemies.length); cy = Math.round(cy / enemies.length);
+    cells.sort((a, b) => distanceCheb(a[0], a[1], cx, cy) - distanceCheb(b[0], b[1], cx, cy));
+    return cells[0];
+  }
+  return cells[0];
+}
+
+function aiReplaceOnDeath(deadToken) {
+  const reserve = state.reserve[aiPlayer];
+  if (!reserve.length) return;
+  const cell = aiPickSpawnCell();
+  if (!cell) return;
+  let idx = 0, best = -Infinity;
+  reserve.forEach((r, i) => {
+    const c = charById(r.charId);
+    let sc = c.atk * 2 + r.hp * 0.4 + c.mouvement;
+    if (c.role === "soutien") sc += 2;
+    if (c.role === "colosse") sc += 1;
+    if (sc > best) { best = sc; idx = i; }
+  });
+  pendingSpawn = { mode: "replace", player: aiPlayer, reserveIdx: idx, tokenId: deadToken.id };
+  commitSpawnPlacement(cell[0], cell[1]);
+}
+
+/* ---------- Constitution de l'équipe IA ---------- */
+
+function aiBuildTeamB() {
+  const taken = state.decks.A || [];
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+  const byRole = {};
+  pool.forEach((id) => {
+    const c = charById(id);
+    (byRole[c.role] = byRole[c.role] || []).push(id);
+  });
+  const roles = isRampage()
+    ? ["colosse", "ravageur", "soutien"].filter((r) => byRole[r] && byRole[r].length)
+    : CLASS_ORDER.slice();
+  const picked = [];
+  roles.forEach((role) => {
+    const arr = byRole[role];
+    if (!arr || !arr.length) return;
+    arr.sort((a, b) => {
+      const ca = charById(a), cb = charById(b);
+      return (cb.atk * 2 + cb.hp * 0.4 + cb.mouvement) - (ca.atk * 2 + ca.hp * 0.4 + ca.mouvement);
+    });
+    picked.push(arr[0]);
+  });
+  state.decks.B = picked.slice(0, teamSizeTarget());
+  buildMode = null;
+  save();
+  renderDecks();
+  renderBuildBanner();
+  if (teamComplete("A") && teamComplete("B")) finishBuild();
+}
+
+/* ---------- Titulaires de l'IA ---------- */
+
+function aiPickStartersInDialog() {
+  const chips = Array.prototype.slice.call(
+    document.querySelectorAll('.starter-chip[data-player="B"]')
+  );
+  if (!chips.length) return;
+  const n = Math.min(3, chips.length);
+  const score = (txt) => {
+    const c = GAME.characters.find((ch) => txt.indexOf(ch.name) === 0);
+    if (!c) return 0;
+    let s = c.atk * 2 + c.hp * 0.4 + c.mouvement;
+    if (c.role === "colosse") s += 2;
+    if (c.role === "soutien") s += 1.5;
+    return s;
+  };
+  const sorted = chips.slice().sort((a, b) => score(b.textContent) - score(a.textContent));
+  for (let i = 0; i < n; i++) sorted[i].classList.add("picked");
+}
+
+/* ---------- Menu IA ---------- */
+
+function aiOpenMode() {
+  aiMode = false;
+  askChoicePrompt({
+    icon: "🤖",
+    title: "Jouer contre l'IA",
+    text: "Choisissez la difficulté de l'ordinateur.",
+    hint: "Facile : impulsif · Normal : solide · Difficile : tactique · Expert : anticipe vos ripostes.",
+    cancel: "Annuler",
+    options: [
+      { label: "😌 Facile", value: "facile" },
+      { label: "🙂 Normal", value: "normal" },
+      { label: "😈 Difficile", value: "difficile" },
+      { label: "🔥 Expert", value: "expert" }
+    ]
+  }).then((d) => {
+    if (!d) { showHome(); return; }
+    aiDifficulty = d;
+    askChoicePrompt({
+      icon: "🎮",
+      title: "Mode de jeu",
+      text: "Choisissez le mode face à l'IA.",
+      hint: "Objectif : 5 champions, détruisez l'objectif adverse. Rampage : 3c3, éliminez tout.",
+      cancel: "Annuler",
+      options: [
+        { label: "🎯 Mode Objectif", value: "classic" },
+        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+      ]
+    }).then((mode) => {
+      if (!mode) { showHome(); return; }
+      askSelectionMethodAI(mode);
+    });
+  });
+}
+
+function askSelectionMethodAI(mode) {
+  askChoicePrompt({
+    icon: "🧩",
+    title: "Sélection des champions",
+    text: mode === "rampage"
+      ? "Rampage : 3 champions (3 classes différentes)."
+      : "Objectif : 5 champions (1 par classe).",
+    hint: "Aléatoire : équipes tirées au sort. Normal : composez librement votre équipe.",
+    cancel: "Annuler",
+    options: [
+      { label: "🎲 Aléatoire", value: "random" },
+      { label: "✍️ Normal", value: "free" }
+    ]
+  }).then((method) => {
+    if (!method) { showHome(); return; }
+    if (method === "random") { aiStartRandomGame(mode); return; }
+    aiOpenTerrainPicker(mode);
+  });
+}
+
+function aiOpenTerrainPicker(mode) {
+  const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  if (!ids.length) { alert("Aucun terrain disponible."); showHome(); return; }
+  const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
+  options.push({ label: "🎲 Au hasard", value: "__random__" });
+  askChoicePrompt({
+    icon: "🗺️",
+    title: "Choisir le terrain",
+    text: "Sur quel terrain voulez-vous jouer ?",
+    cancel: "Annuler",
+    options
+  }).then((val) => {
+    if (!val) { showHome(); return; }
+    let id = val;
+    if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
+    aiSetupGame(id, mode, "free");
+  });
+}
+
+function aiStartRandomGame(mode) {
+  const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  const id = ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
+  if (!id) { alert("Aucun terrain disponible."); showHome(); return; }
+  aiSetupGame(id, mode, "random");
+}
+
+function aiSetupGame(mapId, mode, method) {
+  aiMode = true;
+  aiPlayer = "B";
+  aiRunning = false;
+  aiAutoChoice = undefined;
+  setActiveMap(mapId);
+  state = defaultState();
+  state.mode = mode === "rampage" ? "rampage" : "classic";
+  undoStack = [];
+  selectedTokenId = null;
+  reachable = [];
+  attackCells = [];
+  pendingAbility = null;
+  pendingSpawn = null;
+  save();
+  renderDecks();
+  refreshMapSelectOptions();
+  if (method === "random") {
+    state.decks = { A: randomTeam(teamSizeTarget(), null) };
+    state.decks.B = aiChooseTeamAgainst(state.decks.A);
+    buildMode = null;
+    renderBuildBanner();
+    save();
+    renderDecks();
+    if (isRampage()) {
+      state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+      save();
+      startGame();
+    } else {
+      openStarterDialog({ askMap: false });
+    }
+    return;
+  }
+  beginTeamBuild();
+}
+
+/* L'équipe de l'IA répond à celle du joueur : bons counters, classes distinctes. */
+function aiChooseTeamAgainst(taken) {
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+  const byRole = {};
+  pool.forEach((id) => {
+    const c = charById(id);
+    (byRole[c.role] = byRole[c.role] || []).push(id);
+  });
+  const roles = isRampage()
+    ? ["colosse", "ravageur", "soutien"].filter((r) => byRole[r] && byRole[r].length)
+    : CLASS_ORDER.slice();
+  const picked = [];
+  roles.forEach((role) => {
+    const arr = byRole[role];
+    if (!arr || !arr.length) return;
+    arr.sort((a, b) => {
+      const ca = charById(a), cb = charById(b);
+      return (cb.atk * 2 + cb.hp * 0.4 + cb.mouvement) - (ca.atk * 2 + ca.hp * 0.4 + ca.mouvement);
+    });
+    picked.push(arr[0]);
+  });
+  return picked.slice(0, teamSizeTarget());
+}
+
+/* ---------- Bouton d'accueil ---------- */
+(function initAIButton() {
+  const host = document.getElementById("home-online");
+  if (!host || !host.parentNode) return;
+  const btn = document.createElement("button");
+  btn.id = "home-ai";
+  btn.className = "home-btn";
+  btn.textContent = "🤖 Jouer contre l'IA";
+  host.parentNode.insertBefore(btn, host);
+  btn.addEventListener("click", aiOpenMode);
+})();
+
+/* Petit bandeau d'état de l'IA */
+(function initAIStatus() {
+  const el = document.createElement("div");
+  el.id = "ai-status";
+  document.body.appendChild(el);
+})();
