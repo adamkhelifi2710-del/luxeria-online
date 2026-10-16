@@ -4657,6 +4657,7 @@ fsBtn.addEventListener("click", toggleBigScreen);
 document.getElementById("bigscreen-exit").addEventListener("click", () => setBigScreen(false));
 const bsSwap = document.getElementById("bs-swap");
 const bsUlt = document.getElementById("bs-ult");
+const bsNext = document.getElementById("bs-next");
 function updateBigscreenActions() {
   const wrap = document.getElementById("bigscreen-actions");
   if (!wrap) return;
@@ -4667,10 +4668,13 @@ function updateBigscreenActions() {
      du remplacement et de la capacité reste ainsi gérée par le moteur du jeu. */
   const swapBtn = document.getElementById("panel-swap");
   const ultBtn = document.getElementById("panel-ability");
+  const nextBtn = document.getElementById("next-turn");
   const swap = document.getElementById("bs-swap");
   const ult = document.getElementById("bs-ult");
+  const next = document.getElementById("bs-next");
   if (swap) swap.disabled = !(swapBtn && !swapBtn.disabled);
   if (ult) ult.disabled = !(ultBtn && !ultBtn.disabled);
+  if (next) next.disabled = !(nextBtn && !nextBtn.disabled);
 }
 if (bsSwap) bsSwap.addEventListener("click", () => {
   const b = document.getElementById("panel-swap");
@@ -4678,6 +4682,10 @@ if (bsSwap) bsSwap.addEventListener("click", () => {
 });
 if (bsUlt) bsUlt.addEventListener("click", () => {
   const b = document.getElementById("panel-ability");
+  if (b && !b.disabled) b.click();
+});
+if (bsNext) bsNext.addEventListener("click", () => {
+  const b = document.getElementById("next-turn");
   if (b && !b.disabled) b.click();
 });
 
