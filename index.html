@@ -107,9 +107,12 @@
   <button id="bigscreen-exit" class="bigscreen-exit" title="Quitter le grand écran (Échap ou F)">⛶ Quitter</button>
 
   <div id="bigscreen-actions" class="bigscreen-actions" style="display:none">
-    <button id="bs-swap" class="bs-btn" title="Remplacement (raccourci : R)">↔ Remplacement</button>
-    <button id="bs-ult" class="bs-btn" title="Capacité ultime (raccourci : X)">✨ Capacité</button>
-    <button id="bs-next" class="bs-btn bs-btn--accent" title="Passer au tour suivant (raccourci : Espace ou Z)">⏭ Tour suivant</button>
+    <button id="bs-toggle" class="bs-toggle" title="Actions (menu)" aria-expanded="false" aria-label="Afficher le menu d'actions">☰</button>
+    <div id="bs-menu" class="bs-menu">
+      <button id="bs-swap" class="bs-btn" title="Remplacement (raccourci : R)">↔ Remplacement</button>
+      <button id="bs-ult" class="bs-btn" title="Capacité ultime (raccourci : X)">✨ Capacité</button>
+      <button id="bs-next" class="bs-btn bs-btn--accent" title="Passer au tour suivant (raccourci : Espace ou Z)">⏭ Tour suivant</button>
+    </div>
   </div>
 
   <dialog id="ask-dialog">
