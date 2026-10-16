@@ -136,7 +136,7 @@ const GAME = {
       role: "assassin",
       hp: 8,
       atk: 3,
-      mouvement: 5,
+      mouvement: 4,
       range: 2,
       ability: {
         name: "Gel",
@@ -211,7 +211,7 @@ const GAME = {
       role: "expert",
       hp: 10,
       atk: 3,
-      mouvement: 4,
+      mouvement: 3,
       range: 2,
       ability: {
         name: "Purple Rain",
