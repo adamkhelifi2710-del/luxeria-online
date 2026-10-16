@@ -269,9 +269,9 @@ const GAME = {
       name: "Rapido",
       number: 6,
       role: "ravageur",
-      hp: 10,
+      hp: 9,
       atk: 3,
-      mouvement: 2,
+      mouvement: 5,
       range: 1,
       ability: {
         name: "Déferlement",
@@ -316,7 +316,7 @@ const GAME = {
       role: "soutien",
       hp: 13,
       atk: 2,
-      mouvement: 2,
+      mouvement: 3,
       range: 2,
       ability: {
         name: "Transfusion",
@@ -349,7 +349,7 @@ const GAME = {
       role: "colosse",
       hp: 12,
       atk: 3,
-      mouvement: 3,
+      mouvement: 2,
       range: 2,
       ability: {
         name: "Pacif",
