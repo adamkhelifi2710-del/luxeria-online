@@ -6128,6 +6128,24 @@ function aiPacifActive(s, target) {
   );
 }
 
+/* Effets de bord d'une mort (simulation) : retrait des dômes du mort, soin
+   Rampage des alliés, perte de l'enchantement de BETTA. (Zone de KOGA et
+   remplacement par la réserve volontairement non simulés : approximation.) */
+function aiOnDeath(s, target) {
+  s.guardZones = (s.guardZones || []).filter((z) => z.ownerId !== target.id);
+  if ((target.bettaRegen || 0) > 0) {
+    target.bettaRegen = 0;
+    target.bettaRoundsLeft = 0;
+    target.bettaOwnerId = null;
+  }
+  if (s.mode === "rampage") {
+    (s.tokens || []).forEach((t) => {
+      if (t.dead || t.player !== target.player) return;
+      t.hp = Math.max(t.hp, rampageFloor(charById(t.charId).hp));
+    });
+  }
+}
+
 function aiApplyDamage(s, target, amount, source) {
   if (!target || target.dead || amount <= 0) return 0;
   let dmg = amount;
@@ -6143,7 +6161,7 @@ function aiApplyDamage(s, target, amount, source) {
     target.buffs.vini = false;
     aiApplyDamage(s, source, dealt, null);
   }
-  if (target.hp <= 0) target.dead = true;
+  if (target.hp <= 0) { target.dead = true; aiOnDeath(s, target); }
   return dealt;
 }
 
@@ -6158,19 +6176,78 @@ function aiAttackValue(s, tok, target) {
   return c.atk;
 }
 
+/* ---------- Terminaison (victoire / défaite) ---------- */
+
+const AI_WIN = 1e6;
+
+function aiAllDead(s, player) {
+  const mine = (s.tokens || []).filter((t) => t.player === player);
+  return mine.length > 0 && mine.every((t) => t.dead);
+}
+
+/* Score terminal du point de vue de « me » (null si la partie n'est pas décidée).
+   Permet à la recherche de préférer un gain immédiat et d'éviter une perte. */
+function aiTerminalScore(s, me) {
+  if (s.winner) {
+    if (s.winner === "draw") return 0;
+    return s.winner === me ? AI_WIN : -AI_WIN;
+  }
+  if (aiAllDead(s, me)) return -AI_WIN;
+  const foe = aiOther(me);
+  if (aiAllDead(s, foe)) return AI_WIN;
+  if (s.mode !== "rampage" && s.objectives) {
+    const myO = s.objectives[me] || 0, foeO = s.objectives[foe] || 0;
+    if (myO <= 0 && foeO <= 0) return 0;
+    if (myO <= 0) return -AI_WIN;
+    if (foeO <= 0) return AI_WIN;
+  }
+  return null;
+}
+
+/* Menaces tactiques : dégâts que l'adversaire peut m'infliger au prochain tour
+   depuis sa position, moins ceux que j'exerce sur lui. Favorise la mise à
+   distance et la couverture de l'ennemi. Coûteux : réservé à l'éval principale. */
+function aiThreats(s, me) {
+  const foe = aiOther(me);
+  const mine = (s.tokens || []).filter((t) => !t.dead && t.player === me);
+  const theirs = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+  let sc = 0;
+  for (const t of theirs) {
+    const ac = aiAttackCellsAt(s, t, t.x, t.y);
+    if (!ac.length) continue;
+    const dmg = charById(t.charId).atk;
+    for (const m of mine) {
+      if (!ac.some(([x, y]) => x === m.x && y === m.y)) continue;
+      sc -= (dmg >= m.hp ? 2.4 : 0.7 + 0.15 * Math.min(dmg, m.hp));
+    }
+  }
+  for (const m of mine) {
+    const ac = aiAttackCellsAt(s, m, m.x, m.y);
+    if (!ac.length) continue;
+    const dmg = charById(m.charId).atk;
+    for (const t of theirs) {
+      if (!ac.some(([x, y]) => x === t.x && y === t.y)) continue;
+      sc += 0.5 * (dmg >= t.hp ? 2.2 : 0.6 + 0.15 * Math.min(dmg, t.hp));
+    }
+  }
+  return sc;
+}
+
 /* ---------- Évaluation heuristique (du point de vue de « me ») ---------- */
 
-function aiEvaluate(s, me, aggro) {
+function aiEvaluate(s, me, aggro, withThreats) {
   const foe = aiOther(me);
   if (aggro == null) aggro = 1;
+  const term = aiTerminalScore(s, me);
+  if (term !== null) return term;
   let v = 0;
   const rampage = s.mode === "rampage";
   const myNexus = (s.objectivePos && s.objectivePos[me]) || null;
   const foeNexus = (s.objectivePos && s.objectivePos[foe]) || null;
 
   if (!rampage && s.objectives) {
-    v += 1.25 * (s.objectives[me] || 0);
-    v -= 1.45 * (s.objectives[foe] || 0);
+    v += 1.8 * (s.objectives[me] || 0);
+    v -= 2.2 * (s.objectives[foe] || 0);
   }
 
   const myAlive = (s.tokens || []).filter((t) => !t.dead && t.player === me);
@@ -6203,6 +6280,33 @@ function aiEvaluate(s, me, aggro) {
       });
     }
   }
+
+  /* Cases spéciales sous les champions (feu = danger, soin/vitesse = atout). */
+  aiWithState(s, () => {
+    myAlive.forEach((t) => {
+      if (isFire(t.x, t.y)) v -= 1.5;
+      else if (healCellKindAt(t.x, t.y)) v += 0.5;
+      if (isSpeedCell(t.x, t.y)) v += 0.2;
+    });
+    foeAlive.forEach((t) => {
+      if (isFire(t.x, t.y)) v += 1.2;
+    });
+  });
+
+  /* Buffs actifs et ressources (tempo de la réserve, enchantements). */
+  myAlive.forEach((t) => {
+    if (t.buffs && t.buffs.abyss) v += 1.0;
+    if (t.buffs && t.buffs.vini) v += 0.7;
+    if (t.buffs && t.buffs.braut) v += 0.9;
+    if ((t.bettaRegen || 0) > 0) v += 0.6;
+  });
+  v += 0.4 * ((s.reserve && s.reserve[me] && s.reserve[me].length) || 0);
+  v -= 0.5 * ((s.reserve && s.reserve[foe] && s.reserve[foe].length) || 0);
+  if ((s.bettaCharges || 0) > 0 && myAlive.some((t) => t.charId === "betta")) v += 0.4;
+
+  /* Menaces tactiques : uniquement dans l'évaluation principale (coût CPU). */
+  if (withThreats) v += aggro * aiThreats(s, me);
+
   return v;
 }
 
@@ -6661,7 +6765,7 @@ function aiBestReply(s, foe, cfg) {
 function aiScorePlan(s, me, p, cfg) {
   const s2 = aiCloneState(s);
   aiApplyPlan(s2, me, p);
-  let sc = aiEvaluate(s2, me, cfg.aggro);
+  let sc = aiEvaluate(s2, me, cfg.aggro, cfg.depth >= 2);
   if (cfg.depth >= 2 && cfg.reply > 0) {
     const foe = aiOther(me);
     sc -= cfg.reply * aiBestReply(s2, foe, cfg);
