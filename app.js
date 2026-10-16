@@ -6341,10 +6341,11 @@ function aiEvaluate(s, me, aggro, withThreats) {
     }
   }
 
-  /* Cases spéciales sous les champions (feu = danger, soin/vitesse = atout). */
+  /* Cases spéciales sous les champions (feu = poison qui tue à petit feu : à
+     éviter avant tout ; soin/vitesse = atout). */
   aiWithState(s, () => {
     myAlive.forEach((t) => {
-      if (isFire(t.x, t.y)) v -= 1.5;
+      if (isFire(t.x, t.y)) v -= 3.4;
       else if (healCellKindAt(t.x, t.y)) v += 0.5;
       if (isSpeedCell(t.x, t.y)) v += 0.2;
     });
@@ -6352,6 +6353,43 @@ function aiEvaluate(s, me, aggro, withThreats) {
       if (isFire(t.x, t.y)) v += 1.2;
     });
   });
+
+  /* Rôles : les soutiens/experts ne sont pas des combattants — on les tient à
+     distance des ennemis et on les protège plutôt que de les envoyer au front. */
+  myAlive.forEach((t) => {
+    const role = charById(t.charId).role;
+    if (role === "soutien" || role === "expert") {
+      let near = 99;
+      foeAlive.forEach((f) => { near = Math.min(near, distanceCheb(t.x, t.y, f.x, f.y)); });
+      v += 0.55 * Math.min(near, 4);
+    }
+  });
+
+  /* Mode Rampage : contrôle du centre + progression de TOUTE l'équipe.
+     On récompense la cohésion et surtout l'avancement du champion le plus en
+     retard (le moins mobile), pour ne pas envoyer un champion seul au front. */
+  if (rampage && myAlive.length) {
+    const cx = ((GAME.map.cols || 15) - 1) / 2;
+    const cy = ((GAME.map.rows || 10) - 1) / 2;
+    const maxD = Math.max(1, distanceCheb(0, 0, cx, cy));
+    let sumClose = 0;
+    let laggard = 0;
+    let dispersion = 0;
+    myAlive.forEach((t) => {
+      const d = distanceCheb(t.x, t.y, cx, cy);
+      sumClose += (maxD - d) / maxD;
+      laggard = Math.max(laggard, d);
+      let nearest = 99;
+      myAlive.forEach((o) => {
+        if (o === t) return;
+        nearest = Math.min(nearest, distanceCheb(t.x, t.y, o.x, o.y));
+      });
+      dispersion += Math.max(0, nearest - 2);
+    });
+    v += 2.2 * sumClose;
+    v -= 1.6 * (laggard / maxD);
+    v -= 0.5 * dispersion;
+  }
 
   /* Buffs actifs et ressources (tempo de la réserve, enchantements). */
   myAlive.forEach((t) => {
@@ -6729,6 +6767,14 @@ function aiMoveHeuristic(s, tk, x, y) {
   const foe = aiOther(tk.player);
   const nexus = s.objectivePos && s.objectivePos[foe];
   if (nexus) sc += Math.max(0, 8 - distanceCheb(x, y, nexus.x, nexus.y));
+  /* Le feu est un poison : on ne s'y arrête jamais si on peut l'éviter. */
+  if (isFire(x, y)) sc -= 14;
+  /* Rampage : avancer vers le centre de la carte (contrôle du milieu). */
+  if (s.mode === "rampage") {
+    const cx = ((GAME.map.cols || 15) - 1) / 2;
+    const cy = ((GAME.map.rows || 10) - 1) / 2;
+    sc += Math.max(0, 9 - distanceCheb(x, y, cx, cy)) * 0.9;
+  }
   return sc;
 }
 
@@ -7043,22 +7089,35 @@ function aiChoosePlacementCell() {
     return true;
   });
   if (!cells.length) return null;
-  const foe = aiOther(player);
-  const nexus = state.objectivePos && state.objectivePos[foe];
+  const cols = (GAME.map && GAME.map.cols) || 15;
+  const rows = (GAME.map && GAME.map.rows) || 10;
+  const centerY = (rows - 1) / 2;
+  /* « front » = à quel point la case est proche de l'ennemi (grand = devant). */
+  const front = ([x]) => (player === "A" ? x : cols - 1 - x);
+  const minFront = Math.min.apply(null, cells.map(front));
   if (state.placingStage === "objective") {
-    // l'objectif reste au fond de la zone, le plus loin de l'ennemi
+    /* Objectif au fond de la zone, aligné sur la ligne centrale. */
     cells.sort((a, b) => {
-      const da = nexus ? distanceCheb(a[0], a[1], nexus.x, nexus.y) : 0;
-      const db = nexus ? distanceCheb(b[0], b[1], nexus.x, nexus.y) : 0;
-      return db - da;
+      const da = Math.abs(front(a) - minFront);
+      const db = Math.abs(front(b) - minFront);
+      return (da - db) || (Math.abs(a[1] - centerY) - Math.abs(b[1] - centerY));
     });
     return cells[0];
   }
-  // champions : au front, mais pas sur la même case (les cases occupées sont déjà exclues)
+  /* Champions : formation VERTICALE le long de la colonne avant (la plus proche
+     du centre), pour être dans le jeu dès le début. Les soutiens sont posés une
+     colonne derrière les combattants pour rester protégés. */
+  const queue = (state.placingQueue && state.placingQueue[player]) || [];
+  const champId = queue[0];
+  const role = champId ? charById(champId).role : "ravageur";
+  const isSupport = role === "soutien" || role === "expert";
+  const maxFrontCell = cells.reduce((m, c) => Math.max(m, front(c)), -Infinity);
+  const target = isSupport ? Math.max(minFront, maxFrontCell - 1) : maxFrontCell;
   cells.sort((a, b) => {
-    const da = nexus ? distanceCheb(a[0], a[1], nexus.x, nexus.y) : 0;
-    const db = nexus ? distanceCheb(b[0], b[1], nexus.x, nexus.y) : 0;
-    return da - db;
+    const da = Math.abs(front(a) - target);
+    const db = Math.abs(front(b) - target);
+    if (da !== db) return da - db;
+    return Math.abs(a[1] - centerY) - Math.abs(b[1] - centerY);
   });
   return cells[0];
 }
@@ -7143,11 +7202,7 @@ function aiBuildTeamB() {
   roles.forEach((role) => {
     const arr = byRole[role];
     if (!arr || !arr.length) return;
-    arr.sort((a, b) => {
-      const ca = charById(a), cb = charById(b);
-      return (cb.atk * 2 + cb.hp * 0.4 + cb.mouvement) - (ca.atk * 2 + ca.hp * 0.4 + ca.mouvement);
-    });
-    picked.push(arr[0]);
+    picked.push(arr[Math.floor(Math.random() * arr.length)]);
   });
   state.decks.B = picked.slice(0, teamSizeTarget());
   buildMode = null;
@@ -7165,16 +7220,13 @@ function aiPickStartersInDialog() {
   );
   if (!chips.length) return;
   const n = Math.min(3, chips.length);
-  const score = (txt) => {
-    const c = GAME.characters.find((ch) => txt.indexOf(ch.name) === 0);
-    if (!c) return 0;
-    let s = c.atk * 2 + c.hp * 0.4 + c.mouvement;
-    if (c.role === "colosse") s += 2;
-    if (c.role === "soutien") s += 1.5;
-    return s;
-  };
-  const sorted = chips.slice().sort((a, b) => score(b.textContent) - score(a.textContent));
-  for (let i = 0; i < n; i++) sorted[i].classList.add("picked");
+  /* Titulaires tirés au sort (et non « les 3 meilleurs ») : variété des départs. */
+  const shuffled = chips.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  for (let i = 0; i < n; i++) shuffled[i].classList.add("picked");
 }
 
 /* ---------- Menu IA ---------- */
@@ -7295,7 +7347,8 @@ function aiSetupGame(mapId, mode, method) {
   beginTeamBuild();
 }
 
-/* L'équipe de l'IA répond à celle du joueur : bons counters, classes distinctes. */
+/* L'équipe de l'IA tire ses champions au sort par classe : but = diversité,
+   pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties. */
 function aiChooseTeamAgainst(taken) {
   const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
   const byRole = {};
@@ -7310,11 +7363,7 @@ function aiChooseTeamAgainst(taken) {
   roles.forEach((role) => {
     const arr = byRole[role];
     if (!arr || !arr.length) return;
-    arr.sort((a, b) => {
-      const ca = charById(a), cb = charById(b);
-      return (cb.atk * 2 + cb.hp * 0.4 + cb.mouvement) - (ca.atk * 2 + ca.hp * 0.4 + ca.mouvement);
-    });
-    picked.push(arr[0]);
+    picked.push(arr[Math.floor(Math.random() * arr.length)]);
   });
   return picked.slice(0, teamSizeTarget());
 }
