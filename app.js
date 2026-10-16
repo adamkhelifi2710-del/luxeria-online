@@ -2400,6 +2400,7 @@ if (t.charId === "cazou") {
   renderLog();
   updateHeartbeat();
   updatePlacementBanner();
+  updateBigscreenActions();
   fx = emptyFx();
 
   if (lanMode && lanRole === "host" && lanConnected && !lanApplying && !onlineSetupPhase) {
@@ -4346,6 +4347,20 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  if (k === "r") {
+    e.preventDefault();
+    blurFocused();
+    const tok = tokenById(selectedTokenId);
+    if (
+      tok && isTurnOf(tok.player) && !championAlreadyActed(tok) &&
+      !pendingSpawn && !pendingAbility && state.phase === "playing" && !state.winner &&
+      (state.reserve[tok.player] || []).length
+    ) {
+      openSwapDialog(tok.player, tok);
+    }
+    return;
+  }
+
   if (k === "f") {
     e.preventDefault();
     blurFocused();
@@ -4640,6 +4655,32 @@ function toggleBigScreen() {
 
 fsBtn.addEventListener("click", toggleBigScreen);
 document.getElementById("bigscreen-exit").addEventListener("click", () => setBigScreen(false));
+const bsSwap = document.getElementById("bs-swap");
+const bsUlt = document.getElementById("bs-ult");
+function updateBigscreenActions() {
+  const wrap = document.getElementById("bigscreen-actions");
+  if (!wrap) return;
+  const on = document.body.classList.contains("bigscreen");
+  wrap.style.display = on ? "flex" : "none";
+  if (!on) return;
+  /* On reflète l'état réel des boutons du panneau du champion : la disponibilité
+     du remplacement et de la capacité reste ainsi gérée par le moteur du jeu. */
+  const swapBtn = document.getElementById("panel-swap");
+  const ultBtn = document.getElementById("panel-ability");
+  const swap = document.getElementById("bs-swap");
+  const ult = document.getElementById("bs-ult");
+  if (swap) swap.disabled = !(swapBtn && !swapBtn.disabled);
+  if (ult) ult.disabled = !(ultBtn && !ultBtn.disabled);
+}
+if (bsSwap) bsSwap.addEventListener("click", () => {
+  const b = document.getElementById("panel-swap");
+  if (b && !b.disabled) b.click();
+});
+if (bsUlt) bsUlt.addEventListener("click", () => {
+  const b = document.getElementById("panel-ability");
+  if (b && !b.disabled) b.click();
+});
+
 
 document.getElementById("win-close").addEventListener("click", () => {
   document.getElementById("win-overlay").classList.remove("show");
