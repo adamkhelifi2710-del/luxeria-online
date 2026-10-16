@@ -89,7 +89,7 @@ const GAME = {
       name: "KOGA",
       number: 12,
       role: "assassin",
-      hp: 11,
+      hp: 10,
       atk: 3,
       mouvement: 4,
       range: 2,
