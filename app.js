@@ -4658,12 +4658,19 @@ document.getElementById("bigscreen-exit").addEventListener("click", () => setBig
 const bsSwap = document.getElementById("bs-swap");
 const bsUlt = document.getElementById("bs-ult");
 const bsNext = document.getElementById("bs-next");
+const bsToggle = document.getElementById("bs-toggle");
+function setBigscreenMenu(open) {
+  const wrap = document.getElementById("bigscreen-actions");
+  if (!wrap) return;
+  wrap.classList.toggle("open", !!open);
+  if (bsToggle) bsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
 function updateBigscreenActions() {
   const wrap = document.getElementById("bigscreen-actions");
   if (!wrap) return;
   const on = document.body.classList.contains("bigscreen");
   wrap.style.display = on ? "flex" : "none";
-  if (!on) return;
+  if (!on) { setBigscreenMenu(false); return; }
   /* On reflète l'état réel des boutons du panneau du champion : la disponibilité
      du remplacement et de la capacité reste ainsi gérée par le moteur du jeu. */
   const swapBtn = document.getElementById("panel-swap");
@@ -4676,17 +4683,21 @@ function updateBigscreenActions() {
   if (ult) ult.disabled = !(ultBtn && !ultBtn.disabled);
   if (next) next.disabled = !(nextBtn && !nextBtn.disabled);
 }
+if (bsToggle) bsToggle.addEventListener("click", () => {
+  const wrap = document.getElementById("bigscreen-actions");
+  setBigscreenMenu(wrap && !wrap.classList.contains("open"));
+});
 if (bsSwap) bsSwap.addEventListener("click", () => {
   const b = document.getElementById("panel-swap");
-  if (b && !b.disabled) b.click();
+  if (b && !b.disabled) { b.click(); setBigscreenMenu(false); }
 });
 if (bsUlt) bsUlt.addEventListener("click", () => {
   const b = document.getElementById("panel-ability");
-  if (b && !b.disabled) b.click();
+  if (b && !b.disabled) { b.click(); setBigscreenMenu(false); }
 });
 if (bsNext) bsNext.addEventListener("click", () => {
   const b = document.getElementById("next-turn");
-  if (b && !b.disabled) b.click();
+  if (b && !b.disabled) { b.click(); setBigscreenMenu(false); }
 });
 
 
