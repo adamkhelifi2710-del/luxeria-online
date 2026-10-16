@@ -271,7 +271,7 @@ const GAME = {
       role: "ravageur",
       hp: 9,
       atk: 3,
-      mouvement: 5,
+      mouvement: 3,
       range: 1,
       ability: {
         name: "Déferlement",
