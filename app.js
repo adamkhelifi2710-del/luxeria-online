@@ -28,6 +28,10 @@ let rtcDc = null;
 let lanConnected = false;
 let lanSeq = 0;
 let lanApplying = false;
+/* Relais des fenêtres de capacité en partie en ligne : l'hébergeur pose la
+   question au client (qui contrôle son champion) et attend sa réponse. */
+let lanAskSeq = 0;
+const lanAskWaiters = {};
 
 /* ---- Partie en ligne (matchmaking + relais WebSocket) ---- */
 let onlineMode = false;
@@ -1289,6 +1293,17 @@ function askConfirm(opts) {
 /* Fenêtre de choix multiple (ex : quantité de PV à donner). */
 function askChoicePrompt(opts) {
   const o = opts || {};
+  /* Partie en ligne : l'hébergeur applique l'action du client mais la fenêtre
+     doit s'ouvrir chez le client. On relaie la question et on attend la réponse. */
+  if (lanMustRelayAsk()) {
+    return relayAskLocal({
+      kind: "choice",
+      opts: {
+        title: o.title, text: o.text, hint: o.hint, icon: o.icon, cancel: o.cancel,
+        options: (o.options || []).map((x) => ({ label: x.label, value: x.value }))
+      }
+    });
+  }
   askTitle.textContent = o.title || "Choisissez";
   askText.textContent = o.text || "";
   askHint.textContent = o.hint || "";
@@ -1344,6 +1359,33 @@ function askCalixType(tokenId, avail) {
     }
     return;
   }
+  /* Partie en ligne : la fenêtre s'ouvre chez le joueur qui contrôle CALIX
+     (le client), pas chez l'hébergeur -> on relaie la question puis la réponse. */
+  if (lanMustRelayAsk()) {
+    relayAskLocal({ kind: "calix", tokenId, avail }).then(applyCalixTypeChoice);
+    return;
+  }
+  openCalixTypeDialog(tokenId, avail).then(applyCalixTypeChoice);
+}
+
+/* Applique le type choisi (chaîne) ou annule si falsy. */
+function applyCalixTypeChoice(pick) {
+  if (pick && pendingAbility && pendingAbility.type === "calix") {
+    pendingAbility.cellType = pick;
+    log(`CALIX va poser une case ${CALIX_TYPE_LABEL[pick]} : choisissez une case libre du terrain.`);
+    renderBoard();
+  } else if (pendingAbility && pendingAbility.type === "calix") {
+    pendingAbility = null;
+    log("CALIX annule sa création.");
+    renderBoard();
+  }
+  /* L'hébergeur resynchronise le client après ce choix (appliqué hors action). */
+  lanBroadcast();
+}
+
+/* Fenêtre « quelle case spéciale ? » -> promesse résolue par le type choisi
+   (ou null si annulée). Réutilisée en local et côté client (relais en ligne). */
+function openCalixTypeDialog(tokenId, avail) {
   askTitle.textContent = "Création";
   askText.textContent = "Quelle case spéciale CALIX pose-t-il ?";
   askHint.textContent = avail
@@ -1360,17 +1402,18 @@ function askCalixType(tokenId, avail) {
     const b = document.createElement("button");
     b.className = "ask-btn ask-btn-primary";
     b.textContent = CALIX_TYPE_LABEL[t];
-    b.addEventListener("click", () => {
-      closeAsk(true);
-      if (pendingAbility && pendingAbility.type === "calix") {
-        pendingAbility.cellType = t;
-        log(`CALIX va poser une case ${CALIX_TYPE_LABEL[t]} : choisissez une case libre du terrain.`);
-        renderBoard();
-      }
-    });
+    b.addEventListener("click", () => closeAsk(t));
     askChoice.appendChild(b);
   });
+  if (aiRunning && aiAutoChoice !== undefined && aiAutoChoice !== null) {
+    const v = aiAutoChoice;
+    aiAutoChoice = undefined;
+    return Promise.resolve(v);
+  }
   askDialog.showModal();
+  return new Promise((resolve) => {
+    askResolver = resolve;
+  });
 }
 
 askYes.addEventListener("click", () => closeAsk(true));
@@ -5475,6 +5518,34 @@ function lanSendAction(action) {
   lanSend({ type: "action", action });
 }
 
+/* Vrai quand l'hébergeur applique l'action d'un client et doit lui renvoyer
+   les fenêtres de capacité (sinon elles s'ouvriraient chez l'hébergeur). */
+function lanMustRelayAsk() {
+  return lanMode && lanRole === "host" && lanApplying;
+}
+
+function relayAskLocal(desc) {
+  return new Promise((resolve) => {
+    const id = "ask" + (++lanAskSeq);
+    lanAskWaiters[id] = resolve;
+    lanSend({ type: "ask", id, desc });
+  });
+}
+
+/* Côté client : affiche la fenêtre demandée par l'hébergeur, puis renvoie le choix. */
+function lanHandleAsk(msg) {
+  const d = (msg && msg.desc) || {};
+  if (d.kind === "choice") {
+    askChoicePrompt(d.opts || {}).then((v) => {
+      lanSend({ type: "answer", id: msg.id, value: v === undefined ? null : v });
+    });
+  } else if (d.kind === "calix") {
+    openCalixTypeDialog(d.tokenId, d.avail || []).then((v) => {
+      lanSend({ type: "answer", id: msg.id, value: v || null });
+    });
+  }
+}
+
 function lanApplySelection(id) {
   selectedTokenId = null;
   reachable = [];
@@ -5539,6 +5610,17 @@ function handleLanMessage(msg) {
   if (msg.type === "char-dialog" && lanRole === "client") {
     const c = charById(msg.charId);
     if (c) openCharDialogOrig(c, msg.hp);
+    return;
+  }
+  /* Fenêtre de capacité à afficher chez le client (demandée par l'hébergeur). */
+  if (msg.type === "ask" && lanRole === "client") {
+    lanHandleAsk(msg);
+    return;
+  }
+  /* Réponse du client à une fenêtre de capacité : on débloque l'hébergeur. */
+  if (msg.type === "answer" && lanRole === "host") {
+    const cb = lanAskWaiters[msg.id];
+    if (cb) { delete lanAskWaiters[msg.id]; cb(msg.value); }
     return;
   }
   if (msg.type === "action" && lanRole === "host") {
