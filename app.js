@@ -2808,33 +2808,29 @@ function nextShrinkInfo() {
   return activeShrinkSchedule()[state.shrinkStep] || null;
 }
 
-/* Le feu frappe les objectifs de façon symétrique : dès que l'un des deux
-   objectifs est atteint par le feu, les DEUX subissent 1 dégât au même moment,
-   afin qu'aucun ne meure avant l'autre (égalité au temps). */
-function burnObjectivesSimultaneous() {
+/* Le feu brûle uniquement l'objectif qui se trouve réellement sur une case en
+   feu (1 dégât par manche). L'autre objectif n'est PAS affecté. */
+function burnObjectives() {
   var sides = ["A", "B"];
-  var anyFire = false;
   for (var i = 0; i < sides.length; i++) {
-    var s = sides[i];
-    var pos = state.objectivePos ? state.objectivePos[s] : null;
+    var t = sides[i];
+    var pos = state.objectivePos ? state.objectivePos[t] : null;
     if (!pos) continue;
-    if (state.objectives[s] <= 0) continue;
-    if (isFire(pos.x, pos.y)) { anyFire = true; break; }
-  }
-  if (!anyFire) return;
-  for (var j = 0; j < sides.length; j++) {
-    var t = sides[j];
     if (state.objectives[t] <= 0) continue;
+    if (!isFire(pos.x, pos.y)) continue;
     state.objectives[t] = Math.max(0, state.objectives[t] - 1);
     log(`L'objectif de l'équipe ${t} est sur une case en feu : 1 dégât (${state.objectives[t]} PV).`);
   }
-  if (state.objectives.A <= 0 && state.objectives.B <= 0) {
-    if (!state.winner) state.winner = "draw";
+  if (state.winner) return;
+  var aDead = state.objectives.A <= 0;
+  var bDead = state.objectives.B <= 0;
+  if (aDead && bDead) {
+    state.winner = "draw";
     log(`Les deux objectifs sont détruits en même temps par le feu : match nul !`);
-  } else if (state.objectives.A <= 0 && !state.winner) {
+  } else if (aDead) {
     state.winner = "B";
     log(`L'objectif de l'équipe A est détruit par le feu ! Victoire de l'équipe B.`);
-  } else if (state.objectives.B <= 0 && !state.winner) {
+  } else if (bDead) {
     state.winner = "A";
     log(`L'objectif de l'équipe B est détruit par le feu ! Victoire de l'équipe A.`);
   }
@@ -4535,9 +4531,9 @@ function endPlayerTurn() {
       if (t.charId === "moms") {
         const mc = charById("moms");
         if (t.hp < 10 && t.hp < mc.hp) {
-          const alliesAllFull = state.tokens
-            .filter((a) => !a.dead && a.player === side)
-            .every((a) => a.hp >= charById(a.charId).hp);
+            const alliesAllFull = state.tokens
+              .filter((a) => !a.dead && a.player === side && a.id !== t.id)
+              .every((a) => a.hp >= charById(a.charId).hp);
           if (alliesAllFull) {
             const before = t.hp;
             t.hp = Math.min(10, t.hp + 1);
@@ -4561,9 +4557,9 @@ function endPlayerTurn() {
     fireAt(t, t.x, t.y, true);
   });
 
-  /* Dégâts de feu aux objectifs, une fois par manche (début du tour de A) et
-     de façon symétrique : les deux objectifs tombent en même temps. */
-  if (side === "A") burnObjectivesSimultaneous();
+  /* Dégâts de feu aux objectifs, une fois par manche (début du tour de A) :
+     seul l'objectif posé sur une case en feu est brûlé. */
+  if (side === "A") burnObjectives();
 
   log(`Au tour de l'équipe ${side}.`);
   save();
@@ -6330,8 +6326,17 @@ function aiEvaluate(s, me, aggro, withThreats) {
     const frac = c.hp ? t.hp / c.hp : 0;
     return 1.8 + 0.18 * c.atk + 0.95 * frac;
   };
-  myAlive.forEach((t) => (v += champVal(t)));
-  foeAlive.forEach((t) => (v -= champVal(t) * 1.04));
+    myAlive.forEach((t) => (v += champVal(t)));
+    foeAlive.forEach((t) => (v -= champVal(t) * 1.04));
+
+    /* Aura de JAY : récompenser de garder les alliés dans son rayon (≤2). */
+    myAlive.forEach((t) => {
+      if (t.charId !== "jay") return;
+      myAlive.forEach((o) => {
+        if (o === t) return;
+        if (distanceCheb(t.x, t.y, o.x, o.y) <= 2) v += (o.hp < charById(o.charId).hp ? 0.7 : 0.2);
+      });
+    });
 
   if (foeNexus) {
     myAlive.forEach((t) => {
@@ -6653,7 +6658,9 @@ function aiAbilityOptionsAt(s, me, tk, x, y) {
 /* Choisit la meilleure cible/type pour une capacité donnée (sur clone). */
 function aiBestAbilityOption(s, me, tk, x, y, opts, cfg) {
   if (!opts.length) return null;
-  if (cfg.abilityChance < 1 && Math.random() > cfg.abilityChance) return null;
+  const diff = (typeof aiDifficulty === "string") ? aiDifficulty : "normal";
+  const jaySpam = tk.charId === "jay" && (diff === "facile" || diff === "normal");
+  if (!jaySpam && cfg.abilityChance < 1 && Math.random() > cfg.abilityChance) return null;
   let best = null, bestScore = -Infinity;
   for (const o of opts) {
     const s2 = aiCloneState(s);
@@ -6675,11 +6682,34 @@ function aiApplyAbility(s, tk, me, ab) {
   const foe = aiOther(me);
   const cell = (ab && ab.cell) || null;
   switch (tk.charId) {
-    case "guard":
+    case "guard": {
       s.guardZones.push({ player: me, x: tk.x, y: tk.y, turnsLeft: 3, ownerId: tk.id });
       tk.cd = 5;
-      return 2.0;
-    case "abyss": tk.buffs.abyss = true; tk.cd = 6; return 1.4;
+      /* Dôme : utile seulement pour protéger un point (notre objectif), enfermer
+         un adversaire dans le feu, ou couvrir des alliés blessés. Sinon = inutile. */
+      let bonus = -1.2;
+      const myObj = s.objectivePos && s.objectivePos[me];
+      if (myObj && Math.abs(myObj.x - tk.x) <= 1 && Math.abs(myObj.y - tk.y) <= 1) bonus += 2.2;
+      const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      foes.forEach((e) => {
+        if (Math.abs(e.x - tk.x) <= 1 && Math.abs(e.y - tk.y) <= 1 && aiWithState(s, () => isFire(e.x, e.y))) bonus += 2.0;
+      });
+      (s.tokens || []).forEach((t) => {
+        if (t.dead || t.player !== me || t.id === tk.id) return;
+        if (t.hp < charById(t.charId).hp && Math.abs(t.x - tk.x) <= 1 && Math.abs(t.y - tk.y) <= 1) bonus += 1.0;
+      });
+      return bonus;
+    }
+    case "abyss": {
+      tk.buffs.abyss = true; tk.cd = 6;
+      /* Colosse : on active en avançant, en tête d'équipe. */
+      let bonus = 1.4;
+      const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      let near = 99;
+      foes.forEach((e) => { near = Math.min(near, distanceCheb(tk.x, tk.y, e.x, e.y)); });
+      if (near <= 3) bonus += 0.6;
+      return bonus;
+    }
     case "braut": tk.buffs.braut = true; tk.cd = 5; return 1.6;
     case "vini": tk.buffs.vini = true; tk.cd = 5; return 1.3;
     case "jay": {
@@ -6687,9 +6717,27 @@ function aiApplyAbility(s, tk, me, ab) {
       const hurt = (s.tokens || []).filter(
         (t) => !t.dead && t.player === me && t.hp < charById(t.charId).hp && distanceCheb(tk.x, tk.y, t.x, t.y) <= 2
       ).length;
-      return 1.0 + 0.8 * hurt;
+      let bonus = 1.0 + 0.8 * hurt;
+      /* JAY : cooldown faible. En facile/normal on l'active en continu ; en
+         difficile/expert on l'active en anticipant le combat (adversaire proche). */
+      const enemies = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      let near = 99;
+      enemies.forEach((e) => { near = Math.min(near, distanceCheb(tk.x, tk.y, e.x, e.y)); });
+      const diff = (typeof aiDifficulty === "string") ? aiDifficulty : "normal";
+      if (diff === "facile" || diff === "normal") bonus += 0.8;
+      else if (near <= 4 || hurt > 0) bonus += 1.2;
+      return bonus;
     }
-    case "prince": s.healingBlocked = true; tk.rainActive = true; tk.cd = 7; return 2.0;
+    case "prince": {
+      s.healingBlocked = true; tk.rainActive = true; tk.cd = 7;
+      let bonus = 2.0;
+      const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      let lowest = 1;
+      foes.forEach((t) => { lowest = Math.min(lowest, t.hp / charById(t.charId).hp); });
+      if (lowest <= 0.34) bonus += 1.2;                          // adversaire bien entamé
+      if (foes.some((t) => (t.poison || 0) > 0)) bonus += 1.0;   // synergie RANIUM
+      return bonus;
+    }
     case "ark":
       if (cell) {
         if (!s.arkWalls) s.arkWalls = [];
@@ -6725,14 +6773,34 @@ function aiApplyAbility(s, tk, me, ab) {
         (t) => !t.dead && ab.targetCell && t.x === ab.targetCell[0] && t.y === ab.targetCell[1]
       );
       tk.hp = Math.max(1, tk.hp - 4);
-      if (target && cell) { target.x = cell[0]; target.y = cell[1]; }
-      return 0;
+      let bonus = 0;
+      if (target && cell) {
+        target.x = cell[0]; target.y = cell[1];
+        if (aiWithState(s, () => isFire(cell[0], cell[1]))) bonus += 2.2;   // poussé dans le feu
+        const myObj = s.objectivePos && s.objectivePos[me];
+        if (myObj && s.mode !== "rampage" && distanceCheb(cell[0], cell[1], myObj.x, myObj.y) >= 4) {
+          bonus += 0.8;   // éloigné de notre objectif (défense)
+        }
+      }
+      return bonus;
     }
     case "scrab": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
       if (target) target.stunned = 1;
       tk.cd = 5;
-      return 0.4;
+      /* Le gel sert à achever une cible entamée, ou à se protéger quand on est
+         encerclé (un adversaire qui fuit avec peu de PV). */
+      let bonus = 0.4;
+      if (target) {
+        const frac = target.hp / charById(target.charId).hp;
+        if (frac <= 0.34) bonus += 1.2;
+        if (target.hp <= 2) bonus += 1.0;
+      }
+      const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      let near = 0;
+      foes.forEach((e) => { if (distanceCheb(tk.x, tk.y, e.x, e.y) <= 2) near++; });
+      if (near >= 2) bonus += 0.9;
+      return bonus;
     }
     case "betta": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
@@ -6746,12 +6814,14 @@ function aiApplyAbility(s, tk, me, ab) {
     }
     case "moms": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
+      let healed = 0;
       if (target) {
         const amt = Math.min(ab.amount || 1, tk.hp - 1, charById(target.charId).hp - target.hp);
-        if (amt > 0) { tk.hp -= amt; target.hp += amt; }
+        if (amt > 0) { tk.hp -= amt; target.hp += amt; healed = amt; }
       }
       tk.cd = 4;
-      return 0;
+      /* MOM'S soigne la moindre blessure d'un allié. */
+      return 0.6 + 0.5 * healed;
     }
     case "ranium": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
@@ -6763,13 +6833,49 @@ function aiApplyAbility(s, tk, me, ab) {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
       if (target) aiApplyDamage(s, target, 5, tk);
       tk.cd = 4;
-      return 0;
+      /* SE7EN : l'attaque de base assure déjà 4 dégâts. L'ulti (portée 2) ne vaut
+         le coup que si la cible est hors portée normale, pour finir, ou en
+         début de combat / situation critique. */
+      let bonus = -0.9;
+      if (target) {
+        const d = distanceCheb(tk.x, tk.y, target.x, target.y);
+        if (d > 1) bonus += 1.6;
+        if (target.hp <= 4) bonus += 1.2;
+      }
+      return bonus;
     }
     case "calix": {
       if (!s.specialCells) s.specialCells = [];
       if (cell) s.specialCells.push({ x: cell[0], y: cell[1], type: ab.calixType, ownerId: tk.id });
       tk.cd = 5;
-      return 0.4;
+      /* CALIX : contrôle le centre / ouvre des accès.
+         - fire : sous un adversaire (dégâts + le force à sortir)
+         - block (vide) : bloque un accès (près de notre objectif, ou du centre en rampage)
+         - heal : près d'un allié blessé ou de notre objectif (états critiques)
+         - speed : atout mineur */
+      let bonus = 0;
+      const tp = ab.calixType;
+      const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+      const myObj = s.objectivePos && s.objectivePos[me];
+      if (cell) {
+        const ccx = cell[0], ccy = cell[1];
+        if (tp === "fire") {
+          foes.forEach((e) => { if (Math.abs(e.x - ccx) + Math.abs(e.y - ccy) <= 1) bonus += 1.6; });
+        } else if (tp === "block") {
+          if (myObj && distanceCheb(ccx, ccy, myObj.x, myObj.y) <= 3) bonus += 1.4;
+          if (s.mode === "rampage") {
+            const mcx = ((GAME.map.cols || 15) - 1) / 2, mcy = ((GAME.map.rows || 10) - 1) / 2;
+            if (distanceCheb(ccx, ccy, mcx, mcy) <= 2) bonus += 1.2;
+          }
+        } else if (tp === "heal") {
+          const hurtAlly = (s.tokens || []).some((t) => !t.dead && t.player === me && t.hp < charById(t.charId).hp && distanceCheb(ccx, ccy, t.x, t.y) <= 1);
+          if (hurtAlly) bonus += 1.6;
+          if (myObj && distanceCheb(ccx, ccy, myObj.x, myObj.y) <= 2) bonus += 1.0;
+        } else if (tp === "speed") {
+          bonus += 0.5;
+        }
+      }
+      return bonus;
     }
     default: break;
   }
@@ -6792,12 +6898,48 @@ function aiMoveHeuristic(s, tk, x, y) {
   if (nexus) sc += Math.max(0, 8 - distanceCheb(x, y, nexus.x, nexus.y));
   /* Le feu est un poison : on ne s'y arrête jamais si on peut l'éviter. */
   if (isFire(x, y)) sc -= 14;
+  const cx = ((GAME.map.cols || 15) - 1) / 2;
+  const cy = ((GAME.map.rows || 10) - 1) / 2;
   /* Rampage : avancer vers le centre de la carte (contrôle du milieu). */
   if (s.mode === "rampage") {
-    const cx = ((GAME.map.cols || 15) - 1) / 2;
-    const cy = ((GAME.map.rows || 10) - 1) / 2;
     sc += Math.max(0, 9 - distanceCheb(x, y, cx, cy)) * 0.9;
   }
+  const role = charById(tk.charId).role;
+  const allies = (s.tokens || []).filter((t) => !t.dead && t.player === tk.player && t.id !== tk.id);
+  const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+
+  if (role === "soutien" || role === "expert") {
+    /* Soutiens/experts : se tenir au milieu de l'équipe (près des alliés). */
+    if (allies.length) {
+      let ax = 0, ay = 0;
+      allies.forEach((a) => { ax += a.x; ay += a.y; });
+      ax /= allies.length; ay /= allies.length;
+      sc += Math.max(0, 4 - distanceCheb(x, y, ax, ay)) * 0.7;
+    }
+  } else if (tk.charId === "abyss") {
+    /* ABYSS : se placer en tête d'équipe quand on avance. */
+    if (nexus) sc += Math.max(0, 8 - distanceCheb(x, y, nexus.x, nexus.y)) * 0.8;
+  }
+
+  if (tk.charId === "dicrum") {
+    /* DICRUM : chercher un axe dégagé avec un adversaire à 5 cases. */
+    for (const e of foes) {
+      const dx = Math.abs(e.x - x), dy = Math.abs(e.y - y);
+      if ((dx === 0 || dy === 0) && Math.max(dx, dy) === 5 && aiWithState(s, () => hasClearLoS(x, y, e.x, e.y))) {
+        sc += 3;
+        break;
+      }
+    }
+  }
+
+  if (tk.charId === "scrab") {
+    /* SCRAB : jouer les côtés et se tenir à portée de gel (≤3) des adversaires. */
+    sc += Math.abs(y - cy) * 0.35;
+    let near = 0;
+    foes.forEach((e) => { if (Math.abs(e.x - x) <= 3 && Math.abs(e.y - y) <= 3) near++; });
+    if (near > 0) sc += 1.6;
+  }
+
   return sc;
 }
 
@@ -7119,13 +7261,51 @@ function aiChoosePlacementCell() {
   const front = ([x]) => (player === "A" ? x : cols - 1 - x);
   const minFront = Math.min.apply(null, cells.map(front));
   if (state.placingStage === "objective") {
-    /* Objectif au fond de la zone, aligné sur la ligne centrale. */
-    cells.sort((a, b) => {
-      const da = Math.abs(front(a) - minFront);
-      const db = Math.abs(front(b) - minFront);
-      return (da - db) || (Math.abs(a[1] - centerY) - Math.abs(b[1] - centerY));
-    });
-    return cells[0];
+    const diff = (typeof aiDifficulty === "string") ? aiDifficulty : "normal";
+    const mapCx = (cols - 1) / 2;
+    if (diff === "facile") {
+      /* Facile : objectif au centre de la zone (facile à atteindre). */
+      const zx = cells.reduce((sum, c) => sum + c[0], 0) / cells.length;
+      cells.sort((a, b) => {
+        const da = Math.abs(a[0] - zx) + Math.abs(a[1] - centerY);
+        const db = Math.abs(b[0] - zx) + Math.abs(b[1] - centerY);
+        return da - db;
+      });
+      return cells[0];
+    }
+    if (diff === "normal") {
+      /* Normal : au fond de la zone, le plus opposé au camp adverse. */
+      cells.sort((a, b) => {
+        const da = Math.abs(front(a) - minFront);
+        const db = Math.abs(front(b) - minFront);
+        return (da - db) || (Math.abs(a[1] - centerY) - Math.abs(b[1] - centerY));
+      });
+      return cells[0];
+    }
+      /* Difficile : case de la zone la plus proche du centre de la map (colonne
+         avant, ligne centrale) -> le feu gagne depuis les bords, l'objectif est
+         donc brûlé le plus tard possible.
+         Expert : idem, mais on privilégie les cases « cachées » par les murs.
+         Un mur adjacent coupe une ligne de tir : moins l'objectif est exposé,
+         moins il est attaquable. */
+      const wallAt = (x, y) => {
+        if (x < 0 || y < 0 || x >= cols || y >= rows) return true;
+        return !!(GAME.map.tiles[y] && GAME.map.tiles[y][x] === 1);
+      };
+      const cover = ([x, y]) =>
+        (wallAt(x - 1, y) ? 1 : 0) + (wallAt(x + 1, y) ? 1 : 0) +
+        (wallAt(x, y - 1) ? 1 : 0) + (wallAt(x, y + 1) ? 1 : 0);
+      const distCenter = (c) => Math.abs(c[0] - mapCx) + Math.abs(c[1] - centerY);
+      if (diff === "expert") {
+        cells.sort((a, b) => {
+          const da = distCenter(a) - 1.0 * cover(a);
+          const db = distCenter(b) - 1.0 * cover(b);
+          return (da - db) || (distCenter(a) - distCenter(b));
+        });
+        return cells[0];
+      }
+      cells.sort((a, b) => (distCenter(a) - distCenter(b)) || (a[1] - b[1]));
+      return cells[0];
   }
   /* Champions : formation VERTICALE le long de la colonne avant (la plus proche
      du centre), pour être dans le jeu dès le début. Les soutiens sont posés une
