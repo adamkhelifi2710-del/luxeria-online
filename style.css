@@ -92,6 +92,30 @@
   box-shadow: 0 8px 26px rgba(246, 194, 75, 0.5);
 }
 
+/* Partie en ligne : blanc */
+#home-online {
+  background: #ffffff;
+  color: #17222c;
+  border: 1px solid #ffffff;
+  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.28);
+}
+#home-online:hover {
+  filter: brightness(0.97);
+  box-shadow: 0 8px 26px rgba(255, 255, 255, 0.42);
+}
+
+/* Jouer contre l'IA : vert */
+#home-ai {
+  background: linear-gradient(180deg, #6ee7a8 0%, #22c55e 100%);
+  color: #04240f;
+  border: 1px solid #6ee7a8;
+  box-shadow: 0 6px 22px rgba(34, 197, 94, 0.35);
+}
+#home-ai:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 26px rgba(34, 197, 94, 0.5);
+}
+
 #home-create {
   background: linear-gradient(180deg, #6ea7ff 0%, var(--team-a) 100%);
   color: #0b1220;
