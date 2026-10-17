@@ -6221,6 +6221,11 @@ function aiApplyDamage(s, target, amount, source) {
     target.buffs.vini = false;
     aiApplyDamage(s, source, dealt, null);
   }
+  /* Passif KOGA : récupère 1 PV à chaque attaque qui inflige des dégâts. */
+  if (source && source.charId === "koga" && dealt > 0 && source.id !== target.id && !source.dead) {
+    const kMax = charById(source.charId).hp;
+    source.hp = Math.min(kMax, source.hp + 1);
+  }
   if (target.hp <= 0) { target.dead = true; aiOnDeath(s, target); }
   return dealt;
 }
@@ -6353,6 +6358,20 @@ function aiEvaluate(s, me, aggro, withThreats) {
       if (isFire(t.x, t.y)) v += 1.2;
     });
   });
+
+  /* Poison (RANIUM) : en infliger est un avantage durable ; en subir ronge à
+     petit feu. Jusqu'ici absent de l'évaluation -> RANIUM était sous-utilisé. */
+  myAlive.forEach((t) => { if ((t.poison || 0) > 0) v -= 0.9 * t.poison; });
+  foeAlive.forEach((t) => { if ((t.poison || 0) > 0) v += 0.9 * t.poison; });
+
+  /* Pluie violette (PRINCE) : bloque TOUS les soins. Avantageux si l'adversaire
+     a davantage de PV à récupérer que nous (on lui coupe ses soins). */
+  if (s.healingBlocked) {
+    let mm = 0, fm = 0;
+    myAlive.forEach((t) => { mm += Math.max(0, charById(t.charId).hp - t.hp); });
+    foeAlive.forEach((t) => { fm += Math.max(0, charById(t.charId).hp - t.hp); });
+    v += 0.22 * (fm - mm);
+  }
 
   /* Rôles : les soutiens/experts ne sont pas des combattants — on les tient à
      distance des ennemis et on les protège plutôt que de les envoyer au front. */
@@ -6719,7 +6738,11 @@ function aiApplyAbility(s, tk, me, ab) {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
       if (target) { target.bettaRegen = 5; target.bettaRoundsLeft = 8; target.bettaOwnerId = tk.id; }
       s.bettaCharges = Math.max(0, (s.bettaCharges || 0) - 1);
-      return 0.5;
+      /* Combo KOGA : enchanter un attaquant qui régénère (KOGA/ravageur) crée une
+         boucle attaque -> soin. On bonifie donc l'enchantement de ces alliés. */
+      let bonus = 0.5;
+      if (target && (target.charId === "koga" || charById(target.charId).role === "ravageur")) bonus += 0.6;
+      return bonus;
     }
     case "moms": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
@@ -7187,24 +7210,53 @@ function aiReplaceOnDeath(deadToken) {
 
 /* ---------- Constitution de l'équipe IA ---------- */
 
-function aiBuildTeamB() {
-  const taken = state.decks.A || [];
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+/* Paires signature que l'IA cherche à composer (quand c'est légal pour le mode).
+   L'IA garde une large part d'aléatoire : le but est d'apprendre plusieurs
+   personnages, pas de rejouer toujours les mêmes combos. */
+const AI_COMBOS = [["calix", "ark"], ["prince", "ranium"], ["koga", "betta"], ["cazou", "fakie"]];
+
+/* Tire une équipe : un champion au hasard par classe (diversité). Avec une
+   probabilité de ~45 %, remplace deux postes par une paire signature légale
+   (rôles distincts, tous deux présents dans l'équipe tirée). */
+function aiPickTeam(pool, size, rolePool) {
   const byRole = {};
   pool.forEach((id) => {
     const c = charById(id);
     (byRole[c.role] = byRole[c.role] || []).push(id);
   });
-  const roles = isRampage()
-    ? ["colosse", "ravageur", "soutien"].filter((r) => byRole[r] && byRole[r].length)
-    : CLASS_ORDER.slice();
-  const picked = [];
-  roles.forEach((role) => {
-    const arr = byRole[role];
-    if (!arr || !arr.length) return;
-    picked.push(arr[Math.floor(Math.random() * arr.length)]);
-  });
-  state.decks.B = picked.slice(0, teamSizeTarget());
+  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const availRoles = rolePool.filter((r) => byRole[r] && byRole[r].length);
+  if (!availRoles.length) return [];
+  const shuffled = availRoles.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const teamRoles = shuffled.slice(0, size);
+  const roleSet = new Set(teamRoles);
+  const pick = {};
+  teamRoles.forEach((r) => { pick[r] = rand(byRole[r]); });
+  /* Biais combo : ~45 % des équipes cherchent à poser une paire signature. */
+  if (Math.random() < 0.45) {
+    const legal = AI_COMBOS.filter(([a, b]) =>
+      roleSet.has(charRole(a)) && roleSet.has(charRole(b)) &&
+      charRole(a) !== charRole(b) &&
+      byRole[charRole(a)] && byRole[charRole(a)].indexOf(a) >= 0 &&
+      byRole[charRole(b)] && byRole[charRole(b)].indexOf(b) >= 0
+    );
+    if (legal.length) {
+      const pair = rand(legal);
+      pick[charRole(pair[0])] = pair[0];
+      pick[charRole(pair[1])] = pair[1];
+    }
+  }
+  return teamRoles.map((r) => pick[r]);
+}
+
+function aiBuildTeamB() {
+  const taken = state.decks.A || [];
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+  state.decks.B = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
   buildMode = null;
   save();
   renderDecks();
@@ -7348,24 +7400,11 @@ function aiSetupGame(mapId, mode, method) {
 }
 
 /* L'équipe de l'IA tire ses champions au sort par classe : but = diversité,
-   pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties. */
+   pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties.
+   `aiPickTeam` ajoute, dans ~45 % des cas, l'une de ses paires signature. */
 function aiChooseTeamAgainst(taken) {
   const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
-  const byRole = {};
-  pool.forEach((id) => {
-    const c = charById(id);
-    (byRole[c.role] = byRole[c.role] || []).push(id);
-  });
-  const roles = isRampage()
-    ? ["colosse", "ravageur", "soutien"].filter((r) => byRole[r] && byRole[r].length)
-    : CLASS_ORDER.slice();
-  const picked = [];
-  roles.forEach((role) => {
-    const arr = byRole[role];
-    if (!arr || !arr.length) return;
-    picked.push(arr[Math.floor(Math.random() * arr.length)]);
-  });
-  return picked.slice(0, teamSizeTarget());
+  return aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
 }
 
 /* ---------- Bouton d'accueil ---------- */
