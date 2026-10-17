@@ -891,6 +891,10 @@ function isBlockedLoS(x, y) {
   for (const gz of state.guardZones) {
     if (Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1) return true;
   }
+  /* L'objectif est une structure : il coupe les lignes de tir (on ne peut pas
+     tirer « par-dessus » pour toucher un champion placé derrière). La case cible
+     n'étant jamais testée ici, attaquer l'objectif lui-même reste possible. */
+  if (objectiveCellAt(x, y)) return true;
   return false;
 }
 
@@ -3310,6 +3314,9 @@ function spawnChoiceAt(x, y) {
 function checkTeamWipe() {
   if (state.winner || state.phase !== "playing") return;
   ["A", "B"].forEach((p) => {
+    /* Un remplacement de mort en attente signifie que l'équipe n'est pas
+       réellement vaincue : son remplaçant n'est simplement pas encore posé. */
+    if (pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === p) return;
     if (!allDead(p)) return;
     state.winner = turnOfOther(p);
     log(`Tous les champions de l'équipe ${p} sont éliminés. Victoire de l'équipe ${state.winner}.`);
@@ -4499,7 +4506,13 @@ function endPlayerTurn() {
   reachable = [];
   attackCells = [];
   pendingAbility = null;
-  pendingSpawn = null;
+  /* Ne PAS effacer un remplacement de mort encore en attente : le champion peut
+     mourir pendant le tour de l'IA et le joueur humain ne peut poser son
+     remplaçant qu'à son propre tour. (L'IA pose son remplaçant immédiatement,
+     donc dans son cas pendingSpawn est déjà remis à null.) */
+  if (!(pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player !== aiPlayer)) {
+    pendingSpawn = null;
+  }
   state.activatedTokenId = null;
   checkTeamWipe();
 
@@ -6423,7 +6436,7 @@ function aiEvaluate(s, me, aggro, withThreats) {
   if (foeNexus) {
     myAlive.forEach((t) => {
       const d = distanceCheb(t.x, t.y, foeNexus.x, foeNexus.y);
-      v += 0.5 * aggro * Math.max(0, 7 - d);
+      v += 0.65 * aggro * Math.max(0, 8 - d);
     });
     if (myNexus) {
       foeAlive.forEach((t) => {
@@ -6495,6 +6508,26 @@ function aiEvaluate(s, me, aggro, withThreats) {
     v += 2.2 * sumClose;
     v -= 1.6 * (laggard / maxD);
     v -= 0.5 * dispersion;
+  }
+
+  /* Mode Objectif : poussée collective vers l'objectif adverse (miroir du terme
+     Rampage ci-dessus). Sans lui, l'IA n'a aucune raison d'avancer tant qu'elle
+     se trouve à plus de 7 cases de l'objectif ennemi (le bonus d'approche est
+     borné) : elle campe et attend l'adversaire. On récompense donc une
+     progression CONTINUE vers l'objectif adverse et l'avancement du champion le
+     plus en retard, pour que toute l'équipe monte au front. Le facteur aggro
+     rend l'IA nettement plus agressive en Difficile/Expert. */
+  if (!rampage && myAlive.length && foeNexus) {
+    const maxD = Math.max(1, distanceCheb(0, 0, (GAME.map.cols || 15) - 1, (GAME.map.rows || 10) - 1));
+    let sumClose = 0;
+    let laggard = 0;
+    myAlive.forEach((t) => {
+      const d = distanceCheb(t.x, t.y, foeNexus.x, foeNexus.y);
+      sumClose += Math.max(0, maxD - d) / maxD;
+      laggard = Math.max(laggard, d);
+    });
+    v += 1.8 * aggro * sumClose;
+    v -= 0.9 * aggro * (laggard / maxD);
   }
 
   /* Buffs actifs et ressources (tempo de la réserve, enchantements). */
