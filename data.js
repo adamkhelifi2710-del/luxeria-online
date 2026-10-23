@@ -200,7 +200,7 @@ const GAME = {
       range: 1,
       ability: {
         name: "Manipulation",
-        desc: "Cd 6 — Sacrifie 4 PV (peut l'éliminer) et manipule un seul champion adverse : cliquez d'abord le champion concerné, puis la case libre du plateau où le porter."
+        desc: "Cd 6 — Sacrifie 3 PV (peut l'éliminer) et manipule un champion adverse : choisissez-le dans une zone 5×5 centrée sur lui, puis déposez-le sur une case libre dans une zone 9×9 centrée sur lui."
       },
       passive: { name: "", desc: "" }
     },
