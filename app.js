@@ -2326,6 +2326,15 @@ if (t.charId === "cazou") {
     const cazou = tokenById(pendingAbility.tokenId);
     if (cazou) {
       if (!pendingAbility.selected) {
+        /* Zone de sélection 5×5 : hachures lilas pour montrer jusqu'où CAZOU
+           peut saisir un champion adverse. */
+        for (let cy = 0; cy < GAME.map.rows; cy++) {
+          for (let cx = 0; cx < GAME.map.cols; cx++) {
+            if (!cazouInRange5(cazou, { x: cx, y: cy })) continue;
+            const zel = board.querySelector(`.cell[data-x="${cx}"][data-y="${cy}"]`);
+            if (zel) zel.classList.add("cazou-zone");
+          }
+        }
         state.tokens
           .filter((t) => !t.dead && t.player !== cazou.player && cazouInRange5(cazou, t))
           .forEach((t) => {
@@ -3443,8 +3452,10 @@ function attackAt(x, y) {
     return;
   }
   const targetTok = state.tokens.find((t) => !t.dead && t.x === x && t.y === y);
-  if (tok.charId === "rapido" && targetTok && targetTok.rapidoStunnedBy === tok.id && targetTok.rapidoStunnedTurn === state.turnCount) {
-    alert("RAPIDO ne peut pas re-attaquer une cible qu'il vient d'étourdir avec Déferlement.");
+  const recentRapidoStun = targetTok && targetTok.rapidoStunnedBy === tok.id &&
+    (targetTok.rapidoStunnedTurn === state.turnCount || targetTok.rapidoStunnedTurn === state.turnCount - 1);
+  if (tok.charId === "rapido" && targetTok && recentRapidoStun) {
+    alert("RAPIDO ne peut pas re-attaquer une cible qu'il a étourdie ce tour-ci ou au tour précédent avec Déferlement.");
     renderBoard();
     return;
   }
@@ -4502,7 +4513,13 @@ function endPlayerTurn() {
 
   state.tokens.forEach((t) => {
     if (t.stunned > 0 && t.player === state.turn) t.stunned = 0;
-    if (t.rapidoStunnedBy) { delete t.rapidoStunnedBy; delete t.rapidoStunnedTurn; }
+    /* Le marqueur RAPIDO survit un tour de plus : il interdit aussi la
+       re-attaque de la cible étourdie au tour précédent. On ne l'efface donc
+       qu'une fois ce délai écoulé. */
+    if (t.rapidoStunnedBy && typeof t.rapidoStunnedTurn === "number" && t.rapidoStunnedTurn < state.turnCount - 1) {
+      delete t.rapidoStunnedBy;
+      delete t.rapidoStunnedTurn;
+    }
     if (t.flurry || t.flurrySecond) {
       t.flurry = false;
       t.flurrySecond = false;
@@ -7183,10 +7200,23 @@ function aiBestReply(s, foe, cfg) {
   return bestGain;
 }
 
+/* Les ravageurs et assassins frappent plus fort : on bonifie leurs plans
+   d'attaque pour que l'IA les préfère aux rôles moins offensifs. */
+function aiRoleAttackBonus(charId) {
+  const role = charById(charId).role;
+  if (role === "ravageur") return 1.4;
+  if (role === "assassin") return 1.15;
+  return 0;
+}
+
 function aiScorePlan(s, me, p, cfg) {
   const s2 = aiCloneState(s);
   aiApplyPlan(s2, me, p);
   let sc = aiEvaluate(s2, me, cfg.aggro, cfg.depth >= 2);
+  if (p.type === "attack" || p.type === "move_attack") {
+    const tok = (s.tokens || []).find((t) => t.id === p.tokenId);
+    if (tok) sc += aiRoleAttackBonus(tok.charId) * (s.mode === "rampage" ? 1.35 : 1);
+  }
   if (cfg.depth >= 2 && cfg.reply > 0) {
     const foe = aiOther(me);
     sc -= cfg.reply * aiBestReply(s2, foe, cfg);
