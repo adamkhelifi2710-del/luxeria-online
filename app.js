@@ -2327,7 +2327,7 @@ if (t.charId === "cazou") {
     if (cazou) {
       if (!pendingAbility.selected) {
         state.tokens
-          .filter((t) => !t.dead && t.player !== cazou.player)
+          .filter((t) => !t.dead && t.player !== cazou.player && cazouInRange5(cazou, t))
           .forEach((t) => {
             const el = board.querySelector(`.cell[data-x="${t.x}"][data-y="${t.y}"]`);
             if (el) el.classList.add("cazou-pick");
@@ -2335,6 +2335,7 @@ if (t.charId === "cazou") {
       } else {
         for (let cy = 0; cy < GAME.map.rows; cy++) {
           for (let cx = 0; cx < GAME.map.cols; cx++) {
+            if (!cazouDestInRange7(cazou, cx, cy)) continue;
             if (!cazouCellFree(cx, cy, cazou.player)) continue;
             const el = board.querySelector(`.cell[data-x="${cx}"][data-y="${cy}"]`);
             if (el) el.classList.add("cazou-cell");
@@ -3420,8 +3421,10 @@ function rapidoFlurryStep(tok, target) {
   tok.flurrySecond = false;
   if (target && !target.dead) {
     target.stunned = 1;
+    target.rapidoStunnedBy = tok.id;
+    target.rapidoStunnedTurn = state.turnCount;
     fxCell(target.x, target.y, "lock");
-    log(`${charById(target.charId).name} (${target.player}) est paralysé par Déferlement pendant un tour.`);
+    log(`${charById(target.charId).name} (${target.player}) est paralysé par Déferlement pendant un tour. Il ne peut plus être re-attaqué par RAPIDO.`);
   }
   return false;
 }
@@ -3436,6 +3439,12 @@ function attackAt(x, y) {
   }
   if (championAlreadyActed(tok)) {
     alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
+  const targetTok = state.tokens.find((t) => !t.dead && t.x === x && t.y === y);
+  if (tok.charId === "rapido" && targetTok && targetTok.rapidoStunnedBy === tok.id && targetTok.rapidoStunnedTurn === state.turnCount) {
+    alert("RAPIDO ne peut pas re-attaquer une cible qu'il vient d'étourdir avec Déferlement.");
     renderBoard();
     return;
   }
@@ -3732,10 +3741,11 @@ async function useAbility(tokenId) {
         renderBoard();
         return;
       }
+      log("Cliquez d'abord le champion adverse à manipuler, puis la case libre où le déposer.");
       tok.cd = 6;
       fxAbility(tok.id);
       pendingAbility = { tokenId, type: "cazou", selected: null };
-      log("CAZOU sacrifie 4 PV et ne manipule qu'UN seul champion adverse : cliquez d'abord le champion concerné, puis la case libre où le porter.");
+      log("CAZOU sacrifie 4 PV et manipule un champion adverse dans une zone 5×5 autour de lui, puis le dépose dans une zone 7×7 autour de lui.");
       applyDamageToToken(tok, 4, null, { self: true });
       break;
     }
@@ -3942,6 +3952,16 @@ function cazouCellFree(x, y, player) {
   return true;
 }
 
+function cazouInRange5(cazou, target) {
+  if (!cazou || !target) return false;
+  return Math.abs(target.x - cazou.x) <= 2 && Math.abs(target.y - cazou.y) <= 2;
+}
+
+function cazouDestInRange7(cazou, x, y) {
+  if (!cazou) return false;
+  return Math.abs(x - cazou.x) <= 3 && Math.abs(y - cazou.y) <= 3;
+}
+
 async function resolvePendingOnCell(x, y) {
   const pa = pendingAbility;
   const tok = tokenById(pa.tokenId);
@@ -3963,8 +3983,12 @@ async function resolvePendingOnCell(x, y) {
       alert("Ce champion est enfermé dans un Dôme de Verre (GUARD) : impossible de le manipuler.");
       return;
     }
+    if (!cazouInRange5(tok, target)) {
+      alert("CAZOU ne peut manipuler que les champions adverses dans une zone 5×5 centrée sur lui.");
+      return;
+    }
     pa.selected = target.id;
-    log(`${charById(target.charId).name} est saisi : cliquez la case libre où le porter.`);
+    log(`${charById(target.charId).name} est saisi : cliquez la case libre où le porter (zone 7×7 centrée sur CAZOU).`);
     renderBoard();
     return;
   }
@@ -4004,6 +4028,10 @@ async function resolvePendingOnCell(x, y) {
     if (!enemy || enemy.dead) {
       pendingAbility = null;
       renderBoard();
+      return;
+    }
+    if (!cazouDestInRange7(tok, x, y)) {
+      alert("CAZOU ne peut redisposer le champion que dans une zone 7×7 centrée sur lui.");
       return;
     }
     if (!cazouCellFree(x, y, tok.player)) {
@@ -4474,6 +4502,7 @@ function endPlayerTurn() {
 
   state.tokens.forEach((t) => {
     if (t.stunned > 0 && t.player === state.turn) t.stunned = 0;
+    if (t.rapidoStunnedBy) { delete t.rapidoStunnedBy; delete t.rapidoStunnedTurn; }
     if (t.flurry || t.flurrySecond) {
       t.flurry = false;
       t.flurrySecond = false;
@@ -6607,6 +6636,7 @@ function aiAbilityReady(s, tk) {
 }
 
 function aiBestCazouCell(s, me, enemy) {
+  const tk = (s.tokens || []).find((t) => !t.dead && t.player === me && t.charId === "cazou");
   const mine = (s.tokens || []).filter((t) => !t.dead && t.player === me);
   let cx = 0, cy = 0;
   if (mine.length) {
@@ -6616,6 +6646,7 @@ function aiBestCazouCell(s, me, enemy) {
   let best = null, bestD = Infinity;
   for (let y = 0; y < GAME.map.rows; y++) {
     for (let x = 0; x < GAME.map.cols; x++) {
+      if (tk && !cazouDestInRange7(tk, x, y)) continue;
       if (!aiWithState(s, () => cazouCellFree(x, y, me))) continue;
       const d = distanceCheb(x, y, cx, cy);
       if (d < bestD) { bestD = d; best = [x, y]; }
@@ -6688,15 +6719,17 @@ function aiAbilityOptions(s, me, tk) {
       });
       break;
     }
-    case "cazou": {
-      (s.tokens || []).forEach((t) => {
-        if (t.dead || t.player === me) return;
-        if ((s.guardZones || []).some((z) => Math.abs(z.x - t.x) <= 1 && Math.abs(z.y - t.y) <= 1)) return;
-        const cell = aiBestCazouCell(s, me, t);
-        if (cell) add({ targetCell: [t.x, t.y], cell });
-      });
-      break;
-    }
+  case "cazou": {
+    const cazou = tk;
+    (s.tokens || []).forEach((t) => {
+      if (t.dead || t.player === me) return;
+      if ((s.guardZones || []).some((z) => Math.abs(z.x - t.x) <= 1 && Math.abs(z.y - t.y) <= 1)) return;
+      if (!cazouInRange5(cazou, t)) return;
+      const cell = aiBestCazouCell(s, me, t);
+      if (cell) add({ targetCell: [t.x, t.y], cell });
+    });
+    break;
+  }
     case "scrab": {
       (s.tokens || []).forEach((t) => {
         if (t.dead || t.player === me) return;
@@ -6884,12 +6917,14 @@ function aiApplyAbility(s, tk, me, ab) {
       return 0;
     }
     case "cazou": {
+      const cazouT = tk;
       const target = (s.tokens || []).find(
         (t) => !t.dead && ab.targetCell && t.x === ab.targetCell[0] && t.y === ab.targetCell[1]
       );
       tk.hp = Math.max(1, tk.hp - 4);
       let bonus = 0;
       if (target && cell) {
+        if (cazouT && !cazouDestInRange7(cazouT, cell[0], cell[1])) return -9999;
         target.x = cell[0]; target.y = cell[1];
         if (aiWithState(s, () => isFire(cell[0], cell[1]))) bonus += 2.2;   // poussé dans le feu
         const myObj = s.objectivePos && s.objectivePos[me];
