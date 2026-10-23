@@ -2344,7 +2344,7 @@ if (t.charId === "cazou") {
       } else {
         for (let cy = 0; cy < GAME.map.rows; cy++) {
           for (let cx = 0; cx < GAME.map.cols; cx++) {
-            if (!cazouDestInRange7(cazou, cx, cy)) continue;
+            if (!cazouDestInRange9(cazou, cx, cy)) continue;
             if (!cazouCellFree(cx, cy, cazou.player)) continue;
             const el = board.querySelector(`.cell[data-x="${cx}"][data-y="${cy}"]`);
             if (el) el.classList.add("cazou-cell");
@@ -3756,8 +3756,8 @@ async function useAbility(tokenId) {
       tok.cd = 6;
       fxAbility(tok.id);
       pendingAbility = { tokenId, type: "cazou", selected: null };
-      log("CAZOU sacrifie 4 PV et manipule un champion adverse dans une zone 5×5 autour de lui, puis le dépose dans une zone 7×7 autour de lui.");
-      applyDamageToToken(tok, 4, null, { self: true });
+      log("CAZOU sacrifie 3 PV et manipule un champion adverse dans une zone 5×5 autour de lui, puis le dépose dans une zone 9×9 autour de lui.");
+      applyDamageToToken(tok, 3, null, { self: true });
       break;
     }
     case "prince": {
@@ -3968,9 +3968,9 @@ function cazouInRange5(cazou, target) {
   return Math.abs(target.x - cazou.x) <= 2 && Math.abs(target.y - cazou.y) <= 2;
 }
 
-function cazouDestInRange7(cazou, x, y) {
+function cazouDestInRange9(cazou, x, y) {
   if (!cazou) return false;
-  return Math.abs(x - cazou.x) <= 3 && Math.abs(y - cazou.y) <= 3;
+  return Math.abs(x - cazou.x) <= 4 && Math.abs(y - cazou.y) <= 4;
 }
 
 async function resolvePendingOnCell(x, y) {
@@ -3999,7 +3999,7 @@ async function resolvePendingOnCell(x, y) {
       return;
     }
     pa.selected = target.id;
-    log(`${charById(target.charId).name} est saisi : cliquez la case libre où le porter (zone 7×7 centrée sur CAZOU).`);
+    log(`${charById(target.charId).name} est saisi : cliquez la case libre où le porter (zone 9×9 centrée sur CAZOU).`);
     renderBoard();
     return;
   }
@@ -4041,8 +4041,8 @@ async function resolvePendingOnCell(x, y) {
       renderBoard();
       return;
     }
-    if (!cazouDestInRange7(tok, x, y)) {
-      alert("CAZOU ne peut redisposer le champion que dans une zone 7×7 centrée sur lui.");
+    if (!cazouDestInRange9(tok, x, y)) {
+      alert("CAZOU ne peut redisposer le champion que dans une zone 9×9 centrée sur lui.");
       return;
     }
     if (!cazouCellFree(x, y, tok.player)) {
@@ -6663,7 +6663,7 @@ function aiBestCazouCell(s, me, enemy) {
   let best = null, bestD = Infinity;
   for (let y = 0; y < GAME.map.rows; y++) {
     for (let x = 0; x < GAME.map.cols; x++) {
-      if (tk && !cazouDestInRange7(tk, x, y)) continue;
+      if (tk && !cazouDestInRange9(tk, x, y)) continue;
       if (!aiWithState(s, () => cazouCellFree(x, y, me))) continue;
       const d = distanceCheb(x, y, cx, cy);
       if (d < bestD) { bestD = d; best = [x, y]; }
@@ -6941,7 +6941,7 @@ function aiApplyAbility(s, tk, me, ab) {
       tk.hp = Math.max(1, tk.hp - 4);
       let bonus = 0;
       if (target && cell) {
-        if (cazouT && !cazouDestInRange7(cazouT, cell[0], cell[1])) return -9999;
+        if (cazouT && !cazouDestInRange9(cazouT, cell[0], cell[1])) return -9999;
         target.x = cell[0]; target.y = cell[1];
         if (aiWithState(s, () => isFire(cell[0], cell[1]))) bonus += 2.2;   // poussé dans le feu
         const myObj = s.objectivePos && s.objectivePos[me];
