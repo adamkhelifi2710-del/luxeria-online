@@ -1,4 +1,4 @@
-const STORAGE_KEY = "boardgame_tracker_v2";
+﻿﻿﻿﻿const STORAGE_KEY = "boardgame_tracker_v2";
 
 let state = load();
 let selectedTokenId = null;
@@ -1784,7 +1784,7 @@ function renderBoard() {
       }
 
       if (state.phase === "placement") {
-        if (inSpawnZone(state.placingPlayer, x, y)) cell.classList.add("placement-zone");
+      if (inSpawnZone("A", x, y) || inSpawnZone("B", x, y)) cell.classList.add("placement-zone");
         if (cellPlaceable(x, y)) cell.classList.add("placeable");
       }
 
@@ -2366,7 +2366,7 @@ if (t.charId === "cazou") {
 
   const turnLabel = document.getElementById("turn-label");
   if (state.phase === "placement") {
-    turnLabel.textContent = `Tour 0 — Placement — Équipe ${state.placingPlayer}`;
+turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase === "placement" ? lanLocalTeam() : state.placingPlayer}`;
     turnLabel.className = "player-" + state.placingPlayer.toLowerCase();
   } else {
     const shrinkNext = nextShrinkInfo();
@@ -2488,7 +2488,14 @@ function objectiveCellAt(x, y) {
 
 function cellPlaceable(x, y) {
   if (state.phase !== "placement") return false;
-  const player = state.placingPlayer;
+  let player;
+  if (lanMode) {
+    if (GAME.startZones.A.some(([sx, sy]) => sx === x && sy === y)) player = "A";
+    else if (GAME.startZones.B.some(([sx, sy]) => sx === x && sy === y)) player = "B";
+    else return false;
+  } else {
+    player = state.placingPlayer;
+  }
   if (state.placement[player]) return false;
   if (!inSpawnZone(player, x, y)) return false;
   if (objectiveCellAt(x, y)) return false;
@@ -2497,7 +2504,22 @@ function cellPlaceable(x, y) {
 }
 
 function placeAt(x, y) {
-  const player = state.placingPlayer;
+  let player;
+  if (lanMode && state.phase === "placement") {
+    if (GAME.startZones.A.some(([sx, sy]) => sx === x && sy === y)) player = "A";
+    else if (GAME.startZones.B.some(([sx, sy]) => sx === x && sy === y)) player = "B";
+    else {
+      alert("Choisissez une case dans votre zone de départ.");
+      return;
+    }
+  } else {
+    player = state.placingPlayer;
+  }
+  /* En ligne, on ne peut placer que pour son propre camp. */
+  if (lanMode && state.phase === "placement") {
+    const acting = lanApplying ? "B" : "A";
+    if (player !== acting) return;
+  }
   if (state.placement[player]) return;
   if (!inSpawnZone(player, x, y)) {
     alert(`Choisissez une case dans la zone de départ de l'équipe ${player}.`);
@@ -2523,9 +2545,18 @@ function placeAt(x, y) {
       return;
     }
     state.objectivePos[player] = { x, y };
-    state.placingStage = "champion";
+    if (lanMode) {
+      if (state.objectivePos.A && state.objectivePos.B) {
+        state.placingStage = "champion";
+        log("Objectifs posés. Placez vos titulaires.");
+      } else {
+        log(`Équipe ${player} place son objectif en (${x + 1}, ${y + 1}). En attente de l'autre équipe.`);
+      }
+    } else {
+      state.placingStage = "champion";
+      log(`Équipe ${player} place son objectif en (${x + 1}, ${y + 1}).`);
+    }
     fxCell(x, y, "objective");
-    log(`Équipe ${player} place son objectif en (${x + 1}, ${y + 1}).`);
   } else {
     const queue = state.placingQueue[player];
     if (!queue.length) return;
@@ -2554,17 +2585,29 @@ function placeAt(x, y) {
     fxEnter(newId);
     log(`Équipe ${player} place ${c.name} en (${x + 1}, ${y + 1}).`);
     if (!queue.length) {
-      state.placingStage = isRampage() ? "champion" : "objective";
       state.placement[player] = true;
-      if (player === "A") {
-        state.placingPlayer = "B";
-        log(isRampage()
-          ? "Équipe A terminée. Équipe B : placez vos 3 champions."
-          : "Équipe A terminée. Équipe B : placez votre objectif puis vos titulaires.");
+      if (lanMode) {
+        if (state.placement.A && state.placement.B) {
+          state.phase = "playing";
+          state.placingPlayer = "A";
+          state.turn = "A";
+          state.turnCount = 1;
+          log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
+        } else {
+          log(`Équipe ${player} a terminé son placement. En attente de l'autre équipe…`);
+        }
       } else {
-        state.phase = "playing";
-        state.placingPlayer = "A";
-        log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
+        if (player === "A") {
+          state.placingPlayer = "B";
+          state.placingStage = isRampage() ? "champion" : "objective";
+          log(isRampage()
+            ? "Équipe A terminée. Équipe B : placez vos 3 champions."
+            : "Équipe A terminée. Équipe B : placez votre objectif puis vos titulaires.");
+        } else {
+          state.phase = "playing";
+          state.placingPlayer = "A";
+          log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
+        }
       }
     }
   }
@@ -2581,8 +2624,8 @@ function updatePlacementBanner() {
     return;
   }
   banner.style.display = "block";
-  banner.className = "player-" + state.placingPlayer.toLowerCase();
-  const player = state.placingPlayer;
+  const player = (lanMode && state.phase === "placement") ? lanLocalTeam() : state.placingPlayer;
+  banner.className = "player-" + player.toLowerCase();
   const queue = state.placingQueue[player] || [];
   const upcoming = queue.length ? ` Titulaires à poser ensuite : ${queue.map((id) => charById(id).name).join(", ")}.` : "";
   if (state.placingStage === "objective") {
@@ -5570,7 +5613,9 @@ function lanLocalTeam() {
 function lanIsActingPlayer() {
   if (!lanMode) return true;
   const team = lanLocalTeam();
-  if (state.phase === "placement") return state.placingPlayer === team;
+  if (state.phase === "placement") {
+    return !state.placement[team];
+  }
   return state.turn === team;
 }
 
@@ -5733,7 +5778,7 @@ function lanExpandArgs(fn, args) {
 
 function lanRemoteActsNow() {
   if (state.winner) return false;
-  if (state.phase === "placement") return state.placingPlayer === "B";
+  if (state.phase === "placement") return !state.placement.B;
   return state.turn === "B";
 }
 
