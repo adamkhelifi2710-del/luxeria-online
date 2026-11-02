@@ -1,4 +1,4 @@
-﻿﻿﻿﻿const STORAGE_KEY = "boardgame_tracker_v2";
+﻿﻿﻿﻿﻿const STORAGE_KEY = "boardgame_tracker_v2";
 
 let state = load();
 let selectedTokenId = null;
@@ -1784,7 +1784,7 @@ function renderBoard() {
       }
 
       if (state.phase === "placement") {
-      if (inSpawnZone("A", x, y) || inSpawnZone("B", x, y)) cell.classList.add("placement-zone");
+      if (inSpawnZone((lanMode && state.phase === "placement") ? lanLocalTeam() : state.placingPlayer, x, y)) cell.classList.add("placement-zone");
         if (cellPlaceable(x, y)) cell.classList.add("placeable");
       }
 
