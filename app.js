@@ -2736,16 +2736,17 @@ function deselect() {
 
 /* ---------- Rétrécissement de la carte (zone de feu) ----------
    Le feu gagne du terrain par couches, à la fin d'un TOUR COMPLET (A+B).
-   Barème : 10 (longueur 1), 20 (longueur 2), 25 (largeur 1),
-   30 (longueur 3), 35 (largeur 2), 45 (largeur 3).
+   Mode normal (objectif) : tous les 7 tours.
+   Barème : 7 (longueur 1), 14 (longueur 2), 21 (largeur 1),
+   28 (longueur 3), 35 (largeur 2), 42 (largeur 3).
    "longueur" = bords haut/bas, "largeur" = bords gauche/droite. */
 const SHRINK_SCHEDULE = [
-  { round: 10, axis: "length", layer: 1 },
-  { round: 20, axis: "length", layer: 2 },
-  { round: 25, axis: "width", layer: 1 },
-  { round: 30, axis: "length", layer: 3 },
+  { round: 7, axis: "length", layer: 1 },
+  { round: 14, axis: "length", layer: 2 },
+  { round: 21, axis: "width", layer: 1 },
+  { round: 28, axis: "length", layer: 3 },
   { round: 35, axis: "width", layer: 2 },
-  { round: 45, axis: "width", layer: 3 }
+  { round: 42, axis: "width", layer: 3 }
 ];
 
 /* Rampage : le feu démarre au tour 3 puis avance tous les 3 tours. Passé le
