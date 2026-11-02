@@ -110,7 +110,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Aura de soin",
-        desc: "Cd 3 — Jay active son aura pour 8 tours : chaque allié dans un rayon de 2 cases autour de lui (diagonales incluses) récupère 1 PV au début de chaque tour. Jay ne se soigne pas lui-même. Quand les 8 tours s'achèvent, la capacité part en recharge (Cd 3)."
+        desc: "Cd 3 — Jay active son aura pour 8 tours : chaque allié dans un rayon de 2 cases autour de lui (diagonales incluses, JAY inclus) récupère 1 PV au début de chaque tour. Quand les 8 tours s'achèvent, la capacité part en recharge (Cd 3)."
       },
       passive: { name: "", desc: "" }
     },
@@ -155,7 +155,7 @@ const GAME = {
       range: 3,
       ability: {
         name: "Soin",
-        desc: "Cd 5 — Soigne un allié de 4 PV, sur une ligne horizontale ou verticale uniquement (aucune diagonale), jusqu'à 4 cases. Le soin ne traverse pas les murs."
+        desc: "Cd 5 — Soigne un allié (ou lui-même) de 4 PV, sur une ligne horizontale ou verticale uniquement (aucune diagonale), jusqu'à 4 cases. Le soin ne traverse pas les murs."
       },
       passive: { name: "", desc: "" }
     },
@@ -170,7 +170,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Enchantement",
-        desc: "Cd 0 — Place une balise de soin sur un allié situé sur une ligne horizontale ou verticale (aucune diagonale), à 2 cases max, avec ligne de vue dégagée : il récupère 1 PV au début de chacun de ses tours pendant 8 manches (1 manche = les 2 joueurs ont joué). Au terme des 8 manches, l'enchantement s'arrête et BETTA récupère son enchantement pour le rejouer. Si la cible est éliminée avant ces 8 manches, l'enchantement est perdu définitivement et BETTA ne récupère pas cette charge. Limite : 2 enchantements."
+        desc: "Cd 0 — Place une balise de soin sur un allié (ou sur lui-même) situé sur une ligne horizontale ou verticale (aucune diagonale), à 2 cases max, avec ligne de vue dégagée : il récupère 1 PV au début de chacun de ses tours pendant 8 manches (1 manche = les 2 joueurs ont joué). Au terme des 8 manches, l'enchantement s'arrête et BETTA récupère son enchantement pour le rejouer. Si la cible est éliminée avant ces 8 manches, l'enchantement est perdu définitivement et BETTA ne récupère pas cette charge. Limite : 2 enchantements."
       },
       passive: { name: "", desc: "" }
     },
@@ -320,7 +320,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Transfusion",
-        desc: "Cd 4 — MOM'S cède jusqu'à 8 de ses propres PV à un allié blessé situé à 2 cases max. Une fenêtre s'ouvre pour choisir la quantité (1 à 8 PV). Elle ne peut rien céder si elle n'a plus aucun PV, et l'allié ne peut pas dépasser ses PV maximum."
+        desc: "Cd 4 — MOM'S cède jusqu'à 8 de ses propres PV à un allié blessé situé à 2 cases max (elle-même exclue : MOM'S ne peut pas se soigner avec sa Transfusion). Une fenêtre s'ouvre pour choisir la quantité (1 à 8 PV). Elle ne peut rien céder si elle n'a plus aucun PV, et l'allié ne peut pas dépasser ses PV maximum."
       },
       passive: {
         name: "Régénération",
