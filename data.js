@@ -140,7 +140,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Gel",
-        desc: "Cd 3 — Gel : gèle UN champion adverse choisi dans la zone carrée 7×7 centrée sur SCRAB (les murs sont ignorés). Le champion gelé ne peut PAS être utilisé pendant tout le prochain tour adverse."
+        desc: "Cd 3 — Gel : gèle UN champion adverse choisi dans la zone carrée 7×7 centrée sur SCRAB (les murs sont ignorés) et lui inflige 1 dégât. Le champion gelé ne peut PAS être utilisé pendant tout le prochain tour adverse."
       },
       passive: { name: "", desc: "" }
     },
