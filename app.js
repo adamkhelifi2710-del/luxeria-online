@@ -3845,7 +3845,7 @@ async function useAbility(tokenId) {
     case "ranium": {
       pendingAbility = { tokenId, type: "ranium" };
       fxAbility(tok.id);
-      log("Choisissez un champion adverse à portée 1 : il sera empoisonné (1 dégât par tour, les poisons s'additionnent).");
+      log("Choisissez un champion adverse adjacent (portée 1, sans mur entre vous) : il sera empoisonné (1 dégât par tour, les poisons s'additionnent).");
       renderBoard();
       break;
     }
@@ -4185,6 +4185,12 @@ async function resolvePendingOnCell(x, y) {
     if (distanceCheb(tok.x, tok.y, target.x, target.y) > 1) {
       log(`RANIUM ne peut pas viser ${charById(target.charId).name} : trop loin (portée 1).`);
       alert("Cible trop loin : RANIUM empoisonne uniquement un champion adjacent (portée 1).");
+      return;
+    }
+    /* Le poison ne traverse ni les murs de bordure (ARK) ni les diagonales. */
+    if (!inStraightLine(tok.x, tok.y, target.x, target.y, 1) || !hasClearLoS(tok.x, tok.y, target.x, target.y)) {
+      log(`RANIUM ne peut pas empoisonner ${charById(target.charId).name} : un mur bloque le passage.`);
+      alert("RANIUM ne peut pas empoisonner à travers un mur : la cible doit être adjacente (pas en diagonale), sans obstacle entre vous.");
       return;
     }
     target.poison = (target.poison || 0) + 1;
@@ -6777,6 +6783,8 @@ function aiAbilityOptions(s, me, tk) {
       (s.tokens || []).forEach((t) => {
         if (t.dead || t.player === me) return;
         if (distanceCheb(tk.x, tk.y, t.x, t.y) > 1) return;
+        if (!inStraightLine(tk.x, tk.y, t.x, t.y, 1)) return;
+        if (!aiWithState(s, () => hasClearLoS(tk.x, tk.y, t.x, t.y))) return;
         add({ cell: [t.x, t.y] });
       });
       break;
@@ -6992,7 +7000,10 @@ function aiApplyAbility(s, tk, me, ab) {
     }
     case "ranium": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
-      if (target) target.poison = (target.poison || 0) + 1;
+      if (!target) return 0;
+      if (!inStraightLine(tk.x, tk.y, target.x, target.y, 1)) return -9999;
+      if (!aiWithState(s, () => hasClearLoS(tk.x, tk.y, target.x, target.y))) return -9999;
+      target.poison = (target.poison || 0) + 1;
       tk.cd = 4;
       return 0.3;
     }
