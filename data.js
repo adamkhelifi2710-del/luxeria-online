@@ -151,7 +151,7 @@ const GAME = {
       role: "soutien",
       hp: 9,
       atk: 2,
-      mouvement: 5,
+      mouvement: 4,
       range: 3,
       ability: {
         name: "Soin",
