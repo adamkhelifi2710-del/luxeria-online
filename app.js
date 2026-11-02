@@ -6,6 +6,10 @@ let reachable = [];
 let attackCells = [];
 let pendingAbility = null;
 let pendingSpawn = null;
+/* Choix du remplaçant en cours (le propriétaire du champion éliminé choisit).
+   Pendant ce temps, la partie est figée et aucune élimination d'équipe n'est
+   déclarée : le remplaçant n'est pas encore posé. */
+let pendingReplaceChoice = null;
 let pathPreview = [];
 let editMode = false;
 let suppressReplacePrompt = false;
@@ -365,6 +369,7 @@ function undoLast() {
   attackCells = [];
     pendingAbility = null;
     pendingSpawn = null;
+    pendingReplaceChoice = null;
     busy = false;
   fx = emptyFx();
   save();
@@ -582,6 +587,7 @@ function startConfiguredGame(mapId, mode, method) {
   attackCells = [];
   pendingAbility = null;
   pendingSpawn = null;
+  pendingReplaceChoice = null;
   save();
   renderDecks();
   refreshMapSelectOptions();
@@ -846,6 +852,7 @@ function startRandomGame(mode) {
   attackCells = [];
   pendingAbility = null;
   pendingSpawn = null;
+  pendingReplaceChoice = null;
   save();
   renderDecks();
   startGame();
@@ -1298,8 +1305,10 @@ function askConfirm(opts) {
 function askChoicePrompt(opts) {
   const o = opts || {};
   /* Partie en ligne : l'hébergeur applique l'action du client mais la fenêtre
-     doit s'ouvrir chez le client. On relaie la question et on attend la réponse. */
-  if (lanMustRelayAsk()) {
+     doit s'ouvrir chez le client. On relaie la question et on attend la réponse.
+     localOnly force la fenêtre chez l'hôte (ex : remplacement d'un champion
+     qui appartient à l'hôte pendant le tour du client). */
+  if (lanMustRelayAsk() && !o.localOnly) {
     return relayAskLocal({
       kind: "choice",
       opts: {
@@ -1566,6 +1575,7 @@ function startGame() {
     attackCells = [];
     pendingAbility = null;
     pendingSpawn = null;
+    pendingReplaceChoice = null;
     save();
     renderBoard();
     document.querySelector('[data-tab="board"]').click();
@@ -3326,6 +3336,7 @@ function checkTeamWipe() {
   ["A", "B"].forEach((p) => {
     /* Un remplacement de mort en attente signifie que l'équipe n'est pas
        réellement vaincue : son remplaçant n'est simplement pas encore posé. */
+    if (pendingReplaceChoice && pendingReplaceChoice.player === p) return;
     if (pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === p) return;
     if (!allDead(p)) return;
     state.winner = turnOfOther(p);
@@ -3333,7 +3344,7 @@ function checkTeamWipe() {
   });
 }
 
-function handleReserveReplacementOnDeath(deadToken) {
+async function handleReserveReplacementOnDeath(deadToken) {
   if (suppressReplacePrompt) return;
   /* IA : l'ordinateur remplace lui-même, sans fenêtre, en choisissant le meilleur
      remplaçant et une case libre. */
@@ -3344,20 +3355,62 @@ function handleReserveReplacementOnDeath(deadToken) {
   const player = deadToken.player;
   const reserve = state.reserve[player];
   if (!reserve.length) return;
-  const list = reserve.map((r, i) => `${i + 1}. ${charById(r.charId).name} (${r.hp} PV)`).join("\n");
-  const chosen = prompt(
-    `${charById(deadToken.charId).name} (équipe ${player}) est éliminé. Remplacer par un champion de la réserve ?\n\n${list}\n\n(Annuler = ne pas remplacer)`
-  );
-  if (chosen === null) return;
-  const idx = parseInt(chosen, 10) - 1;
-  if (isNaN(idx) || idx < 0 || idx >= reserve.length) return;
+  /* Le choix appartient TOUJOURS au propriétaire du champion éliminé, même si
+     c'est l'adversaire qui est en train de jouer. En ligne, si ce propriétaire
+     est l'autre joueur, l'hébergeur lui relaie la fenêtre et attend sa réponse. */
+  pendingReplaceChoice = { player, deadTokenId: deadToken.id };
+  const opts = {
+    title: "Remplaçant",
+    text: `${charById(deadToken.charId).name} (équipe ${player}) est éliminé. Choisissez le champion de la réserve qui le remplace.`,
+    hint: "Vous choisirez ensuite sa case d'arrivée dans votre zone de départ. « Ne pas remplacer » laisse la place vide.",
+    icon: "♻",
+    cancel: "Ne pas remplacer",
+    localOnly: true,
+    options: reserve.map((r, i) => ({
+      label: `${charById(r.charId).name} (${r.hp} PV)`,
+      value: i
+    }))
+  };
+  let chosen;
+  if (lanMode && player !== lanLocalTeam()) {
+    chosen = await relayAskLocal({
+      kind: "choice",
+      opts: {
+        title: opts.title, text: opts.text, hint: opts.hint, icon: opts.icon,
+        cancel: opts.cancel, options: opts.options
+      }
+    });
+  } else {
+    chosen = await askChoicePrompt(opts);
+  }
+  pendingReplaceChoice = null;
+
+  const idx = chosen === null || chosen === undefined || chosen === false ? NaN : parseInt(chosen, 10);
+  const entry = !isNaN(idx) ? state.reserve[player][idx] : null;
+  if (!entry) {
+    log(`${charById(deadToken.charId).name} (équipe ${player}) n'est pas remplacé.`);
+    checkTeamWipe();
+    save();
+    renderBoard();
+    lanBroadcast();
+    return;
+  }
   if (!freeSpawnCells(player).length) {
-    alert("Aucune case libre dans la zone de départ pour le remplaçant.");
+    log(`Aucune case libre dans la zone de départ de l'équipe ${player} : remplacement impossible pour ${charById(deadToken.charId).name}.`);
+    checkTeamWipe();
+    save();
+    renderBoard();
+    lanBroadcast();
     return;
   }
   pendingSpawn = { mode: "replace", player, reserveIdx: idx, tokenId: deadToken.id };
-  log(`${charById(reserve[idx].charId).name} va remplacer ${charById(deadToken.charId).name} : cliquez une case libre de la zone de départ pour le poser. (Échap pour annuler)`);
+  const placeHint = !lanMode || player === lanLocalTeam()
+    ? "cliquez une case libre de votre zone de départ pour le poser"
+    : "le propriétaire choisit sa case d'arrivée dans sa zone de départ";
+  log(`${charById(entry.charId).name} va remplacer ${charById(deadToken.charId).name} : ${placeHint}. (Échap pour annuler)`);
+  save();
   renderBoard();
+  lanBroadcast();
 }
 
   function applyEliminationSideEffects(deadToken) {
@@ -3411,6 +3464,7 @@ function rampageHealAllies(team) {
    remplacement en zone de départ est en cours (le champion n'est pas encore
    posé, l'équipe n'est donc pas encore vaincue). */
 function checkDeathWipe(deadToken) {
+  if (pendingReplaceChoice && pendingReplaceChoice.player === deadToken.player) return;
   if (pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === deadToken.player) return;
   checkTeamWipe();
 }
@@ -4408,6 +4462,9 @@ document.getElementById("next-turn").addEventListener("click", () => {
   if (busy) return;
   if (aiBlocksInput()) return;
   if (state.winner) return;
+  /* Le remplacement d'un champion éliminé doit être résolu avant de passer. */
+  if (pendingReplaceChoice) return;
+  if (pendingSpawn && pendingSpawn.mode === "replace") return;
   if (state.phase === "placement") {
     alert("La partie ne commence pas tant que chaque équipe n'a pas placé son objectif et ses 3 titulaires.");
     return;
@@ -4421,6 +4478,9 @@ document.addEventListener("keydown", (e) => {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.repeat) return;
+  /* Le choix du remplaçant est ouvert : aucune action de jeu au clavier
+     (la fenêtre modale gère elle-même ses boutons et Échap). */
+  if (pendingReplaceChoice) return;
   const k = (e.key || "").toLowerCase();
   /* Mode IA : le clavier ne pilote pas l'équipe adverse pendant son tour. */
   if (aiBlocksInput() && k !== "f" && e.key !== "Escape") return;
@@ -4489,11 +4549,19 @@ document.addEventListener("keydown", (e) => {
       return;
     }
     if (pendingSpawn) {
+      /* Seul le propriétaire du champion concerné peut annuler son placement.
+         En ligne, le client doit faire relayer l'annulation à l'hébergeur. */
+      if (lanMode && pendingSpawn.player !== lanLocalTeam()) return;
+      if (lanMode && lanRole === "client") {
+        lanSendAction({ kind: "cancelSpawn" });
+        return;
+      }
       pendingSpawn = null;
       log("Placement annulé.");
-      save();
       checkTeamWipe();
+      save();
       renderBoard();
+      lanBroadcast();
       return;
     }
     if (pendingAbility) {
@@ -4706,6 +4774,7 @@ document.getElementById("reset-board").addEventListener("click", () => {
     state.winner = null;
     pendingAbility = null;
     pendingSpawn = null;
+    pendingReplaceChoice = null;
     undoStack = [];
     save();
     renderBoard();
@@ -5692,13 +5761,34 @@ function handleLanMessage(msg) {
   if (msg.type === "action" && lanRole === "host") {
     const a = msg.action || {};
     const viewOnly = a.kind === "tokenClick";
-    if (!viewOnly && !lanRemoteActsNow()) {
+    /* Pendant l'attente du choix du remplaçant, toutes les actions sont gelées. */
+    if (pendingReplaceChoice) {
+      lanBroadcast();
+      return;
+    }
+    /* Pendant un placement de remplacement, seul le clic de la case d'arrivée
+       du propriétaire est accepté. Cela vaut même hors de son tour. */
+    const replacePending = pendingSpawn && pendingSpawn.mode === "replace";
+    const cellAction = a.kind === "cellClick" || (a.kind === "call" && a.fn === "cellClick");
+    const ownerPlaces = replacePending && pendingSpawn.player === "B" && cellAction;
+    const ownerCancel = pendingSpawn && pendingSpawn.player === "B" && a.kind === "cancelSpawn";
+    if (replacePending && !ownerPlaces && !ownerCancel && !viewOnly) {
+      lanBroadcast();
+      return;
+    }
+    if (!viewOnly && !ownerPlaces && !ownerCancel && !lanRemoteActsNow()) {
       lanBroadcast();
       return;
     }
     lanApplying = true;
     try {
-      if (a.kind === "cellClick") {
+      if (a.kind === "cancelSpawn") {
+        if (pendingSpawn && pendingSpawn.player === "B") {
+          pendingSpawn = null;
+          log("Placement annulé.");
+          checkTeamWipe();
+        }
+      } else if (a.kind === "cellClick") {
         cellClick(a.x, a.y);
       } else if (a.kind === "tokenClick") {
         const tok = tokenById(a.id);
@@ -5721,10 +5811,17 @@ function lanPatchFn(name, sendArgs) {
   if (typeof orig !== "function") return;
   window[name] = function (...args) {
     if (lanMode && !lanApplying) {
+      /* Placement d'un remplaçant : seul son propriétaire peut cliquer une case,
+         même si ce n'est pas son tour. Toute autre action est gelée. */
+      const replacePending = pendingSpawn && pendingSpawn.mode === "replace";
+      const ownerPlaces = replacePending && pendingSpawn.player === lanLocalTeam() && name === "cellClick";
+      if (replacePending && !ownerPlaces) return;
       if (lanRole === "client") {
         lanSendAction({ kind: "call", fn: name, args: sendArgs ? sendArgs(args) : args });
         return;
       }
+      if (pendingReplaceChoice) return;
+      if (ownerPlaces) return orig.apply(this, args);
       if (!lanIsActingPlayer()) return;
     }
     return orig.apply(this, args);
@@ -7749,6 +7846,7 @@ function aiSetupGame(mapId, mode, method) {
   attackCells = [];
   pendingAbility = null;
   pendingSpawn = null;
+  pendingReplaceChoice = null;
   save();
   renderDecks();
   refreshMapSelectOptions();
