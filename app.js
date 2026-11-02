@@ -4588,7 +4588,7 @@ function endPlayerTurn() {
         fxCell(t.x, t.y, "aura");
         const allies = state.tokens.filter((a) => !a.dead && a.player === side && distanceCheb(t.x, t.y, a.x, a.y) <= 2);
         allies.forEach((a) => {
-          if (a.id !== t.id && a.hp < charById(a.charId).hp) {
+          if (a.hp < charById(a.charId).hp) {
             if (healToken(a, 1, "aura de JAY") > 0) {
               fxHeal(a.id, 1);
               log(`JAY soigne ${charById(a.charId).name} de 1 PV.`);
@@ -6736,7 +6736,7 @@ function aiAbilityOptions(s, me, tk) {
     }
     case "ad": {
       (s.tokens || []).forEach((t) => {
-        if (t.dead || t.player !== me || t.id === tk.id) return;
+        if (t.dead || t.player !== me) return;
         if (t.hp >= charById(t.charId).hp) return;
         if (!inStraightLine(tk.x, tk.y, t.x, t.y, 4)) return;
         if (aiWithState(s, () => hasClearLoS(tk.x, tk.y, t.x, t.y))) add({ cell: [t.x, t.y] });
