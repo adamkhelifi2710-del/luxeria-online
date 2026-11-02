@@ -3781,7 +3781,7 @@ async function useAbility(tokenId) {
       }
       pendingAbility = { tokenId, type: "scrab", targets: targets.map((t) => t.id) };
       fxAbility(tok.id);
-      log("SCRAB déclenche Gel : cliquez le champion adverse à geler (zone carrée 7×7 centrée sur SCRAB).");
+      log("SCRAB déclenche Gel : cliquez le champion adverse à geler (zone carrée 7×7 centrée sur SCRAB). Il subira 1 dégât et sera gelé au prochain tour adverse.");
       renderBoard();
       break;
     }
@@ -4281,7 +4281,8 @@ async function resolvePendingOnCell(x, y) {
     target.stunned = 1;
     fxCell(target.x, target.y, "lock");
     fxAbility(tok.id);
-    log(`SCRAB gèle ${charById(target.charId).name} (${target.player}) pendant tout le prochain tour adverse.`);
+    applyDamageToToken(target, 1, tok);
+    log(`SCRAB gèle ${charById(target.charId).name} (${target.player}) pendant tout le prochain tour adverse et lui inflige 1 dégât.`);
     save();
     renderBoard();
     return;
@@ -6961,7 +6962,7 @@ function aiApplyAbility(s, tk, me, ab) {
     }
     case "scrab": {
       const target = (s.tokens || []).find((t) => !t.dead && t.x === cell[0] && t.y === cell[1]);
-      if (target) target.stunned = 1;
+      if (target) { target.stunned = 1; aiApplyDamage(s, target, 1, tk); }
       tk.cd = 5;
       /* Le gel sert à achever une cible entamée, ou à se protéger quand on est
          encerclé (un adversaire qui fuit avec peu de PV). */
