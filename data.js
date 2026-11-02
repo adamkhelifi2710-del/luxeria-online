@@ -305,7 +305,7 @@ const GAME = {
       range: 1,
       ability: {
         name: "Empoisonnement",
-        desc: "Cd 4 — Empoisonne un champion adverse : il perd 1 PV par couche de poison au début de chacun de ses tours. Les poisons s'additionnent (1 couche = 1 dégât/tour, 2 couches = 2 dégâts/tour). Le poison reste même si RANIUM est éliminé, et il est dissipé dès que la cible reçoit des PV : le compteur de couches repart alors de zéro."
+        desc: "Cd 4 — Empoisonne un champion adverse adjacent (portée 1, sans mur entre vous) : il perd 1 PV par couche de poison au début de chacun de ses tours. Les poisons s'additionnent (1 couche = 1 dégât/tour, 2 couches = 2 dégâts/tour). Le poison reste même si RANIUM est éliminé, et il est dissipé dès que la cible reçoit des PV : le compteur de couches repart alors de zéro."
       },
       passive: { name: "", desc: "" }
     },
