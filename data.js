@@ -120,12 +120,12 @@ const GAME = {
       number: 4,
       role: "ravageur",
       hp: 11,
-      atk: 5,
+      atk: 4,
       mouvement: 3,
       range: 1,
       ability: {
         name: "Frappe dévastatrice",
-        desc: "Cd 5 — Sa prochaine attaque inflige 7 dégâts contre un champion de rôle Colosse, ou 6 dégâts contre les autres champions."
+        desc: "Cd 4 - Sa prochaine attaque inflige 7 dégâts contre un champion de rôle Colosse, ou 6 dégâts contre les autres champions."
       },
       passive: { name: "", desc: "" }
     },
