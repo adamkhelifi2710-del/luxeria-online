@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿const STORAGE_KEY = "boardgame_tracker_v2";
+﻿const STORAGE_KEY = "boardgame_tracker_v2";
 
 let state = load();
 let selectedTokenId = null;
@@ -3645,6 +3645,7 @@ function attackValue(attacker, target) {
   let dmg = c.atk;
   if (attacker.buffs.braut) {
     attacker.buffs.braut = false;
+    attacker.cd = 4;
     if (charById(target.charId).role === "colosse") {
       dmg = 7;
       log(`${c.name} (BRAUT) : Frappe dévastatrice inflige 7 dégâts au Colosse ${charById(target.charId).name} (effet consommé).`);
@@ -3752,6 +3753,11 @@ function showAbilityBanner(charId) {
 async function useAbility(tokenId) {
   if (busy) return;
   const tok = tokenById(tokenId);
+  if (tok && tok.charId === "braut" && tok.buffs && tok.buffs.braut) {
+    alert("Frappe dévastatrice déjà préparée : elle sera consommée à la prochaine attaque.");
+    renderBoard();
+    return;
+  }
   if (!tok || tok.dead || tok.cd > 0 || tok.abilityUsed) return;
   const c = charById(tok.charId);
   if (c.id === "rapido" && tok.hasMoved) {
@@ -3815,9 +3821,8 @@ async function useAbility(tokenId) {
     }
     case "braut": {
       tok.buffs.braut = true;
-      tok.cd = 5;
       fxAbility(tok.id);
-      log(`BRAUT prépare sa prochaine attaque : 7 dégâts (ou AT si Colosse).`);
+      log(`BRAUT prépare sa prochaine attaque : 7 dégâts contre un Colosse, 6 sinon. Le cooldown (4) démarre quand la frappe est portée.`);
       renderBoard();
       break;
     }
@@ -5185,7 +5190,7 @@ function openTokenPanel() {
       <button data-delta="1">+1 PV</button>
       <button data-delta="5">+5</button>
     </div>
-    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && !tok.hasAttacked && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
+    ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && !tok.hasAttacked && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) && !(tok.charId === "braut" && tok.buffs && tok.buffs.braut) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
     <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded || blocked ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : blocked ? " (un seul champion par tour)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
     ${myTurn && tok.abilityUsed && !isAuto ? `<div class="cd-badge">Capacité déjà utilisée ce tour : plus aucune action possible.</div>` : ""}
     ${blocked ? `<div class="cd-badge">Un seul champion peut agir par tour : passez au tour suivant pour en jouer un autre.</div>` : ""}
@@ -6523,6 +6528,7 @@ function aiAttackValue(s, tok, target) {
   if (!target) return c.atk;
   if (tok.buffs && tok.buffs.braut) {
     tok.buffs.braut = false;
+    tok.cd = 4;
     return charById(target.charId).role === "colosse" ? 7 : 6;
   }
   return c.atk;
@@ -7027,7 +7033,7 @@ function aiApplyAbility(s, tk, me, ab) {
       if (near <= 3) bonus += 0.6;
       return bonus;
     }
-    case "braut": tk.buffs.braut = true; tk.cd = 5; return 1.6;
+    case "braut": tk.buffs.braut = true; return 1.6;
     case "vini": tk.buffs.vini = true; tk.cd = 5; return 1.3;
     case "jay": {
       tk.jayAura = true; tk.jayAuraTurns = 8;
