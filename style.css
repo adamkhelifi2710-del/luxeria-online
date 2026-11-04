@@ -4775,16 +4775,16 @@ button:hover, .btn-random-inline:hover {
   transform: translateX(-50%) translateY(-20px);
   z-index: 4000;
   display: none;
-  padding: 8px 22px;
+  padding: 6px 16px;
   border-radius: 999px;
-  background: rgba(12, 18, 28, 0.9);
+  background: rgba(12, 18, 28, 0.85);
   border: 2px solid rgba(79, 140, 255, 0.6);
   color: #eaf1fa;
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -4802,18 +4802,18 @@ button:hover, .btn-random-inline:hover {
   right: 14px;
   z-index: 3600;
   display: none;
-  min-width: 52px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(12, 18, 28, 0.9);
-  border: 2px solid rgba(79, 140, 255, 0.5);
+  min-width: 64px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(12, 18, 28, 0.92);
+  border: 2px solid rgba(79, 140, 255, 0.6);
   color: #eaf1fa;
-  font-size: 1.35rem;
-  font-weight: 800;
+  font-size: 1.7rem;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  transition: border-color 0.2s, color 0.2s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.2s, color 0.2s, transform 0.2s;
 }
 .turn-timer.show { display: block; }
 .turn-timer.urgent { border-color: #ff5c5c; color: #ff5c5c; animation: timer-pulse 0.6s ease-in-out infinite; }
