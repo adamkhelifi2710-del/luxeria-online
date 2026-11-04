@@ -8054,3 +8054,43 @@ setInterval(() => {
   }
   if (state.phase !== "playing") stopTurnTimer();
 }, 500);
+/* ---------- Intro / Splash ---------- */
+let introPlayed = false;
+function showIntro() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro || introPlayed) return;
+  introPlayed = true;
+  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
+  intro.style.display = "flex";
+}
+function playIntro() {
+  const intro = document.getElementById("intro-screen");
+  const btn = document.getElementById("intro-play");
+  if (!intro || intro.dataset.playing === "1") return;
+  intro.dataset.playing = "1";
+  if (btn) btn.style.pointerEvents = "none";
+  intro.classList.add("zoom-out");
+  setTimeout(() => {
+    intro.classList.remove("zoom-out");
+    intro.classList.add("zoom-in");
+  }, 450);
+  setTimeout(() => {
+    intro.classList.add("fade");
+  }, 1700);
+  setTimeout(() => {
+    intro.style.display = "none";
+    intro.classList.remove("zoom-out", "zoom-in", "fade");
+    delete intro.dataset.playing;
+    if (typeof showHome === "function") showHome();
+  }, 2400);
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("intro-play");
+  if (btn) btn.addEventListener("click", playIntro);
+  showIntro();
+});
+if (document.readyState !== "loading") {
+  const btn = document.getElementById("intro-play");
+  if (btn) btn.addEventListener("click", playIntro);
+  showIntro();
+}
