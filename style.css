@@ -18,7 +18,7 @@
   z-index: 9990;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: url("luxeria-map.png") center / cover no-repeat, var(--bg);
 }
 .home-box {
   background: rgba(26, 32, 41, 0.85);
@@ -4886,7 +4886,7 @@ button:hover, .btn-random-inline:hover {
 .intro-bg {
   position: absolute;
   inset: -8%;
-  background: url("home-bg.png") center / cover no-repeat;
+  background: url("luxeria-map.png") center / cover no-repeat;
   filter: blur(8px) brightness(0.55) saturate(1.1);
   transform: scale(1.12);
   transition: transform 1.7s cubic-bezier(.15,.85,.25,1), filter 1.7s ease;
