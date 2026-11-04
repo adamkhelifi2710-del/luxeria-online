@@ -271,8 +271,12 @@
   --team-b: #ff6b6b;
 }
 
-body {
-  background: var(--bg);
+* {
+  font-family: "Cinzel", "Segoe UI", system-ui, sans-serif;
+}
+code, pre, kbd, samp, .log-list, .mono {
+  font-family: "Consolas", "SF Mono", ui-monospace, "Segoe UI", system-ui, sans-serif;
+}
   color: var(--text);
   font-family: "Cinzel", "Segoe UI", system-ui, sans-serif;
   min-height: 100vh;
