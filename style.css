@@ -4768,10 +4768,52 @@ button:hover, .btn-random-inline:hover {
   font-size: 0.98rem;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
-.online-toast.show {
-  display: block;
-  animation: online-toast-in 0.25s ease-out;
+.turn-toast {
+  position: fixed;
+  left: 50%;
+  top: 18%;
+  transform: translate(-50%, -50%) scale(0.9);
+  z-index: 4000;
+  display: none;
+  padding: 22px 40px;
+  border-radius: 18px;
+  background: rgba(12, 18, 28, 0.92);
+  border: 2px solid rgba(79, 140, 255, 0.6);
+  color: #eaf1fa;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
+.turn-toast.show {
+  display: block;
+  animation: turn-toast-in 0.25s ease-out;
+}
+.turn-toast.player-a { border-color: var(--team-a, #4f8cff); color: var(--team-a, #4f8cff); }
+.turn-toast.player-b { border-color: var(--team-b, #ff5c5c); color: var(--team-b, #ff5c5c); }
+@keyframes turn-toast-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.75); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.turn-timer {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 3600;
+  display: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(12, 18, 28, 0.85);
+  border: 1px solid rgba(79, 140, 255, 0.4);
+  color: #c9d6e6;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.turn-timer.show { display: block; }
+.turn-timer.urgent { border-color: #ff5c5c; color: #ff5c5c; }
 @keyframes online-toast-in {
   from { opacity: 0; transform: translate(-50%, 20px); }
   to { opacity: 1; transform: translate(-50%, 0); }
