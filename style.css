@@ -40,7 +40,7 @@
   margin-bottom: 4px;
 }
 .home-box h1.home-title {
-  font-family: "Orbitron", "Cinzel", "Segoe UI", system-ui, sans-serif;
+  font-family: "Cinzel Decorative", "Cinzel", "Segoe UI", system-ui, sans-serif;
   font-weight: 900;
   font-size: 4.2rem;
   line-height: 1.05;
@@ -274,14 +274,15 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: "Cinzel", "Segoe UI", system-ui, sans-serif;
   min-height: 100vh;
   background-image: radial-gradient(1200px 600px at 50% -100px, #1d2633 0%, var(--bg) 60%);
   background-attachment: fixed;
 }
 
-::selection {
-  background: rgba(246, 194, 75, 0.35);
+h1, h2 {
+  font-family: "Cinzel Decorative", "Cinzel", "Segoe UI", system-ui, sans-serif;
+}
 }
 
 *::-webkit-scrollbar { width: 10px; height: 10px; }
