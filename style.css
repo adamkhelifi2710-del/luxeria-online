@@ -18,7 +18,7 @@
   z-index: 9990;
   align-items: center;
   justify-content: center;
-  background: url("home-bg.png") center / cover no-repeat, var(--bg);
+  background: var(--bg);
 }
 .home-box {
   background: rgba(26, 32, 41, 0.85);
