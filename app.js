@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "boardgame_tracker_v2";
+const STORAGE_KEY = "boardgame_tracker_v2";
 
 let state = load();
 let selectedTokenId = null;
@@ -8055,107 +8055,18 @@ setInterval(() => {
   if (state.phase !== "playing") stopTurnTimer();
 }, 500);
 /* ---------- Intro / Splash ---------- */
-let introPlayed = false;
-function drawIntroMap(canvas) {
-  try {
-    const map = (typeof GAME !== "undefined" && GAME.maps && GAME.maps.map1) ? GAME.maps.map1 : null;
-    const cols = (map && map.cols) || 15;
-    const rows = (map && map.rows) || 10;
-    const cell = 48;
-    const w = cols * cell;
-    const h = rows * cell;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    // background
-    const grad = ctx.createLinearGradient(0, 0, w, h);
-    grad.addColorStop(0, "#0b1a14");
-    grad.addColorStop(1, "#1a2a1f");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-    // subtle grid
-    ctx.strokeStyle = "rgba(120,160,120,0.08)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= cols; x++) {
-      ctx.beginPath(); ctx.moveTo(x * cell, 0); ctx.lineTo(x * cell, h); ctx.stroke();
-    }
-    for (let y = 0; y <= rows; y++) {
-      ctx.beginPath(); ctx.moveTo(0, y * cell); ctx.lineTo(w, y * cell); ctx.stroke();
-    }
-    // start zones
-    const zones = (map && map.startZones) || { A: [], B: [] };
-    (zones.A || []).forEach(([zx, zy]) => {
-      ctx.fillStyle = "rgba(79, 140, 255, 0.18)";
-      ctx.fillRect(zx * cell, zy * cell, cell, cell);
-    });
-    (zones.B || []).forEach(([zx, zy]) => {
-      ctx.fillStyle = "rgba(255, 92, 92, 0.18)";
-      ctx.fillRect(zx * cell, zy * cell, cell, cell);
-    });
-    // walls (edges)
-    ctx.strokeStyle = "rgba(200, 220, 200, 0.55)";
-    ctx.lineWidth = 2;
-    const edges = (map && map.edgesWalls) || [];
-    edges.forEach((e) => {
-      const parts = String(e).split("-");
-      if (parts.length !== 2) return;
-      const [a, b] = parts.map((p) => p.split(",").map(Number));
-      if (!a || !b) return;
-      const x1 = a[0] + 0.5, y1 = a[1] + 0.5;
-      const x2 = b[0] + 0.5, y2 = b[1] + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x1 * cell, y1 * cell);
-      ctx.lineTo(x2 * cell, y2 * cell);
-      ctx.stroke();
-    });
-    // objectives
-    const objs = (map && map.objectives) || {};
-    ["A", "B"].forEach((p) => {
-      const o = objs[p];
-      const pos = map && map.objectivePos ? map.objectivePos[p] : null;
-      const ox = (pos ? pos.x : (o ? o.x : null));
-      const oy = (pos ? pos.y : (o ? o.y : null));
-      if (ox == null || oy == null) return;
-      ctx.fillStyle = p === "A" ? "rgba(79,140,255,0.9)" : "rgba(255,92,92,0.9)";
-      ctx.beginPath();
-      ctx.moveTo((ox + 0.5) * cell, (oy + 0.1) * cell);
-      ctx.lineTo((ox + 0.9) * cell, (oy + 0.5) * cell);
-      ctx.lineTo((ox + 0.5) * cell, (oy + 0.9) * cell);
-      ctx.lineTo((ox + 0.1) * cell, (oy + 0.5) * cell);
-      ctx.closePath();
-      ctx.fill();
-    });
-    // fire cells
-    (map && map.fireCells || []).forEach(([fx, fy]) => {
-      ctx.fillStyle = "rgba(255, 120, 40, 0.6)";
-      ctx.beginPath();
-      ctx.arc((fx + 0.5) * cell, (fy + 0.5) * cell, cell * 0.25, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    // title
-    ctx.fillStyle = "rgba(240, 233, 255, 0.85)";
-    ctx.font = "bold 28px Cinzel, serif";
-    ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(106,69,224,0.8)";
-    ctx.shadowBlur = 12;
-    ctx.fillText("LUXERIA", w / 2, h / 2);
-    ctx.shadowBlur = 0;
-  } catch (e) {}
-}
 
+/* ---------- Intro / Splash ---------- */
+let introPlayed = false;
 function showIntro() {
   const intro = document.getElementById("intro-screen");
   if (!intro || introPlayed) return;
   introPlayed = true;
-  const canvas = document.createElement("canvas");
-  drawIntroMap(canvas);
-  const url = canvas.toDataURL("image/png");
   const bg = intro.querySelector(".intro-bg");
-  if (bg && url) {
-    bg.style.backgroundImage = 'url("' + url + '")';
+  if (bg) {
+    bg.style.backgroundImage = 'url("luxeria-map.png")';
     bg.style.backgroundSize = "cover";
     bg.style.backgroundPosition = "center";
-    bg.style.filter = "blur(8px) brightness(0.55) saturate(1.1)";
   }
   intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
   intro.style.display = "flex";
