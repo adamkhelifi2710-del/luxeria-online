@@ -2619,6 +2619,7 @@ function placeAt(x, y) {
   save();
   renderBoard();
   if (aiMode) aiMaybeSchedulePlacement();
+  resetTurnTimer();
 }
 
 function updatePlacementBanner() {
@@ -3220,6 +3221,7 @@ function moveToken(id, x, y) {
   }
   if (!tok.dead) healCellOnStop(tok);
   reselectAfter();
+  resetTurnTimer();
 }
 
 function reselectAfter() {
@@ -8025,8 +8027,20 @@ function resetTurnTimer() {
   startTurnTimer();
 }
 
-document.addEventListener("click", () => { if (turnTimerInterval) resetTurnTimer(); }, true);
-document.addEventListener("keydown", () => { if (turnTimerInterval) resetTurnTimer(); }, true);
+document.addEventListener("click", (e) => {
+  if (!turnTimerInterval) return;
+  const t = e.target;
+  const isCell = !!(t && t.classList && t.classList.contains("cell"));
+  const isActionBtn = !!(t && t.closest && (t.closest("#panel-ability") || t.closest("#panel-swap") || t.closest(".scrab-fire") || t.closest("#next-turn")));
+  if (isCell || isActionBtn) resetTurnTimer();
+}, true);
+document.addEventListener("keydown", (e) => {
+  if (!turnTimerInterval) return;
+  const k = (e.key || "").toLowerCase();
+  if (e.code === "Space" || e.key === " " || k === "z" || k === "x" || e.key === "Enter" || k === "u" || k === "a") {
+    resetTurnTimer();
+  }
+}, true);
 
 const _origEndPlayerTurnTT = endPlayerTurn;
 window.endPlayerTurn = function () {
