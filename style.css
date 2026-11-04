@@ -4768,8 +4768,9 @@ button:hover, .btn-random-inline:hover {
   font-size: 0.98rem;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
-.turn-toast {
-  position: fixed;
+.turn-banner {
+  animation: prince-banner-fx 2s ease-in forwards;
+}
   left: 50%;
   top: 12px;
   transform: translateX(-50%) translateY(-20px);
