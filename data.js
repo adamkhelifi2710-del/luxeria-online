@@ -90,7 +90,7 @@ const GAME = {
       number: 12,
       role: "assassin",
       hp: 10,
-      atk: 3,
+      atk: 2,
       mouvement: 4,
       range: 2,
       ability: {
@@ -224,7 +224,7 @@ const GAME = {
       name: "DICRUM",
       number: 10,
       role: "assassin",
-      hp: 9,
+      hp: 8,
       atk: 3,
       mouvement: 4,
       range: 2,
