@@ -7969,17 +7969,14 @@ function turnTimerShouldRun() {
 }
 
 function showTurnToast(text, player) {
-  const el = document.getElementById("turn-toast");
-  if (!el) return;
-  el.textContent = text;
-  el.classList.remove("show", "player-a", "player-b");
-  el.classList.add(player === "B" ? "player-b" : "player-a");
-  void el.offsetWidth;
-  el.classList.add("show");
+  const color = player === "B" ? "#ff5c5c" : "#4f8cff";
+  const bn = document.createElement("div");
+  bn.className = "ability-banner turn-banner";
+  bn.style.setProperty("--ab-color", color);
+  bn.textContent = text;
+  document.body.appendChild(bn);
   if (turnToastTimeout) clearTimeout(turnToastTimeout);
-  turnToastTimeout = setTimeout(() => {
-    el.classList.remove("show");
-  }, 2000);
+  turnToastTimeout = setTimeout(() => bn.remove(), 2000);
 }
 
 function stopTurnTimer() {
