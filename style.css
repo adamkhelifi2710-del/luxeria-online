@@ -4798,25 +4798,23 @@ button:hover, .btn-random-inline:hover {
 .turn-toast.player-a { border-color: var(--team-a, #4f8cff); color: var(--team-a, #4f8cff); }
 .turn-toast.player-b { border-color: var(--team-b, #ff5c5c); color: var(--team-b, #ff5c5c); }
 .turn-timer {
-  position: fixed;
-  top: 12px;
-  right: 14px;
-  z-index: 3600;
   display: none;
   min-width: 64px;
-  padding: 10px 18px;
-  border-radius: 12px;
+  padding: 6px 14px;
+  border-radius: 10px;
   background: rgba(12, 18, 28, 0.92);
   border: 2px solid rgba(79, 140, 255, 0.6);
   color: #eaf1fa;
-  font-size: 1.7rem;
+  font-size: 1.3rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: border-color 0.2s, color 0.2s, transform 0.2s;
+  margin: 0 12px;
+  align-self: center;
 }
-.turn-timer.show { display: block; }
+.turn-timer.show { display: inline-block; }
 .turn-timer.urgent { border-color: #ff5c5c; color: #ff5c5c; animation: timer-pulse 0.6s ease-in-out infinite; }
 @keyframes timer-pulse {
   0%, 100% { transform: scale(1); }
