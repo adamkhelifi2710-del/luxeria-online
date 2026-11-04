@@ -923,6 +923,13 @@ main {
   font-size: 0.85rem;
 }
 
+.char-card .char-stats span {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  font-weight: 700;
+}
+
 .char-ability,
 .char-passive {
   font-size: 0.85rem;
