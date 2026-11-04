@@ -7957,7 +7957,18 @@ function aiChooseTeamAgainst(taken) {
 
 /* ---------- Chrono de tour (15 s) ---------- */
 
+function isOnHome() {
+  const hs = document.getElementById("home-screen");
+  return !!(hs && hs.classList.contains("open"));
+}
+
+function onBoardTab() {
+  if (isOnHome()) return false;
+  const board = document.getElementById("tab-board");
+  return !!(board && board.classList.contains("active"));
+}
 function turnTimerShouldRun() {
+  if (!onBoardTab()) return false;
   if (state.winner || state.phase !== "playing") return false;
   if (aiMode && state.turn === aiPlayer) return false;
   if (aiMode && aiRunning) return false;
@@ -7969,6 +7980,7 @@ function turnTimerShouldRun() {
 }
 
 function showTurnToast(text, player) {
+  if (!onBoardTab()) return;
   const color = player === "B" ? "#ff5c5c" : "#4f8cff";
   const bn = document.createElement("div");
   bn.className = "ability-banner turn-banner";
