@@ -49,6 +49,7 @@ let onlineStartersRequested = false;
 let fx = emptyFx();
 let turnTimerInterval = null;
 let turnTimerTimeout = null;
+let turnToastTimeout = null;
 let turnTimerRemaining = 0;
 
 function emptyFx() {
@@ -4797,7 +4798,7 @@ function endPlayerTurn() {
   if (aiMode && state.turn === aiPlayer && !state.winner && state.phase === "playing") {
     aiScheduleTurn();
   }
-  setTimeout(startTurnTimer, 50);
+  setTimeout(() => startTurnTimer(true), 50);
 }
 
 document.getElementById("reset-board").addEventListener("click", () => {
@@ -7989,27 +7990,27 @@ function stopTurnTimer() {
   if (t) t.classList.remove("show", "urgent");
 }
 
-function startTurnTimer() {
+function startTurnTimer(showToast) {
   stopTurnTimer();
   if (!turnTimerShouldRun()) return;
   const player = state.turn;
-  let remaining = 15;
-  showTurnToast("Tour du joueur " + player, player);
+  turnTimerRemaining = 15;
+  if (showToast) showTurnToast("Tour du joueur " + player, player);
   const timerEl = document.getElementById("turn-timer");
   if (timerEl) {
-    timerEl.textContent = remaining + "s";
+    timerEl.textContent = turnTimerRemaining + "s";
     timerEl.classList.remove("urgent");
     timerEl.classList.add("show");
   }
   turnTimerInterval = setInterval(() => {
     if (!turnTimerShouldRun()) { stopTurnTimer(); return; }
-    remaining--;
+    turnTimerRemaining--;
     if (timerEl) {
-      timerEl.textContent = remaining + "s";
-      if (remaining <= 5) timerEl.classList.add("urgent");
+      timerEl.textContent = turnTimerRemaining + "s";
+      if (turnTimerRemaining <= 5) timerEl.classList.add("urgent");
       else timerEl.classList.remove("urgent");
     }
-    if (remaining <= 0) {
+    if (turnTimerRemaining <= 0) {
       stopTurnTimer();
       if (turnTimerShouldRun()) {
         try { endPlayerTurn(); } catch (e) {}
@@ -8030,13 +8031,13 @@ document.addEventListener("keydown", () => { if (turnTimerInterval) resetTurnTim
 const _origEndPlayerTurnTT = endPlayerTurn;
 window.endPlayerTurn = function () {
   _origEndPlayerTurnTT();
-  setTimeout(startTurnTimer, 50);
+  setTimeout(() => startTurnTimer(), 50);
 };
 
 const _origStartGameTT = startGame;
 window.startGame = function () {
   _origStartGameTT();
-  setTimeout(startTurnTimer, 300);
+  setTimeout(() => startTurnTimer(), 300);
 };
 
 setInterval(() => {
