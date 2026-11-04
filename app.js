@@ -47,6 +47,9 @@ let onlineLocalStarters = null;
 let onlineStartersRequested = false;
 
 let fx = emptyFx();
+let turnTimerInterval = null;
+let turnTimerTimeout = null;
+let turnTimerRemaining = 0;
 
 function emptyFx() {
   return { hits: [], deaths: [], heals: [], abilities: [], casters: [], entered: [], cellFx: [] };
@@ -1580,6 +1583,7 @@ function startGame() {
     renderBoard();
     document.querySelector('[data-tab="board"]').click();
     if (aiMode) aiOnGameStart();
+  setTimeout(startTurnTimer, 300);
 }
 
 function objectiveDef(player) {
@@ -4793,6 +4797,7 @@ function endPlayerTurn() {
   if (aiMode && state.turn === aiPlayer && !state.winner && state.phase === "playing") {
     aiScheduleTurn();
   }
+  setTimeout(startTurnTimer, 50);
 }
 
 document.getElementById("reset-board").addEventListener("click", () => {
@@ -7947,3 +7952,96 @@ function aiChooseTeamAgainst(taken) {
   el.id = "ai-status";
   document.body.appendChild(el);
 })();
+
+
+/* ---------- Chrono de tour (15 s) ---------- */
+
+function turnTimerShouldRun() {
+  if (state.winner || state.phase !== "playing") return false;
+  if (aiMode && state.turn === aiPlayer) return false;
+  if (aiMode && aiRunning) return false;
+  if (busy) return false;
+  if (pendingAbility || pendingSpawn || pendingReplaceChoice) return false;
+  if (lanMode) {
+    return state.turn === lanLocalTeam();
+  }
+  return true;
+}
+
+function showTurnToast(text, player) {
+  const el = document.getElementById("turn-toast");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("show", "player-a", "player-b");
+  el.classList.add(player === "B" ? "player-b" : "player-a");
+  void el.offsetWidth;
+  el.classList.add("show");
+  if (turnToastTimeout) clearTimeout(turnToastTimeout);
+  turnToastTimeout = setTimeout(() => {
+    el.classList.remove("show");
+  }, 2000);
+}
+
+function stopTurnTimer() {
+  if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
+  if (turnTimerTimeout) { clearTimeout(turnTimerTimeout); turnTimerTimeout = null; }
+  const t = document.getElementById("turn-timer");
+  if (t) t.classList.remove("show", "urgent");
+}
+
+function startTurnTimer() {
+  stopTurnTimer();
+  if (!turnTimerShouldRun()) return;
+  const player = state.turn;
+  let remaining = 15;
+  showTurnToast("Tour du joueur " + player, player);
+  const timerEl = document.getElementById("turn-timer");
+  if (timerEl) {
+    timerEl.textContent = remaining + "s";
+    timerEl.classList.remove("urgent");
+    timerEl.classList.add("show");
+  }
+  turnTimerInterval = setInterval(() => {
+    if (!turnTimerShouldRun()) { stopTurnTimer(); return; }
+    remaining--;
+    if (timerEl) {
+      timerEl.textContent = remaining + "s";
+      if (remaining <= 5) timerEl.classList.add("urgent");
+      else timerEl.classList.remove("urgent");
+    }
+    if (remaining <= 0) {
+      stopTurnTimer();
+      if (turnTimerShouldRun()) {
+        try { endPlayerTurn(); } catch (e) {}
+      }
+    }
+  }, 1000);
+}
+
+function resetTurnTimer() {
+  if (!turnTimerInterval) return;
+  if (!turnTimerShouldRun()) { stopTurnTimer(); return; }
+  startTurnTimer();
+}
+
+document.addEventListener("click", () => { if (turnTimerInterval) resetTurnTimer(); }, true);
+document.addEventListener("keydown", () => { if (turnTimerInterval) resetTurnTimer(); }, true);
+
+const _origEndPlayerTurnTT = endPlayerTurn;
+window.endPlayerTurn = function () {
+  _origEndPlayerTurnTT();
+  setTimeout(startTurnTimer, 50);
+};
+
+const _origStartGameTT = startGame;
+window.startGame = function () {
+  _origStartGameTT();
+  setTimeout(startTurnTimer, 300);
+};
+
+setInterval(() => {
+  if (state.phase === "playing" && !turnTimerInterval && turnTimerShouldRun()) {
+    startTurnTimer();
+  }
+  if (state.phase !== "playing") stopTurnTimer();
+}, 500);
