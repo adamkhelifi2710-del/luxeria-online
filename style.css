@@ -4870,3 +4870,68 @@ button:hover, .btn-random-inline:hover {
   from { opacity: 0; transform: translate(-50%, -14px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+/* ---------- Intro / Splash ---------- */
+.intro-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14vh;
+  background: #05080f;
+  overflow: hidden;
+}
+.intro-screen.hidden { display: none; }
+.intro-bg {
+  position: absolute;
+  inset: -8%;
+  background: url("home-bg.png") center / cover no-repeat;
+  filter: blur(8px) brightness(0.55) saturate(1.1);
+  transform: scale(1.12);
+  transition: transform 1.7s cubic-bezier(.15,.85,.25,1), filter 1.7s ease;
+  will-change: transform, filter;
+}
+.intro-screen.zoom-out .intro-bg {
+  transform: scale(0.9);
+  filter: blur(14px) brightness(0.35) saturate(1.2);
+}
+.intro-screen.zoom-in .intro-bg {
+  transform: scale(2.8);
+  filter: blur(0px) brightness(1.15) saturate(1.05);
+}
+.intro-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
+  pointer-events: none;
+}
+.intro-play {
+  position: relative;
+  z-index: 2;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: radial-gradient(circle at 30% 30%, rgba(106, 69, 224, 0.55), rgba(12, 18, 28, 0.75));
+  backdrop-filter: blur(6px);
+  color: #f0e9ff;
+  font-family: "Cinzel Decorative", "Cinzel", serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(106, 69, 224, 0.6), 0 12px 40px rgba(0, 0, 0, 0.5);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  animation: intro-pulse 2.4s ease-in-out infinite;
+}
+.intro-play:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 8px rgba(106, 69, 224, 0.25), 0 16px 50px rgba(0, 0, 0, 0.6);
+}
+.intro-play:active { transform: scale(0.96); }
+@keyframes intro-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(106, 69, 224, 0.5), 0 12px 40px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 0 14px rgba(106, 69, 224, 0), 0 12px 40px rgba(0, 0, 0, 0.5); }
+}
+.intro-screen.fade { opacity: 0; transition: opacity 0.7s ease; pointer-events: none; }
