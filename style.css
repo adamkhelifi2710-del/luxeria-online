@@ -4909,13 +4909,13 @@ button:hover, .btn-random-inline:hover {
 .intro-play {
   position: relative;
   z-index: 2;
-  padding: 14px 48px;
-  border-radius: 8px;
+  padding: 18px 64px;
+  border-radius: 10px;
   border: 2px solid #f5c542;
   background: linear-gradient(180deg, #f5c542, #d4a017);
   color: #1a1200;
   font-family: "Cinzel Decorative", "Cinzel", serif;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
