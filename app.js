@@ -6443,7 +6443,7 @@ initMapSelect();
 renderRoleOptions();
 renderLibrary();
 renderBoard();
-showHome();
+showIntro();
 
 /* ============================ MODE IA ============================ */
 
