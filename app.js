@@ -8058,6 +8058,8 @@ setInterval(() => {
 /* ---------- Intro / Splash ---------- */
 
 /* ---------- Intro / Splash ---------- */
+
+/* ---------- Intro / Splash ---------- */
 let introPlayed = false;
 function showIntro() {
   const intro = document.getElementById("intro-screen");
@@ -8072,6 +8074,28 @@ function showIntro() {
   intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
   intro.style.display = "flex";
 }
+
+function hideLoadingScreen() {
+  const ls = document.getElementById("loading-screen");
+  if (ls) {
+    ls.classList.add("hidden");
+    setTimeout(() => { ls.style.display = "none"; }, 400);
+  }
+}
+
+function preloadIntroImage() {
+  const img = new Image();
+  img.onload = () => {
+    hideLoadingScreen();
+    showIntro();
+  };
+  img.onerror = () => {
+    hideLoadingScreen();
+    showIntro();
+  };
+  img.src = "luxeria-map.png";
+}
+
 function playIntro() {
   const intro = document.getElementById("intro-screen");
   const btn = document.getElementById("intro-play");
@@ -8096,10 +8120,10 @@ function playIntro() {
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("intro-play");
   if (btn) btn.addEventListener("click", playIntro);
-  showIntro();
+  preloadIntroImage();
 });
 if (document.readyState !== "loading") {
   const btn = document.getElementById("intro-play");
   if (btn) btn.addEventListener("click", playIntro);
-  showIntro();
+  preloadIntroImage();
 }
