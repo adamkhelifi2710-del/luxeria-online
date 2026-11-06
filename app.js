@@ -4932,6 +4932,7 @@ if (bsNext) bsNext.addEventListener("click", () => {
 
 document.getElementById("win-close").addEventListener("click", () => {
   document.getElementById("win-overlay").classList.remove("show");
+  if (typeof showHome === "function") showHome();
 });
 
 /* ---------- Réserve / remplacements ---------- */
