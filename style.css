@@ -4890,10 +4890,27 @@ button:hover, .btn-random-inline:hover {
   text-align: center;
   animation: loading-fade 1.4s ease-in-out infinite;
 }
-@keyframes loading-fade {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
+.loading-bar {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(60vw, 360px);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 }
+.loading-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ffffff, #b7a6f0);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+}
+.intro-screen {
+  position: fixed;
   inset: 0;
   z-index: 10000;
   display: flex;
