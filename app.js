@@ -8085,15 +8085,22 @@ function hideLoadingScreen() {
 
 function preloadIntroImage() {
   const img = new Image();
-  img.onload = () => {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
     hideLoadingScreen();
     showIntro();
   };
-  img.onerror = () => {
-    hideLoadingScreen();
-    showIntro();
-  };
+  img.onload = finish;
+  img.onerror = finish;
   img.src = "luxeria-map.png";
+  // Fallback si l'image est deja en cache ou ne declenche pas onload
+  if (img.complete) {
+    setTimeout(finish, 50);
+  }
+  // Securite : ne jamais rester bloque sur l'ecran noir
+  setTimeout(finish, 4000);
 }
 
 function playIntro() {
