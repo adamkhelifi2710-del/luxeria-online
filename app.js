@@ -8090,10 +8090,11 @@ function preloadIntroImage() {
     if (done) return;
     done = true;
     if (fill) fill.style.width = "100%";
+    // Attendre que l'image soit completement decodee avant d'afficher le menu 0
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 300);
+    }, 600);
   };
   // Track real progress via XHR
   try {
@@ -8111,7 +8112,14 @@ function preloadIntroImage() {
         if (fill) fill.style.width = "100%";
         const url = URL.createObjectURL(xhr.response);
         const img = new Image();
-        img.onload = finish;
+        img.onload = () => {
+          // decode complet pour eviter l'affichage progressif haut->bas
+          if (typeof img.decode === "function") {
+            img.decode().then(finish).catch(finish);
+          } else {
+            finish();
+          }
+        };
         img.onerror = finish;
         img.src = url;
       } else {
@@ -8124,7 +8132,7 @@ function preloadIntroImage() {
     finish();
   }
   // Securite : ne jamais rester bloque sur l'ecran noir
-  setTimeout(finish, 8000);
+  setTimeout(finish, 12000);
 }
 
 function playIntro() {
