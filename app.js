@@ -8060,7 +8060,7 @@ setInterval(() => {
 /* ---------- Intro / Splash ---------- */
 
 /* ---------- Intro / Splash ---------- */
-let introPlayed = false;
+var introPlayed = false;
 function showIntro() {
   const intro = document.getElementById("intro-screen");
   if (!intro || introPlayed) return;
