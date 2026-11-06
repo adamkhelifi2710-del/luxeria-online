@@ -8084,23 +8084,47 @@ function hideLoadingScreen() {
 }
 
 function preloadIntroImage() {
-  const img = new Image();
+  const fill = document.getElementById("loading-bar-fill");
   let done = false;
   const finish = () => {
     if (done) return;
     done = true;
-    hideLoadingScreen();
-    showIntro();
+    if (fill) fill.style.width = "100%";
+    setTimeout(() => {
+      hideLoadingScreen();
+      showIntro();
+    }, 300);
   };
-  img.onload = finish;
-  img.onerror = finish;
-  img.src = "luxeria-map.png";
-  // Fallback si l'image est deja en cache ou ne declenche pas onload
-  if (img.complete) {
-    setTimeout(finish, 50);
+  // Track real progress via XHR
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "luxeria-map.png", true);
+    xhr.responseType = "blob";
+    xhr.onprogress = (e) => {
+      if (e.lengthComputable && fill) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        fill.style.width = pct + "%";
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        if (fill) fill.style.width = "100%";
+        const url = URL.createObjectURL(xhr.response);
+        const img = new Image();
+        img.onload = finish;
+        img.onerror = finish;
+        img.src = url;
+      } else {
+        finish();
+      }
+    };
+    xhr.onerror = finish;
+    xhr.send();
+  } catch (e) {
+    finish();
   }
   // Securite : ne jamais rester bloque sur l'ecran noir
-  setTimeout(finish, 4000);
+  setTimeout(finish, 8000);
 }
 
 function playIntro() {
