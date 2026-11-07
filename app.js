@@ -8083,6 +8083,8 @@ function hideLoadingScreen() {
   }
 }
 
+let introBgUrl = null;
+
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
   let done = false;
@@ -8090,13 +8092,11 @@ function preloadIntroImage() {
     if (done) return;
     done = true;
     if (fill) fill.style.width = "100%";
-    // Attendre que l'image soit completement decodee avant d'afficher le menu 0
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
     }, 600);
   };
-  // Track real progress via XHR
   try {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", "luxeria-map.png", true);
@@ -8111,9 +8111,9 @@ function preloadIntroImage() {
       if (xhr.status === 200) {
         if (fill) fill.style.width = "100%";
         const url = URL.createObjectURL(xhr.response);
+        introBgUrl = url;
         const img = new Image();
         img.onload = () => {
-          // decode complet pour eviter l'affichage progressif haut->bas
           if (typeof img.decode === "function") {
             img.decode().then(finish).catch(finish);
           } else {
@@ -8131,10 +8131,22 @@ function preloadIntroImage() {
   } catch (e) {
     finish();
   }
-  // Securite : ne jamais rester bloque sur l'ecran noir
   setTimeout(finish, 12000);
 }
 
+function showIntro() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro || introPlayed) return;
+  introPlayed = true;
+  const bg = intro.querySelector(".intro-bg");
+  if (bg) {
+    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
+    bg.style.backgroundSize = "cover";
+    bg.style.backgroundPosition = "center";
+  }
+  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
+  intro.style.display = "flex";
+}
 function playIntro() {
   const intro = document.getElementById("intro-screen");
   const btn = document.getElementById("intro-play");
