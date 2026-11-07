@@ -4879,8 +4879,11 @@ button:hover, .btn-random-inline:hover {
   align-items: center;
   justify-content: center;
   background: #000000;
+  transition: opacity 2s ease;
+  opacity: 1;
 }
-.loading-screen.hidden { display: none; }
+.loading-screen.hidden { opacity: 0; pointer-events: none; }
+.loading-screen.gone { display: none; }
 .loading-text {
   color: #ffffff;
   font-family: "Cinzel Decorative", "Cinzel", serif;
