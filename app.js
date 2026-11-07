@@ -3499,12 +3499,11 @@ function rampageHealAllies(team) {
   state.tokens.forEach((t) => {
     if (t.dead || t.player !== team) return;
     const max = charById(t.charId).hp;
-    const floor = rampageFloor(max);
-    if (t.hp < floor) {
-      const before = t.hp;
-      t.hp = floor;
+    const before = t.hp;
+    t.hp = Math.min(max, t.hp + 3);
+    if (t.hp > before) {
       fxHeal(t.id, t.hp - before);
-      log(`${charById(t.charId).name} (${team}) se remobilise : ${before}→${t.hp} PV (75 % de ${max}).`);
+      log(`${charById(t.charId).name} (${team}) se remobilise : ${before}→${t.hp} PV (+3 PV).`);
     }
   });
 }
@@ -8077,10 +8076,9 @@ function showIntro() {
 
 function hideLoadingScreen() {
   const ls = document.getElementById("loading-screen");
-  if (ls) {
-    ls.classList.add("hidden");
-    setTimeout(() => { ls.style.display = "none"; }, 400);
-  }
+  if (!ls) return;
+  ls.classList.add("hidden");
+  setTimeout(() => { ls.classList.add("gone"); ls.style.display = "none"; }, 2000);
 }
 
 var introBgUrl = null;
@@ -8095,7 +8093,7 @@ function preloadIntroImage() {
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 400);
+    }, 200);
   };
   let pct = 0;
   const barTimer = setInterval(() => {
