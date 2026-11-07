@@ -8095,45 +8095,32 @@ function preloadIntroImage() {
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 600);
+    }, 400);
   };
-  try {
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", "luxeria-map.png", true);
-    xhr.responseType = "blob";
-    xhr.onprogress = (e) => {
-      if (e.lengthComputable && fill) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        fill.style.width = pct + "%";
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        if (fill) fill.style.width = "100%";
-        const url = URL.createObjectURL(xhr.response);
-        introBgUrl = url;
-        const img = new Image();
-        img.onload = () => {
-          if (typeof img.decode === "function") {
-            img.decode().then(finish).catch(finish);
-          } else {
-            finish();
-          }
-        };
-        img.onerror = finish;
-        img.src = url;
-      } else {
-        finish();
-      }
-    };
-    xhr.onerror = finish;
-    xhr.send();
-  } catch (e) {
+  let pct = 0;
+  const barTimer = setInterval(() => {
+    if (done) { clearInterval(barTimer); return; }
+    pct = Math.min(90, pct + Math.random() * 8 + 2);
+    if (fill) fill.style.width = pct + "%";
+  }, 150);
+  const img = new Image();
+  img.onload = () => {
+    introBgUrl = img.src;
+    clearInterval(barTimer);
+    if (fill) fill.style.width = "100%";
+    if (typeof img.decode === "function") {
+      img.decode().then(finish).catch(finish);
+    } else {
+      finish();
+    }
+  };
+  img.onerror = () => {
+    clearInterval(barTimer);
     finish();
-  }
-  setTimeout(finish, 12000);
+  };
+  img.src = "luxeria-map.png";
+  setTimeout(() => { clearInterval(barTimer); finish(); }, 8000);
 }
-
 function showIntro() {
   const intro = document.getElementById("intro-screen");
   if (!intro || introPlayed) return;
