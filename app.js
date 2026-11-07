@@ -8083,7 +8083,7 @@ function hideLoadingScreen() {
   }
 }
 
-let introBgUrl = null;
+var introBgUrl = null;
 
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
