@@ -6,6 +6,7 @@
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css?v=20261114">
+  <link rel="stylesheet" href="style3d.css?v=1">
 </head>
 <body>
   <div class="heartbeat" aria-hidden="true">
@@ -40,6 +41,7 @@
     <div id="turn-timer" class="turn-timer"></div>
     <nav>
       <button class="tab-btn active" data-tab="board">Plateau</button>
+      <button class="tab-btn" data-tab="board3d" title="Vue 3D du plateau (bêta)">3D <span class="beta-tag">β</span></button>
       <button class="tab-btn" data-tab="library">Champions</button>
       <button class="tab-btn" data-tab="maps">Terrains</button>
       <button id="nav-home" class="tab-btn">Accueil</button>
@@ -70,6 +72,41 @@
           <p class="win-text"></p>
           <button id="win-close">Fermer</button>
         </div>
+      </div>
+    </section>
+
+    <section id="tab-board3d" class="tab">
+      <div id="board3d">
+        <div id="board3d-canvas"></div>
+
+        <div id="b3d-hud">
+          <div class="b3d-top">
+            <span id="b3d-turn" class="b3d-turn team-a">Tour : Équipe A</span>
+            <span id="b3d-map" class="b3d-map"></span>
+          </div>
+          <div class="b3d-bottom">
+            <div id="b3d-card">
+              <div class="b3d-empty">Cliquez une bouteille pour sélectionner un champion.</div>
+            </div>
+            <div class="b3d-actions">
+              <button id="b3d-undo" title="Annuler la dernière action">↩ Annuler</button>
+              <button id="b3d-recenter" title="Recentrer la caméra">⌖ Recentrer</button>
+              <button id="b3d-next" title="Passer au tour suivant">Tour suivant</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="b3d-legend">
+          <span><i style="background:#4f8cff"></i>Équipe A</span>
+          <span><i style="background:#ff6b6b"></i>Équipe B</span>
+          <span><i style="background:#ff7a2f"></i>Feu</span>
+          <span><i style="background:#39d98a"></i>Soin</span>
+          <span><i style="background:#4fd1ff"></i>Vitesse</span>
+          <span><i style="background:#8a5cff"></i>Vide</span>
+        </div>
+
+        <div class="b3d-hint"><b>Glisser</b> tourner · <b>Molette</b> zoom · <b>Clic droit</b> déplacer · <b>Clic</b> jouer</div>
+        <div id="b3d-message"></div>
       </div>
     </section>
 
@@ -149,5 +186,6 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261114"></script>
+  <script src="game3d.js?v=1"></script>
 </body>
 </html>
