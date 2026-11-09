@@ -3177,6 +3177,10 @@ function moveToken(id, x, y) {
     alert(`${c.name} a déjà utilisé sa capacité ce tour : il ne peut plus se déplacer.`);
     return;
   }
+  if (tok.hasAttacked && tok.hasMoved) {
+    alert(`${c.name} a déjà attaqué et déplacé ce tour : déplacement supplémentaire impossible.`);
+    return;
+  }
   if (championAlreadyActed(tok)) {
     alert("Un seul champion peut agir par tour. Passez au tour suivant.");
     renderBoard();
@@ -3525,6 +3529,7 @@ function rapidoFlurryStep(tok, target) {
     tok.hasMoved = false;
     tok.abilityUsed = false;
     tok.movLeft = null;
+    tok.speedTurnBoost = false;
     log("RAPIDO enchaîne : 2ème attaque de 3 dégâts, il peut de nouveau se déplacer avant de frapper.");
     return true;
   }
@@ -3550,6 +3555,11 @@ function attackAt(x, y) {
   }
   if (championAlreadyActed(tok)) {
     alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    renderBoard();
+    return;
+  }
+  if (tok.charId === "rapido" && tok.flurry && tok.flurrySecond && !tok.hasMoved) {
+    alert("RAPIDO doit se déplacer après sa 1ère attaque de Déferlement avant de porter la 2ème.");
     renderBoard();
     return;
   }
