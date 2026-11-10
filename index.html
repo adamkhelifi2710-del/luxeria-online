@@ -27,6 +27,7 @@
   </div>
 
   <div id="home-screen">
+    <button id="home-3d-toggle" title="Ouvrir l'accueil 3D (bêta)">🧊 Accueil 3D</button>
     <div class="home-box">
       <h1 class="home-title">Luxeria</h1>
       <button id="home-play" class="home-btn">Lancer une partie</button>
@@ -34,6 +35,24 @@
       <button id="home-create" class="home-btn">Terrains</button>
       <button id="home-maps" class="home-btn">Voir les champions</button>
     </div>
+  </div>
+
+  <div id="home3d-screen">
+    <div id="home3d-canvas"></div>
+
+    <div class="h3d-panel">
+      <h1 class="h3d-title">Luxeria</h1>
+      <p class="h3d-sub">Choisissez votre mode</p>
+      <div class="h3d-actions">
+        <button class="h3d-btn h3d-primary" data-h3d="play">Lancer une partie</button>
+        <button class="h3d-btn" data-h3d="online">Partie en ligne</button>
+        <button class="h3d-btn" data-h3d="maps">Terrains</button>
+        <button class="h3d-btn" data-h3d="library">Voir les champions</button>
+      </div>
+      <p class="h3d-note">Bêta · le plateau 3D affiche le terrain actif</p>
+    </div>
+
+    <button id="home3d-back" title="Revenir à l'accueil classique">← Accueil</button>
   </div>
 
   <header>
@@ -187,5 +206,6 @@
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261114"></script>
   <script src="game3d.js?v=1"></script>
+  <script src="home3d.js?v=1"></script>
 </body>
 </html>

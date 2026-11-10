@@ -551,7 +551,10 @@
   }
 
   function addObjective(team) {
-    var pos = (state.objectivePos && state.objectivePos[team]) || GAME.objectives[team];
+    /* En Rampage il n'y a ni objectif ni réserve : rien à dessiner.
+       En mode Objectif, on n'affiche la structure qu'une fois réellement posée. */
+    if (typeof isRampage === "function" && isRampage()) return;
+    var pos = state.objectivePos && state.objectivePos[team];
     if (!pos) return;
     var p = cellPos(pos.x, pos.y);
     var col = team === "A" ? COL.teamA : COL.teamB;
@@ -821,7 +824,9 @@
     if (!tok) {
       card.innerHTML = '<div class="b3d-empty">' +
         (state.phase === "placement"
-          ? "Placement : cliquez une case dorée pour poser votre objectif puis vos champions."
+          ? (typeof isRampage === "function" && isRampage()
+              ? "Rampage : cliquez une case dorée pour poser vos 3 champions (pas d'objectif à placer)."
+              : "Placement : cliquez une case dorée pour poser votre objectif puis vos champions.")
           : "Cliquez une bouteille pour sélectionner un champion.") +
         "</div>";
       return;
