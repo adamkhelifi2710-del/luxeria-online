@@ -7975,7 +7975,11 @@ function isOnHome() {
 function onBoardTab() {
   if (isOnHome()) return false;
   const board = document.getElementById("tab-board");
-  return !!(board && board.classList.contains("active"));
+  const board3d = document.getElementById("tab-board3d");
+  return !!(
+    (board && board.classList.contains("active")) ||
+    (board3d && board3d.classList.contains("active"))
+  );
 }
 function turnTimerShouldRun() {
   if (!onBoardTab()) return false;
@@ -8004,8 +8008,10 @@ function showTurnToast(text, player) {
 function stopTurnTimer() {
   if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
   if (turnTimerTimeout) { clearTimeout(turnTimerTimeout); turnTimerTimeout = null; }
-  const t = document.getElementById("turn-timer");
-  if (t) t.classList.remove("show", "urgent");
+  ["turn-timer", "b3d-timer"].forEach((id) => {
+    const t = document.getElementById(id);
+    if (t) t.classList.remove("show", "urgent");
+  });
 }
 
 function startTurnTimer(showToast) {
@@ -8014,20 +8020,22 @@ function startTurnTimer(showToast) {
   const player = state.turn;
   turnTimerRemaining = 15;
   if (showToast) showTurnToast("Tour du joueur " + player, player);
-  const timerEl = document.getElementById("turn-timer");
-  if (timerEl) {
+  const timerEls = ["turn-timer", "b3d-timer"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  timerEls.forEach((timerEl) => {
     timerEl.textContent = turnTimerRemaining + "s";
     timerEl.classList.remove("urgent");
     timerEl.classList.add("show");
-  }
+  });
   turnTimerInterval = setInterval(() => {
     if (!turnTimerShouldRun()) { stopTurnTimer(); return; }
     turnTimerRemaining--;
-    if (timerEl) {
+    timerEls.forEach((timerEl) => {
       timerEl.textContent = turnTimerRemaining + "s";
       if (turnTimerRemaining <= 5) timerEl.classList.add("urgent");
       else timerEl.classList.remove("urgent");
-    }
+    });
     if (turnTimerRemaining <= 0) {
       if (busy) { turnTimerRemaining = 1; return; }
       stopTurnTimer();

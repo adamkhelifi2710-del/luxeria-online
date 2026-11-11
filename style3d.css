@@ -349,13 +349,168 @@
   }
 }
 
-@media (max-width: 560px) {
-  #b3d-card {
+/* ---------- HUD enrichi (timer, objectifs, réserve, journal) ---------- */
+
+.b3d-timer {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 7px 13px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(12, 18, 26, 0.82);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.b3d-timer.urgent {
+  color: #ffb3b3;
+  border-color: rgba(255, 107, 107, 0.6);
+  box-shadow: 0 0 14px rgba(255, 107, 107, 0.45);
+}
+
+.b3d-objectives {
+  font-size: 0.74rem;
+  color: var(--muted);
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(12, 18, 26, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.b3d-objectives.rampage {
+  color: #ffd9a0;
+  border-color: rgba(246, 194, 75, 0.35);
+}
+
+.b3d-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  max-width: 300px;
+}
+
+.b3d-reserve {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: rgba(12, 18, 26, 0.78);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  font-size: 0.72rem;
+  color: var(--text);
+}
+
+.b3d-reserve-team {
+  margin-bottom: 8px;
+}
+
+.b3d-reserve-team:last-child {
+  margin-bottom: 0;
+}
+
+.b3d-reserve-title {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.b3d-reserve-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.b3d-reserve-row:last-child {
+  border-bottom: none;
+}
+
+.b3d-reserve-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.b3d-reserve-enter {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid rgba(79, 140, 255, 0.45);
+  background: rgba(79, 140, 255, 0.12);
+  color: #bcd7ff;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.b3d-reserve-enter:hover {
+  background: rgba(79, 140, 255, 0.28);
+  border-color: rgba(79, 140, 255, 0.7);
+}
+
+.b3d-log {
+  width: 100%;
+  max-height: 92px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  border-radius: 11px;
+  background: rgba(12, 18, 26, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.b3d-log-line {
+  padding: 2px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.b3d-log-line:last-child {
+  border-bottom: none;
+}
+
+#b3d-topview.active {
+  color: #1a1203;
+  background: linear-gradient(180deg, #ffd97a, var(--accent));
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(246, 194, 75, 0.35);
+}
+
+/* ---------- responsive (enrichi) ---------- */
+
+@media (max-width: 860px) {
+  .b3d-left {
+    max-width: 220px;
+  }
+
+  .b3d-reserve,
+  .b3d-log {
     display: none;
   }
 
-  .b3d-map {
+  #b3d-objectives {
     display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .b3d-left {
+    max-width: 150px;
+  }
+
+  #b3d-topview span,
+  #b3d-topview {
+    font-size: 0.72rem;
   }
 }
 

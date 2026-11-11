@@ -6,7 +6,7 @@
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css?v=20261114">
-  <link rel="stylesheet" href="style3d.css?v=1">
+  <link rel="stylesheet" href="style3d.css?v=2">
 </head>
 <body>
   <div class="heartbeat" aria-hidden="true">
@@ -101,15 +101,22 @@
         <div id="b3d-hud">
           <div class="b3d-top">
             <span id="b3d-turn" class="b3d-turn team-a">Tour : Équipe A</span>
+            <span id="b3d-timer" class="b3d-timer" aria-live="polite">15 s</span>
+            <span id="b3d-objectives" class="b3d-objectives"></span>
             <span id="b3d-map" class="b3d-map"></span>
           </div>
           <div class="b3d-bottom">
-            <div id="b3d-card">
-              <div class="b3d-empty">Cliquez une bouteille pour sélectionner un champion.</div>
+            <div class="b3d-left">
+              <div id="b3d-card">
+                <div class="b3d-empty">Cliquez une bouteille pour sélectionner un champion.</div>
+              </div>
+              <div id="b3d-reserve" class="b3d-reserve"></div>
+              <div id="b3d-log" class="b3d-log"></div>
             </div>
             <div class="b3d-actions">
               <button id="b3d-undo" title="Annuler la dernière action">↩ Annuler</button>
-              <button id="b3d-recenter" title="Recentrer la caméra">⌖ Recentrer</button>
+              <button id="b3d-topview" title="Basculer vers une vue tactique verticale">◉ Vue de haut</button>
+              <button id="b3d-recenter" title="Revenir à la vue de l'équipe qui joue">⌖ Vue équipe</button>
               <button id="b3d-next" title="Passer au tour suivant">Tour suivant</button>
             </div>
           </div>
@@ -205,7 +212,7 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261114"></script>
-  <script src="game3d.js?v=1"></script>
-  <script src="home3d.js?v=1"></script>
+  <script src="game3d.js?v=2"></script>
+  <script src="home3d.js?v=2"></script>
 </body>
 </html>

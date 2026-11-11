@@ -477,7 +477,6 @@
 
   function frame(now) {
     requestAnimationFrame(frame);
-    window.__homeTicks = (window.__homeTicks || 0) + 1;
     if (!opened || !ready) return;
 
     try {

@@ -64,7 +64,9 @@
   var cam = {
     theta: 0.85, phi: 0.98, r: 22,
     thetaT: 0.85, phiT: 0.98, rT: 22,
-    target: null, targetT: null
+    target: null, targetT: null,
+    topView: false, savedPhi: 0.98,
+    lastTurn: null, camSet: false
   };
 
   var staticSig = "";
@@ -396,11 +398,6 @@
     cellPlane.rotation.x = -Math.PI / 2;
     cellPlane.position.y = 0.12;
     world.add(cellPlane);
-
-    cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
-    cam.thetaT = 0.85;
-    cam.phiT = 0.98;
-    cam.targetT.set(0, 0.6, 0);
 
     var nameEl = el("b3d-map");
     if (nameEl) nameEl.textContent = (map.name || state.mapName) + " · " + cur.cols + "×" + cur.rows;
@@ -786,12 +783,30 @@
   function sync(force) {
     if (!mounted) return;
 
+    var mapChanged = (cur.mapId !== state.mapName);
     var sig = computeStaticSig();
     if (force || sig !== staticSig) {
       staticSig = sig;
       buildStatic();
       hiSig = "";
+      if (mapChanged || !cam.camSet) {
+        cam.camSet = true;
+        cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
+        cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
+        cam.phiT = 0.98;
+        cam.targetT.set(0, 0.6, 0);
+        cam.topView = false;
+        cam.savedPhi = 0.98;
+      }
     }
+
+    /* Changement de tour : on passe de l'autre côté du plateau, en conservant
+       l'angle et le zoom choisis par le joueur (rotation libre pendant le tour). */
+    var turnChanged = (cam.lastTurn !== null && cam.lastTurn !== state.turn);
+    if (!mapChanged && turnChanged && !cam.topView) {
+      cam.thetaT += Math.PI;
+    }
+    cam.lastTurn = state.turn;
 
     syncTokens();
 
@@ -802,6 +817,9 @@
     }
 
     updateHud();
+    updateObjectives();
+    updateReserve();
+    updateLog();
   }
 
   /* ---------------- HUD ---------------- */
@@ -854,6 +872,79 @@
     if (tok.hp <= 0 || tok.dead) {
       card.innerHTML += '<div class="b3d-empty">Ce champion est éliminé.</div>';
     }
+  }
+
+  /* ---------------- HUD secondaire ---------------- */
+
+  function updateObjectives() {
+    var el = document.getElementById("b3d-objectives");
+    if (!el) return;
+    if (typeof isRampage === "function" && isRampage()) {
+      el.textContent = "Rampage · 3c3 · pas d'objectif";
+      el.className = "b3d-objectives rampage";
+      return;
+    }
+    var a = (state.objectives && typeof state.objectives.A === "number") ? state.objectives.A : "?";
+    var b = (state.objectives && typeof state.objectives.B === "number") ? state.objectives.B : "?";
+    el.textContent = "Objectif A : " + a + " PV · B : " + b + " PV";
+    el.className = "b3d-objectives";
+  }
+
+  function updateReserve() {
+    var el = document.getElementById("b3d-reserve");
+    if (!el) return;
+    if (state.phase !== "playing") {
+      el.style.display = "none";
+      el.innerHTML = "";
+      return;
+    }
+    el.style.display = "";
+    var html = "";
+    ["A", "B"].forEach(function (p) {
+      var entries = state.reserve[p] || [];
+      var alive = state.tokens.filter(function (t) { return t.player === p && !t.dead; }).length;
+      var maxField = (state.starters[p] || []).length;
+      var canEnter = alive < maxField && (typeof findFreeSpawnCell === "function" ? !!findFreeSpawnCell(p) : false);
+      html += '<div class="b3d-reserve-team team-' + p.toLowerCase() + '">';
+      html += '<div class="b3d-reserve-title">Réserve ' + p + ' (' + entries.length + ')</div>';
+      if (!entries.length) {
+        html += '<div class="b3d-reserve-empty">Aucun</div>';
+      } else {
+        entries.forEach(function (r, idx) {
+          var c = (typeof charById === "function") ? charById(r.charId) : null;
+          var name = c ? c.name : r.charId;
+          html += '<div class="b3d-reserve-row">';
+          html += '<span>' + name + " · " + r.hp + " PV</span>";
+          if (p === state.turn && canEnter) {
+            html += '<button class="b3d-reserve-enter" data-p="' + p + '" data-idx="' + idx + '" title="Poser sur une case libre">▶</button>';
+          }
+          html += "</div>";
+        });
+      }
+      html += "</div>";
+    });
+    el.innerHTML = html;
+
+    Array.prototype.forEach.call(el.querySelectorAll(".b3d-reserve-enter"), function (b) {
+      b.addEventListener("click", function () {
+        var p = b.getAttribute("data-p");
+        var idx = parseInt(b.getAttribute("data-idx"), 10);
+        var entry = (state.reserve[p] || [])[idx];
+        if (entry && typeof fieldFromReserve === "function") {
+          fieldFromReserve(p, entry);
+        }
+        sync(true);
+      });
+    });
+  }
+
+  function updateLog() {
+    var el = document.getElementById("b3d-log");
+    if (!el) return;
+    var msgs = (state.log || []).slice(-3).reverse();
+    el.innerHTML = msgs.map(function (l) {
+      return '<div class="b3d-log-line">' + ((l && l.msg) || "") + "</div>";
+    }).join("");
   }
 
   /* ---------------- entrées ---------------- */
@@ -1079,10 +1170,31 @@
 
     var recenter = el("b3d-recenter");
     if (recenter) recenter.addEventListener("click", function () {
-      cam.targetT.set(0, 0.6, 0);
+      cam.topView = false;
+      cam.savedPhi = 0.98;
       cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
-      cam.thetaT = 0.85;
+      cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
       cam.phiT = 0.98;
+      cam.targetT.set(0, 0.6, 0);
+      var tv = el("b3d-topview");
+      if (tv) { tv.textContent = "⤓ Vue de haut"; tv.classList.remove("active"); }
+    });
+
+    var topview = el("b3d-topview");
+    if (topview) topview.addEventListener("click", function () {
+      if (cam.topView) {
+        cam.phiT = cam.savedPhi || 0.98;
+        cam.topView = false;
+        topview.textContent = "⤓ Vue de haut";
+        topview.classList.remove("active");
+      } else {
+        cam.savedPhi = cam.phi;
+        cam.phiT = 0.06;
+        cam.rT = Math.max(cur.cols, cur.rows) * 1.35 + 4;
+        cam.topView = true;
+        topview.textContent = "◉ Vue 3D";
+        topview.classList.add("active");
+      }
     });
 
     var next = el("b3d-next");
@@ -1117,6 +1229,7 @@
     get scene() { return scene; },
     get renderer() { return renderer; },
     get camera() { return camera; },
+    get cam() { return cam; },
     get tokens() { return tokenMeshes; },
     get cells() { return cur; },
     stats: function () {
