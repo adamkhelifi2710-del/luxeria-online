@@ -1151,13 +1151,7 @@ document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "board") {
-      localStorage.setItem("luxeria.prefer3D", "0");
-      renderBoard();
-    }
-    if (btn.dataset.tab === "board3d") {
-      localStorage.setItem("luxeria.prefer3D", "1");
-    }
+    if (btn.dataset.tab === "board") renderBoard();
     if (btn.dataset.tab === "maps") renderMapGallery();
     hideHome();
   });
@@ -1588,18 +1582,7 @@ function startGame() {
     pendingReplaceChoice = null;
     save();
     renderBoard();
-    if (localStorage.getItem("luxeria.prefer3D") === "1") {
-      const t = document.querySelector('[data-tab="board3d"]');
-      if (t) t.click();
-    } else if (document.getElementById("home3d-screen") && document.getElementById("home3d-screen").classList.contains("open")) {
-      const t = document.querySelector('[data-tab="board3d"]');
-      if (t) t.click();
-    } else if (document.getElementById("tab-board3d") && document.getElementById("tab-board3d").classList.contains("active")) {
-      const t = document.querySelector('[data-tab="board3d"]');
-      if (t) t.click();
-    } else {
-      document.querySelector('[data-tab="board"]').click();
-    }
+    document.querySelector('[data-tab="board"]').click();
     if (aiMode) aiOnGameStart();
   setTimeout(startTurnTimer, 300);
 }
@@ -5801,22 +5784,12 @@ function lanOnState(snap) {
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
   hideHome();
-  /* On ne bascule sur le plateau 2D que si le joueur n'est pas en mode 3D :
-     les deux modes sont indépendants, on ne doit jamais arracher le 3D. */
-  const prefer3D = localStorage.getItem("luxeria.prefer3D") === "1";
-  const board3dSection = document.getElementById("tab-board3d");
-  const on3D = prefer3D || !!(board3dSection && board3dSection.classList.contains("active"));
-  if (!on3D) {
-    const boardSection = document.getElementById("tab-board");
-    if (boardSection && !boardSection.classList.contains("active")) {
-      const btn = document.querySelector('[data-tab="board"]');
-      if (btn) btn.click();
-    }
+  const boardSection = document.getElementById("tab-board");
+  if (boardSection && !boardSection.classList.contains("active")) {
+    const btn = document.querySelector('[data-tab="board"]');
+    if (btn) btn.click();
   }
   renderBoard();
-  if (on3D && typeof window.__lux3d !== "undefined" && window.__lux3d.sync) {
-    try { window.__lux3d.sync(true); } catch (e) {}
-  }
 }
 
 function lanExpandArgs(fn, args) {
@@ -8118,11 +8091,8 @@ function hideLoadingScreen() {
   setTimeout(() => { ls.classList.add("gone"); ls.style.display = "none"; }, 2000);
 }
 
-var introBgUrl = null;
 
 
-let runnerFrames = [];
-let runnerAnimId = null;
 
 function removeBackground(ctx, w, h) {
   const imgData = ctx.getImageData(0, 0, w, h);
@@ -8158,21 +8128,78 @@ function processSpriteSheet(img) {
   return frames;
 }
 
+let introBgUrl = null;
+let runnerFrames = [];
+let runnerAnimId = null;
+
+function removeBackground(ctx, w, h) {
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const br = data[0], bg = data[1], bb = data[2];
+  const tol = 32;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i+1], b = data[i+2];
+    if (Math.abs(r - br) < tol && Math.abs(g - bg) < tol && Math.abs(b - bb) < tol) {
+      data[i+3] = 0;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function processSpriteSheet(img) {
+  const cols = 4, rows = 2;
+  const fw = Math.floor(img.width / cols);
+  const fh = Math.floor(img.height / rows);
+  const frames = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = fw;
+      canvas.height = fh;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, c * fw, r * fh, fw, fh, 0, 0, fw, fh);
+      removeBackground(ctx, fw, fh);
+      frames.push(canvas);
+    }
+  }
+  return frames;
+}
+
+function drawRunnerFrame(idx) {
+  const runnerCanvas = document.getElementById("loading-runner");
+  if (!runnerCanvas) return;
+  const ctx = runnerCanvas.getContext("2d");
+  ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
+  if (!runnerFrames.length) {
+    // placeholder: simple colored rect while sprite loads
+    ctx.fillStyle = "rgba(106, 69, 224, 0.6)";
+    ctx.fillRect(4, 4, runnerCanvas.width - 8, runnerCanvas.height - 8);
+    return;
+  }
+  const f = runnerFrames[idx % runnerFrames.length];
+  const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
+  const dw = f.width * scale, dh = f.height * scale;
+  ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
+}
+
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
   const runnerCanvas = document.getElementById("loading-runner");
   const runnerWrap = document.querySelector(".loading-runner-wrap");
   let done = false;
   let runnerFrameIdx = 0;
-  let runnerAnimTimer = null;
 
   const finish = () => {
     if (done) return;
     done = true;
-    if (runnerAnimTimer) clearInterval(runnerAnimTimer);
     if (fill) fill.style.width = "100%";
-    if (runnerCanvas && runnerFrames.length) {
-      // show last frame
+    if (runnerWrap) {
+      const wrapWidth = runnerWrap.offsetWidth || 360;
+      const runnerWidth = (runnerCanvas && runnerCanvas.offsetWidth) || 96;
+      if (runnerCanvas) runnerCanvas.style.left = (wrapWidth - runnerWidth) + "px";
+    }
+    // show last frame
+    if (runnerFrames.length && runnerCanvas) {
       const ctx = runnerCanvas.getContext("2d");
       ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
       const f = runnerFrames[runnerFrames.length - 1];
@@ -8183,59 +8210,59 @@ function preloadIntroImage() {
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 600);
+    }, 500);
   };
 
   // Animate runner frames
-  const startRunnerAnim = () => {
-    if (runnerAnimTimer) clearInterval(runnerAnimTimer);
-    runnerAnimTimer = setInterval(() => {
-      if (done || !runnerFrames.length || !runnerCanvas) return;
-      runnerFrameIdx = (runnerFrameIdx + 1) % runnerFrames.length;
-      const ctx = runnerCanvas.getContext("2d");
-      ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
-      const f = runnerFrames[runnerFrameIdx];
-      const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
-      const dw = f.width * scale, dh = f.height * scale;
-      ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
-    }, 100);
-  };
+  const animTimer = setInterval(() => {
+    if (done) { clearInterval(animTimer); return; }
+    runnerFrameIdx = (runnerFrameIdx + 1) % Math.max(1, runnerFrames.length || 1);
+    drawRunnerFrame(runnerFrameIdx);
+  }, 100);
 
-  // Position runner based on progress
-  const updateRunnerPos = (pct) => {
-    if (!runnerCanvas || !runnerWrap) return;
-    const wrapWidth = runnerWrap.offsetWidth || 360;
-    const runnerWidth = runnerCanvas.offsetWidth || 64;
-    const x = (wrapWidth - runnerWidth) * (pct / 100);
-    runnerCanvas.style.left = x + "px";
-  };
+  // Draw initial placeholder immediately
+  drawRunnerFrame(0);
 
-  // Progress bar animation + image preload
+  // Progress bar animation (fake, smooth)
   let pct = 0;
   const barTimer = setInterval(() => {
     if (done) { clearInterval(barTimer); return; }
-    pct = Math.min(90, pct + Math.random() * 6 + 2);
+    pct = Math.min(90, pct + Math.random() * 5 + 2);
     if (fill) fill.style.width = pct + "%";
-    updateRunnerPos(pct);
-  }, 150);
+    if (runnerWrap && runnerCanvas) {
+      const wrapWidth = runnerWrap.offsetWidth || 360;
+      const runnerWidth = runnerCanvas.offsetWidth || 96;
+      runnerCanvas.style.left = ((wrapWidth - runnerWidth) * (pct / 100)) + "px";
+    }
+  }, 200);
 
-  // Load sprite sheet and map image in parallel
+  // Load sprite sheet
   const spriteImg = new Image();
   spriteImg.onload = () => {
-    runnerFrames = processSpriteSheet(spriteImg);
+    try {
+      runnerFrames = processSpriteSheet(spriteImg);
+    } catch (e) {
+      runnerFrames = [];
+    }
+    // draw first frame immediately
     if (runnerFrames.length && runnerCanvas) {
-      startRunnerAnim();
+      drawRunnerFrame(0);
     }
   };
-  spriteImg.onerror = () => {};
+  spriteImg.onerror = () => { runnerFrames = []; };
   spriteImg.src = "lycan-sprite.png";
 
+  // Load map image
   const img = new Image();
   img.onload = () => {
     introBgUrl = img.src;
     clearInterval(barTimer);
     if (fill) fill.style.width = "100%";
-    updateRunnerPos(100);
+    if (runnerWrap && runnerCanvas) {
+      const wrapWidth = runnerWrap.offsetWidth || 360;
+      const runnerWidth = runnerCanvas.offsetWidth || 96;
+      runnerCanvas.style.left = (wrapWidth - runnerWidth) + "px";
+    }
     if (typeof img.decode === "function") {
       img.decode().then(finish).catch(finish);
     } else {
@@ -8249,9 +8276,22 @@ function preloadIntroImage() {
   img.src = "luxeria-map.png";
 
   // Securite : ne jamais rester bloque sur l'ecran noir
-  setTimeout(() => { clearInterval(barTimer); finish(); }, 12000);
+  setTimeout(() => { clearInterval(barTimer); clearInterval(animTimer); finish(); }, 15000);
 }
 
+function showIntro() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro || introPlayed) return;
+  introPlayed = true;
+  const bg = intro.querySelector(".intro-bg");
+  if (bg) {
+    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
+    bg.style.backgroundSize = "cover";
+    bg.style.backgroundPosition = "center";
+  }
+  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
+  intro.style.display = "flex";
+}
 function showIntro() {
   const intro = document.getElementById("intro-screen");
   if (!intro || introPlayed) return;
