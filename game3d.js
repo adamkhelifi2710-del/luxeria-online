@@ -317,9 +317,9 @@
           continue;
         }
 
-        /* Le vide est un vrai trou : pas de case, juste le puits. */
-        if (isVoidCell(x, y)) {
-          addVoid(p);
+        /* Le vide : aucune case, rien d'autre (pas d'effet). */
+        var isVoid = (map.voidCells || []).some(function (v) { return v[0] === x && v[1] === y; });
+        if (isVoid) {
           continue;
         }
 

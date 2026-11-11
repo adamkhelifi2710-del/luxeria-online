@@ -1151,7 +1151,13 @@ document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "board") renderBoard();
+    if (btn.dataset.tab === "board") {
+      localStorage.setItem("luxeria.prefer3D", "0");
+      renderBoard();
+    }
+    if (btn.dataset.tab === "board3d") {
+      localStorage.setItem("luxeria.prefer3D", "1");
+    }
     if (btn.dataset.tab === "maps") renderMapGallery();
     hideHome();
   });
@@ -1582,7 +1588,18 @@ function startGame() {
     pendingReplaceChoice = null;
     save();
     renderBoard();
-    document.querySelector('[data-tab="board"]').click();
+    if (localStorage.getItem("luxeria.prefer3D") === "1") {
+      const t = document.querySelector('[data-tab="board3d"]');
+      if (t) t.click();
+    } else if (document.getElementById("home3d-screen") && document.getElementById("home3d-screen").classList.contains("open")) {
+      const t = document.querySelector('[data-tab="board3d"]');
+      if (t) t.click();
+    } else if (document.getElementById("tab-board3d") && document.getElementById("tab-board3d").classList.contains("active")) {
+      const t = document.querySelector('[data-tab="board3d"]');
+      if (t) t.click();
+    } else {
+      document.querySelector('[data-tab="board"]').click();
+    }
     if (aiMode) aiOnGameStart();
   setTimeout(startTurnTimer, 300);
 }
@@ -5784,12 +5801,22 @@ function lanOnState(snap) {
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
   hideHome();
-  const boardSection = document.getElementById("tab-board");
-  if (boardSection && !boardSection.classList.contains("active")) {
-    const btn = document.querySelector('[data-tab="board"]');
-    if (btn) btn.click();
+  /* On ne bascule sur le plateau 2D que si le joueur n'est pas en mode 3D :
+     les deux modes sont indépendants, on ne doit jamais arracher le 3D. */
+  const prefer3D = localStorage.getItem("luxeria.prefer3D") === "1";
+  const board3dSection = document.getElementById("tab-board3d");
+  const on3D = prefer3D || !!(board3dSection && board3dSection.classList.contains("active"));
+  if (!on3D) {
+    const boardSection = document.getElementById("tab-board");
+    if (boardSection && !boardSection.classList.contains("active")) {
+      const btn = document.querySelector('[data-tab="board"]');
+      if (btn) btn.click();
+    }
   }
   renderBoard();
+  if (on3D && typeof window.__lux3d !== "undefined" && window.__lux3d.sync) {
+    try { window.__lux3d.sync(true); } catch (e) {}
+  }
 }
 
 function lanExpandArgs(fn, args) {

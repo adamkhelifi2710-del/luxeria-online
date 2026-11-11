@@ -224,9 +224,8 @@
           continue;
         }
 
-        /* Le vide est un vrai trou : pas de case, juste le puits. */
+        /* Le vide : aucune case, rien d'autre. */
         if (has(map.voidCells, x, y)) {
-          addVoid(px(x), pz(y));
           continue;
         }
 
@@ -573,6 +572,7 @@
 
   function open() {
     opened = true;
+    try { localStorage.setItem("luxeria.prefer3D", "1"); } catch (e) {}
     var scr = el("home3d-screen");
     if (scr) scr.classList.add("open");
 
