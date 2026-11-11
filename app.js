@@ -8194,24 +8194,19 @@ function drawRunnerFrame(idx) {
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
   const runnerCanvas = document.getElementById("loading-runner");
-  const runnerWrap = document.querySelector(".loading-runner-wrap");
   let done = false;
-  let runnerFrameIdx = 0;
+  let spriteReady = false;
+  let mapReady = false;
 
-  const finish = () => {
+  const tryFinish = () => {
     if (done) return;
+    if (!spriteReady || !mapReady) return;
     done = true;
     if (fill) fill.style.width = "100%";
-    if (runnerWrap) {
-      const wrapWidth = runnerWrap.offsetWidth || 360;
-      const runnerWidth = (runnerCanvas && runnerCanvas.offsetWidth) || 96;
-      if (runnerCanvas) runnerCanvas.style.left = (wrapWidth - runnerWidth) + "px";
-    }
-    // show last frame
-    if (runnerFrames.length && runnerCanvas) {
+    if (runnerCanvas && runnerFrames.length) {
       const ctx = runnerCanvas.getContext("2d");
       ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
-      const f = runnerFrames[runnerFrames.length - 1];
+      const f = runnerFrames[0];
       const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
       const dw = f.width * scale, dh = f.height * scale;
       ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
@@ -8219,31 +8214,38 @@ function preloadIntroImage() {
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 500);
+    }, 400);
   };
 
-  // Animate runner frames
+  // Progress bar + runner animation
+  let pct = 0;
+  let runnerFrameIdx = 0;
   const animTimer = setInterval(() => {
     if (done) { clearInterval(animTimer); return; }
     runnerFrameIdx = (runnerFrameIdx + 1) % Math.max(1, runnerFrames.length || 1);
-    drawRunnerFrame(runnerFrameIdx);
-  }, 100);
-
-  // Draw initial placeholder immediately
-  drawRunnerFrame(0);
-
-  // Progress bar animation (fake, smooth)
-  let pct = 0;
-  const barTimer = setInterval(() => {
-    if (done) { clearInterval(barTimer); return; }
-    pct = Math.min(90, pct + Math.random() * 5 + 2);
+    if (runnerFrames.length && runnerCanvas) {
+      const ctx = runnerCanvas.getContext("2d");
+      ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
+      const f = runnerFrames[runnerFrameIdx];
+      const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
+      const dw = f.width * scale, dh = f.height * scale;
+      ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
+    } else if (runnerCanvas) {
+      // placeholder while sprite loads
+      const ctx = runnerCanvas.getContext("2d");
+      ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
+      ctx.fillStyle = "rgba(106, 69, 224, 0.6)";
+      ctx.fillRect(4, 4, runnerCanvas.width - 8, runnerCanvas.height - 8);
+    }
+    pct = Math.min(90, pct + Math.random() * 4 + 2);
     if (fill) fill.style.width = pct + "%";
-    if (runnerWrap && runnerCanvas) {
-      const wrapWidth = runnerWrap.offsetWidth || 360;
+    if (runnerCanvas) {
+      const wrap = document.querySelector(".loading-runner-wrap");
+      const wrapWidth = (wrap && wrap.offsetWidth) || 360;
       const runnerWidth = runnerCanvas.offsetWidth || 96;
       runnerCanvas.style.left = ((wrapWidth - runnerWidth) * (pct / 100)) + "px";
     }
-  }, 200);
+  }, 150);
 
   // Load sprite sheet
   const spriteImg = new Image();
@@ -8253,41 +8255,51 @@ function preloadIntroImage() {
     } catch (e) {
       runnerFrames = [];
     }
-    // draw first frame immediately
-    if (runnerFrames.length && runnerCanvas) {
-      drawRunnerFrame(0);
-    }
+    spriteReady = true;
+    tryFinish();
   };
-  spriteImg.onerror = () => { runnerFrames = []; };
+  spriteImg.onerror = () => {
+    spriteReady = true;
+    tryFinish();
+  };
   spriteImg.src = "lycan-sprite.png";
 
   // Load map image
   const img = new Image();
   img.onload = () => {
     introBgUrl = img.src;
-    clearInterval(barTimer);
-    if (fill) fill.style.width = "100%";
-    if (runnerWrap && runnerCanvas) {
-      const wrapWidth = runnerWrap.offsetWidth || 360;
-      const runnerWidth = runnerCanvas.offsetWidth || 96;
-      runnerCanvas.style.left = (wrapWidth - runnerWidth) + "px";
-    }
+    mapReady = true;
     if (typeof img.decode === "function") {
-      img.decode().then(finish).catch(finish);
+      img.decode().then(() => { mapReady = true; tryFinish(); }).catch(() => { mapReady = true; tryFinish(); });
     } else {
-      finish();
+      tryFinish();
     }
   };
   img.onerror = () => {
-    clearInterval(barTimer);
-    finish();
+    mapReady = true;
+    tryFinish();
   };
   img.src = "luxeria-map.png";
 
   // Securite : ne jamais rester bloque sur l'ecran noir
-  setTimeout(() => { clearInterval(barTimer); clearInterval(animTimer); finish(); }, 15000);
+  setTimeout(() => { clearInterval(animTimer); tryFinish(); }, 15000);
+  // Force finish even if images don't load
+  setTimeout(() => { mapReady = true; spriteReady = true; tryFinish(); }, 15000);
 }
 
+function showIntro() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro || introPlayed) return;
+  introPlayed = true;
+  const bg = intro.querySelector(".intro-bg");
+  if (bg) {
+    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
+    bg.style.backgroundSize = "cover";
+    bg.style.backgroundPosition = "center";
+  }
+  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
+  intro.style.display = "flex";
+}
 function showIntro() {
   const intro = document.getElementById("intro-screen");
   if (!intro || introPlayed) return;
