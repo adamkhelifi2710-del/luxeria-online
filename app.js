@@ -1582,15 +1582,7 @@ function startGame() {
     pendingReplaceChoice = null;
     save();
     renderBoard();
-    if (document.getElementById("home3d-screen") && document.getElementById("home3d-screen").classList.contains("open")) {
-      const t = document.querySelector('[data-tab="board3d"]');
-      if (t) t.click();
-    } else if (document.getElementById("tab-board3d") && document.getElementById("tab-board3d").classList.contains("active")) {
-      const t = document.querySelector('[data-tab="board3d"]');
-      if (t) t.click();
-    } else {
-      document.querySelector('[data-tab="board"]').click();
-    }
+    document.querySelector('[data-tab="board"]').click();
     if (aiMode) aiOnGameStart();
   setTimeout(startTurnTimer, 300);
 }
@@ -5380,11 +5372,6 @@ function showHome() {
 function hideHome() {
   document.getElementById("nav-home").classList.remove("active");
   document.getElementById("home-screen").classList.remove("open");
-  // Reprise du jeu si on quitte l'accueil : réarme l'IA et le timer.
-  if (aiMode) {
-    if (state.phase === "placement") aiMaybeSchedulePlacement();
-    else aiScheduleTurn();
-  }
 }
 
 document.getElementById("nav-home").addEventListener("click", showHome);
@@ -5797,21 +5784,12 @@ function lanOnState(snap) {
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
   hideHome();
-  /* On ne bascule sur le plateau 2D que si le joueur n'est pas en mode 3D :
-     les deux modes sont indépendants, on ne doit jamais arracher le 3D. */
-  const board3dSection = document.getElementById("tab-board3d");
-  const on3D = !!(board3dSection && board3dSection.classList.contains("active"));
-  if (!on3D) {
-    const boardSection = document.getElementById("tab-board");
-    if (boardSection && !boardSection.classList.contains("active")) {
-      const btn = document.querySelector('[data-tab="board"]');
-      if (btn) btn.click();
-    }
+  const boardSection = document.getElementById("tab-board");
+  if (boardSection && !boardSection.classList.contains("active")) {
+    const btn = document.querySelector('[data-tab="board"]');
+    if (btn) btn.click();
   }
   renderBoard();
-  if (on3D && typeof window.__lux3d !== "undefined" && window.__lux3d.sync) {
-    try { window.__lux3d.sync(true); } catch (e) {}
-  }
 }
 
 function lanExpandArgs(fn, args) {
@@ -7569,7 +7547,6 @@ async function aiExecutePlan(plan) {
 /* ---------- Boucle de tour IA ---------- */
 
 function aiScheduleTurn() {
-  if (isOnHome()) return;
   if (!aiMode || state.turn !== aiPlayer || state.winner) return;
   if (aiRunning) return;
   aiRunning = true;
@@ -7578,7 +7555,6 @@ function aiScheduleTurn() {
 
 async function aiTurnLoop() {
   try {
-    if (isOnHome()) { aiStatus(null); return; }
     if (!aiMode || state.turn !== aiPlayer || state.winner || state.phase !== "playing") {
       aiStatus(null);
       return;
@@ -7614,7 +7590,6 @@ function aiOnGameStart() {
 }
 
 function aiMaybeSchedulePlacement() {
-  if (isOnHome()) return;
   if (!aiMode || state.phase !== "placement") return;
   if (state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) return;
   if (aiRunning) return;
@@ -8000,11 +7975,7 @@ function isOnHome() {
 function onBoardTab() {
   if (isOnHome()) return false;
   const board = document.getElementById("tab-board");
-  const board3d = document.getElementById("tab-board3d");
-  return !!(
-    (board && board.classList.contains("active")) ||
-    (board3d && board3d.classList.contains("active"))
-  );
+  return !!(board && board.classList.contains("active"));
 }
 function turnTimerShouldRun() {
   if (!onBoardTab()) return false;
@@ -8033,10 +8004,8 @@ function showTurnToast(text, player) {
 function stopTurnTimer() {
   if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
   if (turnTimerTimeout) { clearTimeout(turnTimerTimeout); turnTimerTimeout = null; }
-  ["turn-timer", "b3d-timer"].forEach((id) => {
-    const t = document.getElementById(id);
-    if (t) t.classList.remove("show", "urgent");
-  });
+  const t = document.getElementById("turn-timer");
+  if (t) t.classList.remove("show", "urgent");
 }
 
 function startTurnTimer(showToast) {
@@ -8045,22 +8014,20 @@ function startTurnTimer(showToast) {
   const player = state.turn;
   turnTimerRemaining = 15;
   if (showToast) showTurnToast("Tour du joueur " + player, player);
-  const timerEls = ["turn-timer", "b3d-timer"]
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
-  timerEls.forEach((timerEl) => {
+  const timerEl = document.getElementById("turn-timer");
+  if (timerEl) {
     timerEl.textContent = turnTimerRemaining + "s";
     timerEl.classList.remove("urgent");
     timerEl.classList.add("show");
-  });
+  }
   turnTimerInterval = setInterval(() => {
     if (!turnTimerShouldRun()) { stopTurnTimer(); return; }
     turnTimerRemaining--;
-    timerEls.forEach((timerEl) => {
+    if (timerEl) {
       timerEl.textContent = turnTimerRemaining + "s";
       if (turnTimerRemaining <= 5) timerEl.classList.add("urgent");
       else timerEl.classList.remove("urgent");
-    });
+    }
     if (turnTimerRemaining <= 0) {
       if (busy) { turnTimerRemaining = 1; return; }
       stopTurnTimer();
@@ -8126,29 +8093,122 @@ function hideLoadingScreen() {
 
 var introBgUrl = null;
 
+
+let runnerFrames = [];
+let runnerAnimId = null;
+
+function removeBackground(ctx, w, h) {
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  // detect background from top-left corner
+  const br = data[0], bg = data[1], bb = data[2];
+  const tol = 30;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i+1], b = data[i+2];
+    if (Math.abs(r - br) < tol && Math.abs(g - bg) < tol && Math.abs(b - bb) < tol) {
+      data[i+3] = 0;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function processSpriteSheet(img) {
+  const cols = 4, rows = 2;
+  const fw = Math.floor(img.width / cols);
+  const fh = Math.floor(img.height / rows);
+  const frames = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = fw;
+      canvas.height = fh;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, c * fw, r * fh, fw, fh, 0, 0, fw, fh);
+      removeBackground(ctx, fw, fh);
+      frames.push(canvas);
+    }
+  }
+  return frames;
+}
+
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
+  const runnerCanvas = document.getElementById("loading-runner");
+  const runnerWrap = document.querySelector(".loading-runner-wrap");
   let done = false;
+  let runnerFrameIdx = 0;
+  let runnerAnimTimer = null;
+
   const finish = () => {
     if (done) return;
     done = true;
+    if (runnerAnimTimer) clearInterval(runnerAnimTimer);
     if (fill) fill.style.width = "100%";
+    if (runnerCanvas && runnerFrames.length) {
+      // show last frame
+      const ctx = runnerCanvas.getContext("2d");
+      ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
+      const f = runnerFrames[runnerFrames.length - 1];
+      const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
+      const dw = f.width * scale, dh = f.height * scale;
+      ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
+    }
     setTimeout(() => {
       hideLoadingScreen();
       showIntro();
-    }, 200);
+    }, 600);
   };
+
+  // Animate runner frames
+  const startRunnerAnim = () => {
+    if (runnerAnimTimer) clearInterval(runnerAnimTimer);
+    runnerAnimTimer = setInterval(() => {
+      if (done || !runnerFrames.length || !runnerCanvas) return;
+      runnerFrameIdx = (runnerFrameIdx + 1) % runnerFrames.length;
+      const ctx = runnerCanvas.getContext("2d");
+      ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
+      const f = runnerFrames[runnerFrameIdx];
+      const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
+      const dw = f.width * scale, dh = f.height * scale;
+      ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
+    }, 100);
+  };
+
+  // Position runner based on progress
+  const updateRunnerPos = (pct) => {
+    if (!runnerCanvas || !runnerWrap) return;
+    const wrapWidth = runnerWrap.offsetWidth || 360;
+    const runnerWidth = runnerCanvas.offsetWidth || 64;
+    const x = (wrapWidth - runnerWidth) * (pct / 100);
+    runnerCanvas.style.left = x + "px";
+  };
+
+  // Progress bar animation + image preload
   let pct = 0;
   const barTimer = setInterval(() => {
     if (done) { clearInterval(barTimer); return; }
-    pct = Math.min(90, pct + Math.random() * 8 + 2);
+    pct = Math.min(90, pct + Math.random() * 6 + 2);
     if (fill) fill.style.width = pct + "%";
+    updateRunnerPos(pct);
   }, 150);
+
+  // Load sprite sheet and map image in parallel
+  const spriteImg = new Image();
+  spriteImg.onload = () => {
+    runnerFrames = processSpriteSheet(spriteImg);
+    if (runnerFrames.length && runnerCanvas) {
+      startRunnerAnim();
+    }
+  };
+  spriteImg.onerror = () => {};
+  spriteImg.src = "lycan-sprite.png";
+
   const img = new Image();
   img.onload = () => {
     introBgUrl = img.src;
     clearInterval(barTimer);
     if (fill) fill.style.width = "100%";
+    updateRunnerPos(100);
     if (typeof img.decode === "function") {
       img.decode().then(finish).catch(finish);
     } else {
@@ -8160,7 +8220,23 @@ function preloadIntroImage() {
     finish();
   };
   img.src = "luxeria-map.png";
-  setTimeout(() => { clearInterval(barTimer); finish(); }, 8000);
+
+  // Securite : ne jamais rester bloque sur l'ecran noir
+  setTimeout(() => { clearInterval(barTimer); finish(); }, 12000);
+}
+
+function showIntro() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro || introPlayed) return;
+  introPlayed = true;
+  const bg = intro.querySelector(".intro-bg");
+  if (bg) {
+    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
+    bg.style.backgroundSize = "cover";
+    bg.style.backgroundPosition = "center";
+  }
+  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
+  intro.style.display = "flex";
 }
 function showIntro() {
   const intro = document.getElementById("intro-screen");
