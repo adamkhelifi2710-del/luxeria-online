@@ -5797,12 +5797,21 @@ function lanOnState(snap) {
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
   hideHome();
-  const boardSection = document.getElementById("tab-board");
-  if (boardSection && !boardSection.classList.contains("active")) {
-    const btn = document.querySelector('[data-tab="board"]');
-    if (btn) btn.click();
+  /* On ne bascule sur le plateau 2D que si le joueur n'est pas en mode 3D :
+     les deux modes sont indépendants, on ne doit jamais arracher le 3D. */
+  const board3dSection = document.getElementById("tab-board3d");
+  const on3D = !!(board3dSection && board3dSection.classList.contains("active"));
+  if (!on3D) {
+    const boardSection = document.getElementById("tab-board");
+    if (boardSection && !boardSection.classList.contains("active")) {
+      const btn = document.querySelector('[data-tab="board"]');
+      if (btn) btn.click();
+    }
   }
   renderBoard();
+  if (on3D && typeof window.__lux3d !== "undefined" && window.__lux3d.sync) {
+    try { window.__lux3d.sync(true); } catch (e) {}
+  }
 }
 
 function lanExpandArgs(fn, args) {

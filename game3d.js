@@ -458,23 +458,56 @@
   function addFire(p, x, y) {
     var pad = new THREE.Mesh(
       new THREE.BoxGeometry(0.86, 0.04, 0.86),
-      std(COL.fire, { emissive: COL.fire, emissiveIntensity: 1.5, roughness: 0.4 })
+      std(COL.fire, { emissive: COL.fire, emissiveIntensity: 1.2, roughness: 0.4 })
     );
     pad.position.set(p.x, 0.1, p.z);
     gStatic.add(pad);
 
-    var flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.18, 0.46, 6),
-      std(0xffb066, { emissive: COL.fire, emissiveIntensity: 2.2, transparent: true, opacity: 0.92 })
+    /* base incandescente */
+    var base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.32, 0.08, 16),
+      std(0xff4500, { emissive: 0xff4500, emissiveIntensity: 2.6, roughness: 0.3 })
     );
-    flame.position.set(p.x, 0.34, p.z);
-    flame.userData.anim = "flame";
-    flame.userData.phase = Math.random() * 6.28;
-    flame.userData.baseY = 0.34;
-    gStatic.add(flame);
+    base.position.set(p.x, 0.16, p.z);
+    gStatic.add(base);
 
-    var light = new THREE.PointLight(COL.fire, 6, 3.2, 2);
-    light.position.set(p.x, 0.5, p.z);
+    /* flamme principale */
+    var flame1 = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22, 0.78, 8),
+      std(0xff8c00, { emissive: COL.fire, emissiveIntensity: 2.4, transparent: true, opacity: 0.9 })
+    );
+    flame1.position.set(p.x, 0.52, p.z);
+    flame1.userData.anim = "flame";
+    flame1.userData.phase = Math.random() * 6.28;
+    flame1.userData.baseY = 0.52;
+    gStatic.add(flame1);
+
+    /* flamme secondaire */
+    var flame2 = new THREE.Mesh(
+      new THREE.ConeGeometry(0.13, 0.52, 6),
+      std(0xffd700, { emissive: 0xffd700, emissiveIntensity: 2.8, transparent: true, opacity: 0.75 })
+    );
+    flame2.position.set(p.x + 0.06, 0.42, p.z - 0.05);
+    flame2.userData.anim = "flame2";
+    flame2.userData.phase = Math.random() * 6.28;
+    flame2.userData.baseY = 0.42;
+    gStatic.add(flame2);
+
+    /* braises */
+    for (var i = 0; i < 5; i++) {
+      var ember = new THREE.Mesh(
+        new THREE.SphereGeometry(0.028, 6, 6),
+        std(0xffaa00, { emissive: 0xffaa00, emissiveIntensity: 3.2 })
+      );
+      ember.position.set(p.x + (Math.random() - 0.5) * 0.34, 0.22 + Math.random() * 0.32, p.z + (Math.random() - 0.5) * 0.34);
+      ember.userData.anim = "ember";
+      ember.userData.phase = Math.random() * 6.28;
+      ember.userData.baseY = ember.position.y;
+      gStatic.add(ember);
+    }
+
+    var light = new THREE.PointLight(COL.fire, 9, 3.8, 2);
+    light.position.set(p.x, 0.75, p.z);
     gStatic.add(light);
   }
 
@@ -486,14 +519,21 @@
     pad.position.set(p.x, 0.1, p.z);
     gStatic.add(pad);
 
+    /* croix verte flottante */
     var cross = new THREE.Group();
-    var m = std(0xffffff, { emissive: COL.heal, emissiveIntensity: 1.6 });
-    var c1 = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.14), m);
-    var c2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.44), m);
+    var m = std(0xffffff, { emissive: COL.heal, emissiveIntensity: 2.4, roughness: 0.3 });
+    var c1 = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.1, 0.14), m);
+    var c2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.46), m);
     cross.add(c1, c2);
-    cross.position.set(p.x, 0.2, p.z);
-    cross.userData.anim = "spin";
+    cross.position.set(p.x, 0.48, p.z);
+    cross.userData.anim = "healcross";
+    cross.userData.phase = Math.random() * 6.28;
+    cross.userData.baseY = 0.48;
     gStatic.add(cross);
+
+    var light = new THREE.PointLight(COL.heal, 5, 3.0, 2);
+    light.position.set(p.x, 0.6, p.z);
+    gStatic.add(light);
   }
 
   function addSpeed(p) {
@@ -504,47 +544,74 @@
     pad.position.set(p.x, 0.1, p.z);
     gStatic.add(pad);
 
-    var ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.27, 0.035, 8, 26),
-      std(0xffffff, { emissive: COL.speed, emissiveIntensity: 1.9 })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(p.x, 0.19, p.z);
-    ring.userData.anim = "pulse";
-    ring.userData.baseY = 0.19;
-    ring.userData.phase = Math.random() * 6.28;
-    gStatic.add(ring);
+    /* éclair flottant */
+    var bolt = new THREE.Group();
+    var m = std(0xffffff, { emissive: COL.speed, emissiveIntensity: 2.6, roughness: 0.25 });
+    var segs = [
+      { x: 0.08, y: 0.62, rz: -0.55, w: 0.22, h: 0.07 },
+      { x: 0.16, y: 0.42, rz: 0.75, w: 0.07, h: 0.26 },
+      { x: -0.06, y: 0.22, rz: -0.55, w: 0.22, h: 0.07 },
+      { x: -0.14, y: 0.02, rz: 0.75, w: 0.07, h: 0.26 }
+    ];
+    segs.forEach(function (s) {
+      var box = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, 0.06), m);
+      box.position.set(s.x, s.y, 0);
+      box.rotation.z = s.rz;
+      bolt.add(box);
+    });
+    bolt.position.set(p.x, 0, p.z);
+    bolt.userData.anim = "bolt";
+    bolt.userData.phase = Math.random() * 6.28;
+    bolt.userData.baseY = 0;
+    gStatic.add(bolt);
+
+    var light = new THREE.PointLight(COL.speed, 5, 3.0, 2);
+    light.position.set(p.x, 0.5, p.z);
+    gStatic.add(light);
   }
 
-  /* Le vide : un vrai trou noir — disque noir, entonnoir et halo violet. */
+  /* Le vide : un trou dans la case (puits + halo violet). */
   function addVoid(p) {
-    var funnel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.14, 0.85, 24, 1, true),
-      std(0x04060a, { roughness: 1, metalness: 0, transparent: true, opacity: 0.96 })
+    /* puits encastré */
+    var pit = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.28, 0.95, 24, 1, true),
+      std(0x020408, { roughness: 1, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
     );
-    funnel.position.set(p.x, -0.36, p.z);
-    gStatic.add(funnel);
+    pit.position.set(p.x, -0.38, p.z);
+    gStatic.add(pit);
 
-    var hole = new THREE.Mesh(
-      new THREE.CircleGeometry(0.42, 32),
+    var bottom = new THREE.Mesh(
+      new THREE.CircleGeometry(0.28, 24),
       new THREE.MeshBasicMaterial({ color: 0x000000 })
     );
-    hole.rotation.x = -Math.PI / 2;
-    hole.position.set(p.x, 0.03, p.z);
-    gStatic.add(hole);
+    bottom.rotation.x = -Math.PI / 2;
+    bottom.position.set(p.x, -0.83, p.z);
+    gStatic.add(bottom);
 
+    /* rebord lumineux */
+    var rim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.42, 0.04, 8, 32),
+      std(0xffffff, { emissive: COL["void"], emissiveIntensity: 2.4 })
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(p.x, 0.06, p.z);
+    rim.userData.anim = "void";
+    rim.userData.phase = Math.random() * 6.28;
+    gStatic.add(rim);
+
+    /* halo flottant */
     var halo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.44, 0.03, 8, 32),
-      std(0xffffff, { emissive: COL["void"], emissiveIntensity: 2.2 })
+      new THREE.TorusGeometry(0.5, 0.025, 8, 32),
+      std(0xffffff, { emissive: COL["void"], emissiveIntensity: 2, transparent: true, opacity: 0.6 })
     );
     halo.rotation.x = -Math.PI / 2;
-    halo.position.set(p.x, 0.08, p.z);
+    halo.position.set(p.x, 0.2, p.z);
     halo.userData.anim = "void";
     halo.userData.phase = Math.random() * 6.28;
     gStatic.add(halo);
 
-    var glow = new THREE.PointLight(COL["void"], 4.5, 3.0, 2);
-    glow.position.set(p.x, 0.5, p.z);
+    var glow = new THREE.PointLight(COL["void"], 5, 3.2, 2);
+    glow.position.set(p.x, 0.4, p.z);
     gStatic.add(glow);
   }
 
@@ -1114,6 +1181,20 @@
         var s = 0.85 + Math.sin(t * 7 + o.userData.phase) * 0.2;
         o.scale.set(s, 0.9 + Math.sin(t * 9 + o.userData.phase) * 0.24, s);
         o.position.y = o.userData.baseY + Math.sin(t * 5 + o.userData.phase) * 0.04;
+      } else if (kind === "flame2") {
+        var s2 = 0.8 + Math.sin(t * 8 + o.userData.phase) * 0.18;
+        o.scale.set(s2, 0.85 + Math.sin(t * 10 + o.userData.phase) * 0.2, s2);
+        o.position.y = o.userData.baseY + Math.sin(t * 6 + o.userData.phase) * 0.05;
+      } else if (kind === "ember") {
+        o.position.y = o.userData.baseY + Math.sin(t * 4 + o.userData.phase) * 0.12;
+        o.scale.setScalar(0.7 + Math.sin(t * 5 + o.userData.phase) * 0.3);
+      } else if (kind === "healcross") {
+        o.rotation.y = Math.sin(t * 0.8 + o.userData.phase) * 0.4;
+        o.position.y = o.userData.baseY + Math.sin(t * 1.6 + o.userData.phase) * 0.1;
+      } else if (kind === "bolt") {
+        o.position.y = 0.35 + Math.sin(t * 2.2 + o.userData.phase) * 0.12;
+        o.rotation.y = Math.sin(t * 1.2 + o.userData.phase) * 0.15;
+        o.scale.setScalar(1 + Math.sin(t * 3 + o.userData.phase) * 0.06);
       } else if (kind === "pulse") {
         o.position.y = o.userData.baseY + Math.sin(t * 2 + o.userData.phase) * 0.03;
         o.scale.setScalar(1 + Math.sin(t * 2.4 + o.userData.phase) * 0.07);
