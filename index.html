@@ -6,7 +6,7 @@
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css?v=20261114">
-  <link rel="stylesheet" href="style3d.css?v=2">
+  <link rel="stylesheet" href="style3d.css?v=3">
 </head>
 <body>
   <div class="heartbeat" aria-hidden="true">
@@ -60,7 +60,7 @@
     <div id="turn-timer" class="turn-timer"></div>
     <nav>
       <button class="tab-btn active" data-tab="board">Plateau</button>
-      <button class="tab-btn" data-tab="board3d" title="Vue 3D du plateau (bêta)">3D <span class="beta-tag">β</span></button>
+      <button class="tab-btn" data-tab="board3d" title="Mode 3D">3D</button>
       <button class="tab-btn" data-tab="library">Champions</button>
       <button class="tab-btn" data-tab="maps">Terrains</button>
       <button id="nav-home" class="tab-btn">Accueil</button>
@@ -116,6 +116,7 @@
             <div class="b3d-actions">
               <button id="b3d-undo" title="Annuler la dernière action">↩ Annuler</button>
               <button id="b3d-topview" title="Basculer vers une vue tactique verticale">◉ Vue de haut</button>
+              <button id="b3d-fullscreen" title="Grand écran">⛶ Grand écran</button>
               <button id="b3d-recenter" title="Revenir à la vue de l'équipe qui joue">⌖ Vue équipe</button>
               <button id="b3d-next" title="Passer au tour suivant">Tour suivant</button>
             </div>
@@ -212,7 +213,7 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261114"></script>
-  <script src="game3d.js?v=2"></script>
-  <script src="home3d.js?v=2"></script>
+  <script src="game3d.js?v=4"></script>
+  <script src="home3d.js?v=3"></script>
 </body>
 </html>

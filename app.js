@@ -1582,7 +1582,15 @@ function startGame() {
     pendingReplaceChoice = null;
     save();
     renderBoard();
-    document.querySelector('[data-tab="board"]').click();
+    if (document.getElementById("home3d-screen") && document.getElementById("home3d-screen").classList.contains("open")) {
+      const t = document.querySelector('[data-tab="board3d"]');
+      if (t) t.click();
+    } else if (document.getElementById("tab-board3d") && document.getElementById("tab-board3d").classList.contains("active")) {
+      const t = document.querySelector('[data-tab="board3d"]');
+      if (t) t.click();
+    } else {
+      document.querySelector('[data-tab="board"]').click();
+    }
     if (aiMode) aiOnGameStart();
   setTimeout(startTurnTimer, 300);
 }
@@ -5372,6 +5380,11 @@ function showHome() {
 function hideHome() {
   document.getElementById("nav-home").classList.remove("active");
   document.getElementById("home-screen").classList.remove("open");
+  // Reprise du jeu si on quitte l'accueil : réarme l'IA et le timer.
+  if (aiMode) {
+    if (state.phase === "placement") aiMaybeSchedulePlacement();
+    else aiScheduleTurn();
+  }
 }
 
 document.getElementById("nav-home").addEventListener("click", showHome);
@@ -7547,6 +7560,7 @@ async function aiExecutePlan(plan) {
 /* ---------- Boucle de tour IA ---------- */
 
 function aiScheduleTurn() {
+  if (isOnHome()) return;
   if (!aiMode || state.turn !== aiPlayer || state.winner) return;
   if (aiRunning) return;
   aiRunning = true;
@@ -7555,6 +7569,7 @@ function aiScheduleTurn() {
 
 async function aiTurnLoop() {
   try {
+    if (isOnHome()) { aiStatus(null); return; }
     if (!aiMode || state.turn !== aiPlayer || state.winner || state.phase !== "playing") {
       aiStatus(null);
       return;
@@ -7590,6 +7605,7 @@ function aiOnGameStart() {
 }
 
 function aiMaybeSchedulePlacement() {
+  if (isOnHome()) return;
   if (!aiMode || state.phase !== "placement") return;
   if (state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) return;
   if (aiRunning) return;

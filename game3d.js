@@ -66,7 +66,8 @@
     thetaT: 0.85, phiT: 0.98, rT: 22,
     target: null, targetT: null,
     topView: false, savedPhi: 0.98,
-    lastTurn: null, camSet: false
+    lastTurn: null, camSet: false,
+    side: "A"
   };
 
   var staticSig = "";
@@ -780,6 +781,15 @@
     ].join("|");
   }
 
+  function cameraSide() {
+    var t = cam.thetaT % (Math.PI * 2);
+    if (t < 0) t += Math.PI * 2;
+    var aCenter = 0.85;
+    var bCenter = 0.85 + Math.PI;
+    function dist(x, c) { var d = Math.abs(x - c); if (d > Math.PI) d = Math.PI * 2 - d; return d; }
+    return dist(t, aCenter) < dist(t, bCenter) ? "A" : "B";
+  }
+
   function sync(force) {
     if (!mounted) return;
 
@@ -802,8 +812,11 @@
 
     /* Changement de tour : on passe de l'autre côté du plateau, en conservant
        l'angle et le zoom choisis par le joueur (rotation libre pendant le tour). */
+    /* Changement de tour : on passe du côté du joueur actif, en conservant
+       l'angle et le zoom choisis par le joueur (rotation libre pendant le tour).
+       Si la caméra est déjà du bon côté, on ne bouge pas. */
     var turnChanged = (cam.lastTurn !== null && cam.lastTurn !== state.turn);
-    if (!mapChanged && turnChanged && !cam.topView) {
+    if (!mapChanged && turnChanged && !cam.topView && cameraSide() !== state.turn) {
       cam.thetaT += Math.PI;
     }
     cam.lastTurn = state.turn;
@@ -1191,10 +1204,32 @@
         cam.savedPhi = cam.phi;
         cam.phiT = 0.06;
         cam.rT = Math.max(cur.cols, cur.rows) * 1.35 + 4;
+        /* Vue de haut bien droite, du côté de l'équipe qui joue. */
+        cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
         cam.topView = true;
         topview.textContent = "◉ Vue 3D";
         topview.classList.add("active");
       }
+    });
+
+    var fullscreen = el("b3d-fullscreen");
+    if (fullscreen) fullscreen.addEventListener("click", function () {
+      var host = el("board3d");
+      if (!host) return;
+      if (!document.fullscreenElement) {
+        if (host.requestFullscreen) host.requestFullscreen();
+        else if (host.webkitRequestFullscreen) host.webkitRequestFullscreen();
+        fullscreen.textContent = "✕ Quitter";
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        fullscreen.textContent = "⛶ Grand écran";
+      }
+    });
+    document.addEventListener("fullscreenchange", function () {
+      var fs = el("b3d-fullscreen");
+      if (!fs) return;
+      if (document.fullscreenElement) { fs.textContent = "✕ Quitter"; }
+      else { fs.textContent = "⛶ Grand écran"; }
     });
 
     var next = el("b3d-next");
@@ -1230,6 +1265,7 @@
     get renderer() { return renderer; },
     get camera() { return camera; },
     get cam() { return cam; },
+    cameraSide: cameraSide,
     get tokens() { return tokenMeshes; },
     get cells() { return cur; },
     stats: function () {
