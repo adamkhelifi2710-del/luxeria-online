@@ -317,15 +317,19 @@
           continue;
         }
 
+        /* Le vide est un vrai trou : pas de case, juste le puits. */
+        if (isVoidCell(x, y)) {
+          addVoid(p);
+          continue;
+        }
+
         var tile = new THREE.Mesh(tileGeo, ((x + y) % 2 === 0) ? matA : matB);
         tile.position.set(p.x, 0.05, p.z);
         tile.receiveShadow = true;
         gStatic.add(tile);
 
         /* --- cases spéciales --- */
-        if (isVoidCell(x, y)) {
-          addVoid(p);
-        } else if (isFire(x, y)) {
+        if (isFire(x, y)) {
           addFire(p, x, y);
         } else if (isHealCell(x, y)) {
           addHeal(p);

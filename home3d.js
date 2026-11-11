@@ -224,14 +224,18 @@
           continue;
         }
 
+        /* Le vide est un vrai trou : pas de case, juste le puits. */
+        if (has(map.voidCells, x, y)) {
+          addVoid(px(x), pz(y));
+          continue;
+        }
+
         var tile = new THREE.Mesh(tileGeo, ((x + y) % 2 === 0) ? matA : matB);
         tile.position.set(px(x), 0.05, pz(y));
         tile.receiveShadow = true;
         group.add(tile);
 
-        if (has(map.voidCells, x, y)) {
-          addVoid(px(x), pz(y));
-        } else if (has(map.fireCells, x, y)) {
+        if (has(map.fireCells, x, y)) {
           addFire(px(x), pz(y));
         } else if (has(map.healCells, x, y)) {
           addHeal(px(x), pz(y));
