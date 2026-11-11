@@ -266,8 +266,10 @@
   function buildStatic() {
     var map = GAME.maps[state.mapName] || GAME.map;
     if (!map) return;
+    console.log("BUILDSTATIC map=", state.mapName, "voidCells=", JSON.stringify(map.voidCells), "cols=", map.cols, "rows=", map.rows);
 
     cur.cols = map.cols || 15;
+    cur.rows = map.rows || 10;
     cur.rows = map.rows || 10;
     cur.ox = -(cur.cols - 1) / 2;
     cur.oz = -(cur.rows - 1) / 2;

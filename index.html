@@ -6,7 +6,7 @@
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css?v=20261115">
-  <link rel="stylesheet" href="style3d.css?v=8">
+  <link rel="stylesheet" href="style3d.css?v=9">
 </head>
 <body>
   <div class="heartbeat" aria-hidden="true">
@@ -30,6 +30,7 @@
   </div>
 
   <div id="home-screen">
+    <button id="home-3d-toggle" title="Ouvrir l'accueil 3D">🧊 Accueil 3D</button>
     <div class="home-box">
       <h1 class="home-title">Luxeria</h1>
       <button id="home-play" class="home-btn">Lancer une partie</button>
@@ -39,11 +40,30 @@
     </div>
   </div>
 
+  <div id="home3d-screen">
+    <div id="home3d-canvas"></div>
+
+    <div class="h3d-panel">
+      <h1 class="h3d-title">Luxeria</h1>
+      <p class="h3d-sub">Choisissez votre mode</p>
+      <div class="h3d-actions">
+        <button class="h3d-btn h3d-primary" data-h3d="play">Lancer une partie</button>
+        <button class="h3d-btn" data-h3d="online">Partie en ligne</button>
+        <button class="h3d-btn" data-h3d="maps">Terrains</button>
+        <button class="h3d-btn" data-h3d="library">Voir les champions</button>
+      </div>
+      <p class="h3d-note">Bêta · le plateau 3D affiche le terrain actif</p>
+    </div>
+
+    <button id="home3d-back" title="Revenir à l'accueil classique">← Accueil</button>
+  </div>
+
   <header>
     <h1>Suivi de Partie</h1>
     <div id="turn-timer" class="turn-timer"></div>
     <nav>
       <button class="tab-btn active" data-tab="board">Plateau</button>
+      <button class="tab-btn" data-tab="board3d" title="Mode 3D">3D</button>
       <button class="tab-btn" data-tab="library">Champions</button>
       <button class="tab-btn" data-tab="maps">Terrains</button>
       <button id="nav-home" class="tab-btn">Accueil</button>
@@ -74,6 +94,49 @@
           <p class="win-text"></p>
           <button id="win-close">Fermer</button>
         </div>
+      </div>
+    </section>
+
+    <section id="tab-board3d" class="tab">
+      <div id="board3d">
+        <div id="board3d-canvas"></div>
+
+        <div id="b3d-hud">
+          <div class="b3d-top">
+            <span id="b3d-turn" class="b3d-turn team-a">Tour : Équipe A</span>
+            <span id="b3d-timer" class="b3d-timer" aria-live="polite">15 s</span>
+            <span id="b3d-objectives" class="b3d-objectives"></span>
+            <span id="b3d-map" class="b3d-map"></span>
+          </div>
+          <div class="b3d-bottom">
+            <div class="b3d-left">
+              <div id="b3d-card">
+                <div class="b3d-empty">Cliquez une bouteille pour sélectionner un champion.</div>
+              </div>
+              <div id="b3d-reserve" class="b3d-reserve"></div>
+              <div id="b3d-log" class="b3d-log"></div>
+            </div>
+            <div class="b3d-actions">
+              <button id="b3d-undo" title="Annuler la dernière action">↩ Annuler</button>
+              <button id="b3d-topview" title="Basculer vers une vue tactique verticale">◉ Vue de haut</button>
+              <button id="b3d-fullscreen" title="Grand écran">⛶ Grand écran</button>
+              <button id="b3d-recenter" title="Revenir à la vue de l'équipe qui joue">⌖ Vue équipe</button>
+              <button id="b3d-next" title="Passer au tour suivant">Tour suivant</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="b3d-legend">
+          <span><i style="background:#4f8cff"></i>Équipe A</span>
+          <span><i style="background:#ff6b6b"></i>Équipe B</span>
+          <span><i style="background:#ff7a2f"></i>Feu</span>
+          <span><i style="background:#39d98a"></i>Soin</span>
+          <span><i style="background:#4fd1ff"></i>Vitesse</span>
+          <span><i style="background:#8a5cff"></i>Vide</span>
+        </div>
+
+        <div class="b3d-hint"><b>Glisser</b> tourner · <b>Molette</b> zoom · <b>Clic droit</b> déplacer · <b>Clic</b> jouer</div>
+        <div id="b3d-message"></div>
       </div>
     </section>
 
@@ -153,7 +216,7 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261115"></script>
-  <script src="game3d.js?v=8"></script>
-  <script src="home3d.js?v=8"></script>
+  <script src="game3d.js?v=9"></script>
+  <script src="home3d.js?v=9"></script>
 </body>
 </html>
