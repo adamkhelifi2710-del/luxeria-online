@@ -6452,7 +6452,7 @@ initMapSelect();
 renderRoleOptions();
 renderLibrary();
 renderBoard();
-showIntro();
+
 
 /* ============================ MODE IA ============================ */
 
@@ -8064,58 +8064,11 @@ setInterval(() => {
   }
   if (state.phase !== "playing") stopTurnTimer();
 }, 500);
-/* ---------- Intro / Splash ---------- */
-
-/* ---------- Intro / Splash ---------- */
 
 /* ---------- Intro / Splash ---------- */
 var introPlayed = false;
-function showIntro() {
-  const intro = document.getElementById("intro-screen");
-  if (!intro || introPlayed) return;
-  introPlayed = true;
-  const bg = intro.querySelector(".intro-bg");
-  if (bg) {
-    bg.style.backgroundImage = 'url("luxeria-map.png")';
-    bg.style.backgroundSize = "cover";
-    bg.style.backgroundPosition = "center";
-  }
-  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
-  intro.style.display = "flex";
-}
-
-function hideLoadingScreen() {
-  const ls = document.getElementById("loading-screen");
-  if (!ls) return;
-  ls.classList.add("hidden");
-  setTimeout(() => { ls.classList.add("gone"); ls.style.display = "none"; }, 2000);
-}
-
-
-
-
-function processSpriteSheet(img) {
-  const cols = 4, rows = 2;
-  const fw = Math.floor(img.width / cols);
-  const fh = Math.floor(img.height / rows);
-  const frames = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const canvas = document.createElement("canvas");
-      canvas.width = fw;
-      canvas.height = fh;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, c * fw, r * fh, fw, fh, 0, 0, fw, fh);
-      removeBackground(ctx, fw, fh);
-      frames.push(canvas);
-    }
-  }
-  return frames;
-}
-
 var introBgUrl = null;
-let runnerFrames = [];
-let runnerAnimId = null;
+var runnerFrames = [];
 
 function removeBackground(ctx, w, h) {
   const imgData = ctx.getImageData(0, 0, w, h);
@@ -8125,7 +8078,7 @@ function removeBackground(ctx, w, h) {
   for (let i = 3; i < data.length; i += 4) {
     if (data[i] < 250) { hasAlpha = true; break; }
   }
-  if (hasAlpha) return; // already transparent
+  if (hasAlpha) return;
   // Find most common color (background)
   const colorCount = {};
   for (let i = 0; i < data.length; i += 4) {
@@ -8147,10 +8100,7 @@ function removeBackground(ctx, w, h) {
       removed++;
     }
   }
-  // Safety: if we removed more than 80%, don't apply
-  if (removed > total * 0.8) {
-    for (let i = 3; i < data.length; i += 4) data[i] = 255;
-  } else {
+  if (removed <= total * 0.8) {
     ctx.putImageData(imgData, 0, 0);
   }
 }
@@ -8174,23 +8124,6 @@ function processSpriteSheet(img) {
   return frames;
 }
 
-function drawRunnerFrame(idx) {
-  const runnerCanvas = document.getElementById("loading-runner");
-  if (!runnerCanvas) return;
-  const ctx = runnerCanvas.getContext("2d");
-  ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
-  if (!runnerFrames.length) {
-    // placeholder: simple colored rect while sprite loads
-    ctx.fillStyle = "rgba(106, 69, 224, 0.6)";
-    ctx.fillRect(4, 4, runnerCanvas.width - 8, runnerCanvas.height - 8);
-    return;
-  }
-  const f = runnerFrames[idx % runnerFrames.length];
-  const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
-  const dw = f.width * scale, dh = f.height * scale;
-  ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
-}
-
 function preloadIntroImage() {
   const fill = document.getElementById("loading-bar-fill");
   const runnerCanvas = document.getElementById("loading-runner");
@@ -8198,15 +8131,14 @@ function preloadIntroImage() {
   let spriteReady = false;
   let mapReady = false;
 
-  const tryFinish = () => {
+  const finish = () => {
     if (done) return;
-    if (!spriteReady || !mapReady) return;
     done = true;
     if (fill) fill.style.width = "100%";
     if (runnerCanvas && runnerFrames.length) {
       const ctx = runnerCanvas.getContext("2d");
       ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
-      const f = runnerFrames[0];
+      const f = runnerFrames[runnerFrames.length - 1];
       const scale = Math.min(runnerCanvas.width / f.width, runnerCanvas.height / f.height);
       const dw = f.width * scale, dh = f.height * scale;
       ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
@@ -8217,13 +8149,17 @@ function preloadIntroImage() {
     }, 400);
   };
 
-  // Progress bar + runner animation
-  let pct = 0;
+  const tryFinish = () => {
+    if (done) return;
+    if (!spriteReady || !mapReady) return;
+    finish();
+  };
+
   let runnerFrameIdx = 0;
   const animTimer = setInterval(() => {
     if (done) { clearInterval(animTimer); return; }
-    runnerFrameIdx = (runnerFrameIdx + 1) % Math.max(1, runnerFrames.length || 1);
     if (runnerFrames.length && runnerCanvas) {
+      runnerFrameIdx = (runnerFrameIdx + 1) % runnerFrames.length;
       const ctx = runnerCanvas.getContext("2d");
       ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
       const f = runnerFrames[runnerFrameIdx];
@@ -8231,23 +8167,27 @@ function preloadIntroImage() {
       const dw = f.width * scale, dh = f.height * scale;
       ctx.drawImage(f, (runnerCanvas.width - dw) / 2, (runnerCanvas.height - dh) / 2, dw, dh);
     } else if (runnerCanvas) {
-      // placeholder while sprite loads
       const ctx = runnerCanvas.getContext("2d");
       ctx.clearRect(0, 0, runnerCanvas.width, runnerCanvas.height);
       ctx.fillStyle = "rgba(106, 69, 224, 0.6)";
       ctx.fillRect(4, 4, runnerCanvas.width - 8, runnerCanvas.height - 8);
     }
-    pct = Math.min(90, pct + Math.random() * 4 + 2);
-    if (fill) fill.style.width = pct + "%";
     if (runnerCanvas) {
       const wrap = document.querySelector(".loading-runner-wrap");
       const wrapWidth = (wrap && wrap.offsetWidth) || 360;
       const runnerWidth = runnerCanvas.offsetWidth || 96;
+      let pct = fill ? parseFloat(fill.style.width) || 0 : 0;
       runnerCanvas.style.left = ((wrapWidth - runnerWidth) * (pct / 100)) + "px";
     }
+  }, 100);
+
+  let pct = 0;
+  const barTimer = setInterval(() => {
+    if (done) { clearInterval(barTimer); return; }
+    pct = Math.min(90, pct + Math.random() * 4 + 2);
+    if (fill) fill.style.width = pct + "%";
   }, 150);
 
-  // Load sprite sheet
   const spriteImg = new Image();
   spriteImg.onload = () => {
     try {
@@ -8264,16 +8204,11 @@ function preloadIntroImage() {
   };
   spriteImg.src = "lycan-sprite.png";
 
-  // Load map image
   const img = new Image();
   img.onload = () => {
     introBgUrl = img.src;
     mapReady = true;
-    if (typeof img.decode === "function") {
-      img.decode().then(() => { mapReady = true; tryFinish(); }).catch(() => { mapReady = true; tryFinish(); });
-    } else {
-      tryFinish();
-    }
+    tryFinish();
   };
   img.onerror = () => {
     mapReady = true;
@@ -8281,10 +8216,14 @@ function preloadIntroImage() {
   };
   img.src = "luxeria-map.png";
 
-  // Securite : ne jamais rester bloque sur l'ecran noir
-  setTimeout(() => { clearInterval(animTimer); tryFinish(); }, 15000);
-  // Force finish even if images don't load
-  setTimeout(() => { mapReady = true; spriteReady = true; tryFinish(); }, 15000);
+  setTimeout(() => { clearInterval(barTimer); clearInterval(animTimer); mapReady = true; spriteReady = true; finish(); }, 15000);
+}
+
+function hideLoadingScreen() {
+  const ls = document.getElementById("loading-screen");
+  if (!ls) return;
+  ls.classList.add("hidden");
+  setTimeout(() => { ls.classList.add("gone"); ls.style.display = "none"; }, 2000);
 }
 
 function showIntro() {
@@ -8300,45 +8239,7 @@ function showIntro() {
   intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
   intro.style.display = "flex";
 }
-function showIntro() {
-  const intro = document.getElementById("intro-screen");
-  if (!intro || introPlayed) return;
-  introPlayed = true;
-  const bg = intro.querySelector(".intro-bg");
-  if (bg) {
-    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
-    bg.style.backgroundSize = "cover";
-    bg.style.backgroundPosition = "center";
-  }
-  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
-  intro.style.display = "flex";
-}
-function showIntro() {
-  const intro = document.getElementById("intro-screen");
-  if (!intro || introPlayed) return;
-  introPlayed = true;
-  const bg = intro.querySelector(".intro-bg");
-  if (bg) {
-    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
-    bg.style.backgroundSize = "cover";
-    bg.style.backgroundPosition = "center";
-  }
-  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
-  intro.style.display = "flex";
-}
-function showIntro() {
-  const intro = document.getElementById("intro-screen");
-  if (!intro || introPlayed) return;
-  introPlayed = true;
-  const bg = intro.querySelector(".intro-bg");
-  if (bg) {
-    bg.style.backgroundImage = 'url("' + (introBgUrl || "luxeria-map.png") + '")';
-    bg.style.backgroundSize = "cover";
-    bg.style.backgroundPosition = "center";
-  }
-  intro.classList.remove("hidden", "zoom-out", "zoom-in", "fade");
-  intro.style.display = "flex";
-}
+
 function playIntro() {
   const intro = document.getElementById("intro-screen");
   const btn = document.getElementById("intro-play");
@@ -8360,6 +8261,7 @@ function playIntro() {
     if (typeof showHome === "function") showHome();
   }, 2400);
 }
+
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("intro-play");
   if (btn) btn.addEventListener("click", playIntro);
