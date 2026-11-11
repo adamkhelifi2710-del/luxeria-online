@@ -4904,6 +4904,24 @@ button:hover, .btn-random-inline:hover {
   background: rgba(255, 255, 255, 0.12);
   overflow: hidden;
 }
+.loading-runner-wrap {
+  position: absolute;
+  bottom: calc(18% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(60vw, 360px);
+  height: 64px;
+  pointer-events: none;
+}
+.loading-runner {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
 .loading-bar-fill {
   height: 100%;
   width: 0%;
