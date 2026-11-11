@@ -8094,21 +8094,6 @@ function hideLoadingScreen() {
 
 
 
-function removeBackground(ctx, w, h) {
-  const imgData = ctx.getImageData(0, 0, w, h);
-  const data = imgData.data;
-  // detect background from top-left corner
-  const br = data[0], bg = data[1], bb = data[2];
-  const tol = 30;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i], g = data[i+1], b = data[i+2];
-    if (Math.abs(r - br) < tol && Math.abs(g - bg) < tol && Math.abs(b - bb) < tol) {
-      data[i+3] = 0;
-    }
-  }
-  ctx.putImageData(imgData, 0, 0);
-}
-
 function processSpriteSheet(img) {
   const cols = 4, rows = 2;
   const fw = Math.floor(img.width / cols);
@@ -8135,15 +8120,39 @@ let runnerAnimId = null;
 function removeBackground(ctx, w, h) {
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
-  const br = data[0], bg = data[1], bb = data[2];
-  const tol = 32;
+  // Check if image already has transparency
+  let hasAlpha = false;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 250) { hasAlpha = true; break; }
+  }
+  if (hasAlpha) return; // already transparent
+  // Find most common color (background)
+  const colorCount = {};
+  for (let i = 0; i < data.length; i += 4) {
+    const key = data[i] + "," + data[i+1] + "," + data[i+2];
+    colorCount[key] = (colorCount[key] || 0) + 1;
+  }
+  let maxKey = "", maxCount = 0;
+  for (const k in colorCount) {
+    if (colorCount[k] > maxCount) { maxCount = colorCount[k]; maxKey = k; }
+  }
+  const [br, bg, bb] = maxKey.split(",").map(Number);
+  const tol = 40;
+  let removed = 0;
+  const total = data.length / 4;
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i+1], b = data[i+2];
     if (Math.abs(r - br) < tol && Math.abs(g - bg) < tol && Math.abs(b - bb) < tol) {
       data[i+3] = 0;
+      removed++;
     }
   }
-  ctx.putImageData(imgData, 0, 0);
+  // Safety: if we removed more than 80%, don't apply
+  if (removed > total * 0.8) {
+    for (let i = 3; i < data.length; i += 4) data[i] = 255;
+  } else {
+    ctx.putImageData(imgData, 0, 0);
+  }
 }
 
 function processSpriteSheet(img) {
