@@ -728,19 +728,35 @@
   }
 }
 
-@media (max-width: 560px) {
-  .h3d-actions {
-    grid-template-columns: 1fr;
-  }
+/* =========================================================================
+   Grand écran 3D (masque les onglets, seul le terrain reste)
+   ========================================================================= */
 
-  .h3d-title {
-    font-size: 1.5rem;
-  }
+body.bigscreen3d {
+  overflow: hidden;
+}
 
-  #home-3d-toggle {
-    top: 12px;
-    right: 12px;
-    padding: 8px 13px;
-    font-size: 0.74rem;
-  }
+body.bigscreen3d header,
+body.bigscreen3d .heartbeat {
+  display: none !important;
+}
+
+body.bigscreen3d #board3d {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+body.bigscreen3d .b3d-legend,
+body.bigscreen3d .b3d-hint {
+  display: none;
+}
+
+body.bigscreen3d .h3d-panel {
+  /* no-op pour l'accueil */
 }

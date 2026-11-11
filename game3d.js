@@ -62,11 +62,11 @@
   var tokenMeshes = {};        // id -> { g, label, tx, tz, hp, phase, dying }
   var cur = { cols: 15, rows: 10, ox: 0, oz: 0, mapId: null };
   var cam = {
-    theta: 0.85, phi: 0.98, r: 22,
-    thetaT: 0.85, phiT: 0.98, rT: 22,
+    theta: 0.85 + Math.PI, phi: 0.98, r: 22,
+    thetaT: 0.85 + Math.PI, phiT: 0.98, rT: 22,
     target: null, targetT: null,
     topView: false, savedPhi: 0.98,
-    lastTurn: null, camSet: false,
+    lastTurn: null, camSet: false, lastPhase: null,
     side: "A"
   };
 
@@ -784,8 +784,8 @@
   function cameraSide() {
     var t = cam.thetaT % (Math.PI * 2);
     if (t < 0) t += Math.PI * 2;
-    var aCenter = 0.85;
-    var bCenter = 0.85 + Math.PI;
+    var aCenter = 0.85 + Math.PI;
+    var bCenter = 0.85;
     function dist(x, c) { var d = Math.abs(x - c); if (d > Math.PI) d = Math.PI * 2 - d; return d; }
     return dist(t, aCenter) < dist(t, bCenter) ? "A" : "B";
   }
@@ -802,7 +802,7 @@
       if (mapChanged || !cam.camSet) {
         cam.camSet = true;
         cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
-        cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
+        cam.thetaT = (state.turn === "A" ? 0.85 + Math.PI : 0.85);
         cam.phiT = 0.98;
         cam.targetT.set(0, 0.6, 0);
         cam.topView = false;
@@ -820,6 +820,28 @@
       cam.thetaT += Math.PI;
     }
     cam.lastTurn = state.turn;
+
+    /* Phase de placement : vue de haut pour que les deux joueurs posent en même
+       temps. Passage en phase de jeu : on se place du côté du joueur actif. */
+    var phaseChanged = (cam.lastPhase !== state.phase);
+    if (state.phase === "placement" && !cam.topView) {
+      cam.savedPhi = cam.phi;
+      cam.phiT = 0.02;
+      cam.rT = Math.max(cur.cols, cur.rows) * 1.3 + 3;
+      cam.thetaT = 0;
+      cam.topView = true;
+      var tvp = el("b3d-topview");
+      if (tvp) { tvp.textContent = "◉ Vue 3D"; tvp.classList.add("active"); }
+    }
+    if (state.phase === "playing" && cam.topView && phaseChanged) {
+      cam.topView = false;
+      cam.phiT = 0.98;
+      cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
+      cam.thetaT = (state.turn === "A" ? 0.85 + Math.PI : 0.85);
+      var tvp2 = el("b3d-topview");
+      if (tvp2) { tvp2.textContent = "⤓ Vue de haut"; tvp2.classList.remove("active"); }
+    }
+    cam.lastPhase = state.phase;
 
     syncTokens();
 
@@ -1186,7 +1208,7 @@
       cam.topView = false;
       cam.savedPhi = 0.98;
       cam.rT = Math.max(cur.cols, cur.rows) * 1.16 + 5;
-      cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
+      cam.thetaT = (state.turn === "A" ? 0.85 + Math.PI : 0.85);
       cam.phiT = 0.98;
       cam.targetT.set(0, 0.6, 0);
       var tv = el("b3d-topview");
@@ -1202,10 +1224,10 @@
         topview.classList.remove("active");
       } else {
         cam.savedPhi = cam.phi;
-        cam.phiT = 0.06;
-        cam.rT = Math.max(cur.cols, cur.rows) * 1.35 + 4;
-        /* Vue de haut bien droite, du côté de l'équipe qui joue. */
-        cam.thetaT = (state.turn === "A" ? 0.85 : 0.85 + Math.PI);
+        cam.phiT = 0.02;
+        cam.rT = Math.max(cur.cols, cur.rows) * 1.3 + 3;
+        /* Vue de haut : terrain parfaitement droit (axe X horizontal). */
+        cam.thetaT = 0;
         cam.topView = true;
         topview.textContent = "◉ Vue 3D";
         topview.classList.add("active");
@@ -1217,19 +1239,25 @@
       var host = el("board3d");
       if (!host) return;
       if (!document.fullscreenElement) {
-        if (host.requestFullscreen) host.requestFullscreen();
+        document.body.classList.add("bigscreen3d");
+        if (host.requestFullscreen) host.requestFullscreen().catch(function () {});
         else if (host.webkitRequestFullscreen) host.webkitRequestFullscreen();
         fullscreen.textContent = "✕ Quitter";
       } else {
+        document.body.classList.remove("bigscreen3d");
         if (document.exitFullscreen) document.exitFullscreen();
         fullscreen.textContent = "⛶ Grand écran";
       }
     });
     document.addEventListener("fullscreenchange", function () {
       var fs = el("b3d-fullscreen");
-      if (!fs) return;
-      if (document.fullscreenElement) { fs.textContent = "✕ Quitter"; }
-      else { fs.textContent = "⛶ Grand écran"; }
+      if (document.fullscreenElement) {
+        if (fs) fs.textContent = "✕ Quitter";
+      } else {
+        document.body.classList.remove("bigscreen3d");
+        if (fs) fs.textContent = "⛶ Grand écran";
+      }
+      if (mounted) { resize(); }
     });
 
     var next = el("b3d-next");
