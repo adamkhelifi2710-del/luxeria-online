@@ -4906,21 +4906,23 @@ button:hover, .btn-random-inline:hover {
 }
 .loading-runner-wrap {
   position: absolute;
-  bottom: calc(18% + 8px);
+  bottom: calc(18% + 12px);
   left: 50%;
   transform: translateX(-50%);
   width: min(60vw, 360px);
-  height: 64px;
+  height: 96px;
   pointer-events: none;
+  overflow: visible;
 }
 .loading-runner {
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
 }
 .loading-bar-fill {
   height: 100%;
