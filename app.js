@@ -8128,7 +8128,7 @@ function processSpriteSheet(img) {
   return frames;
 }
 
-let introBgUrl = null;
+var introBgUrl = null;
 let runnerFrames = [];
 let runnerAnimId = null;
 
