@@ -463,8 +463,6 @@
     );
     rim.rotation.x = -Math.PI / 2;
     rim.position.set(x, 0.06, z);
-    rim.userData.anim = "void";
-    rim.userData.phase = Math.random() * 6.28;
     group.add(rim);
 
     var halo = new THREE.Mesh(
@@ -473,8 +471,6 @@
     );
     halo.rotation.x = -Math.PI / 2;
     halo.position.set(x, 0.2, z);
-    halo.userData.anim = "void";
-    halo.userData.phase = Math.random() * 6.28;
     group.add(halo);
 
     var glow = new THREE.PointLight(COL.voidc, 5, 3.2, 2);

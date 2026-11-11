@@ -599,8 +599,6 @@
     );
     rim.rotation.x = -Math.PI / 2;
     rim.position.set(p.x, 0.06, p.z);
-    rim.userData.anim = "void";
-    rim.userData.phase = Math.random() * 6.28;
     gStatic.add(rim);
 
     /* halo flottant */
@@ -610,8 +608,6 @@
     );
     halo.rotation.x = -Math.PI / 2;
     halo.position.set(p.x, 0.2, p.z);
-    halo.userData.anim = "void";
-    halo.userData.phase = Math.random() * 6.28;
     gStatic.add(halo);
 
     var glow = new THREE.PointLight(COL["void"], 5, 3.2, 2);
