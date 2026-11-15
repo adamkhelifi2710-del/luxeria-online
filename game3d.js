@@ -153,7 +153,109 @@
     return sprite;
   }
 
-  /* ---------------- chargement paresseux de Three.js ---------------- */
+  /* ---------------- chargement des modèles GLB (Braut, etc.) ---------------- */
+
+  var gltfLoader = null;
+  var loadedModels = {};   // charId -> THREE.Group (template)
+  var loadingModels = {};   // charId -> boolean
+
+  /* Mapping champion -> fichier GLB */
+  var MODEL_MAP = {
+    braut: "braut-tripo.glb",
+    ad: "ad-tripo.glb",
+    scrab: "scrab-tripo.glb",
+    xixz: "xixz-tripo.glb",
+    cazou: "cazou-tripo.glb"
+  };
+
+  function ensureGLTFLoader(cb) {
+    if (gltfLoader) { cb(); return; }
+    var attempts = 0;
+    var check = setInterval(function () {
+      attempts++;
+      if (window.__GLTFLoader && window.__MeshoptDecoder) {
+        clearInterval(check);
+        try {
+          gltfLoader = new window.__GLTFLoader();
+          gltfLoader.setMeshoptDecoder(window.__MeshoptDecoder);
+          cb();
+        } catch (e) {
+          console.error("GLTFLoader init failed:", e);
+          cb();
+        }
+      } else if (attempts > 50) {
+        clearInterval(check);
+        console.error("GLTFLoader not available (timeout)");
+        cb();
+      }
+    }, 100);
+  }
+
+  function loadModel(charId) {
+    if (loadedModels[charId] || loadingModels[charId]) return;
+    if (!MODEL_MAP[charId]) return;
+    loadingModels[charId] = true;
+    ensureGLTFLoader(function () {
+      if (!gltfLoader) { loadingModels[charId] = false; return; }
+      gltfLoader.load("models/" + MODEL_MAP[charId], function (gltf) {
+        var model = gltf.scene;
+        model.traverse(function (child) {
+          if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+        });
+        var box = new THREE.Box3().setFromObject(model);
+        var size = box.getSize(new THREE.Vector3());
+        var scale = 1.5 / Math.max(size.x, size.y, size.z);
+        model.scale.setScalar(scale);
+        var box2 = new THREE.Box3().setFromObject(model);
+        var c2 = box2.getCenter(new THREE.Vector3());
+        model.position.x -= c2.x;
+        model.position.z -= c2.z;
+        loadedModels[charId] = model;
+        loadingModels[charId] = false;
+        // remove existing bottle meshes for this charId so they get recreated as GLB
+        Object.keys(tokenMeshes).forEach(function (id) {
+          var m = tokenMeshes[id];
+          var tok = (typeof tokenById === "function") ? tokenById(id) : null;
+          if (tok && tok.charId === charId) {
+            gTokens.remove(m.g);
+            disposeTree(m.g);
+            delete tokenMeshes[id];
+          }
+        });
+        if (mounted) sync(true);
+      }, undefined, function (e) {
+        console.error("GLB load failed for " + charId + ":", e);
+        loadingModels[charId] = false;
+      });
+    });
+  }
+
+  function loadAllModels() {
+    var charIds = [];
+    var seen = {};
+    (state.tokens || []).forEach(function (t) { if (!seen[t.charId]) { seen[t.charId] = true; charIds.push(t.charId); } });
+    ["A", "B"].forEach(function (p) {
+      (state.decks && state.decks[p] || []).forEach(function (id) { if (!seen[id]) { seen[id] = true; charIds.push(id); } });
+      (state.starters && state.starters[p] || []).forEach(function (id) { if (!seen[id]) { seen[id] = true; charIds.push(id); } });
+    });
+    // load sequentially to avoid overwhelming the browser
+    var idx = 0;
+    function next() {
+      while (idx < charIds.length && !MODEL_MAP[charIds[idx]]) idx++;
+      if (idx >= charIds.length) return;
+      var cid = charIds[idx];
+      idx++;
+      loadModel(cid);
+      // wait for this model to finish before loading the next
+      var check = setInterval(function () {
+        if (!loadingModels[cid]) {
+          clearInterval(check);
+          next();
+        }
+      }, 200);
+    }
+    next();
+  }
 
   function ensureThree(cb) {
     if (window.THREE) { THREE = window.THREE; cb(); return; }
@@ -657,7 +759,24 @@
 
   /* ---------------- bouteilles (champions) ---------------- */
 
-  function makeBottle(team) {
+  function makeBottle(charId, team) {
+    /* Si un modèle GLB est chargé pour ce champion, l'utiliser. */
+    var model = loadedModels[charId];
+    if (model) {
+      var clone = model.clone(true);
+      var group = new THREE.Group();
+      var box = new THREE.Box3().setFromObject(clone);
+      clone.position.y = -box.min.y;
+      group.add(clone);
+      var ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.45, 0.04, 10, 32),
+        std(team === "A" ? COL.teamA : COL.teamB, { emissive: team === "A" ? COL.teamA : COL.teamB, emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.5 })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.02;
+      group.add(ring);
+      return group;
+    }
     var g = new THREE.Group();
     var body = std(COL.white, { roughness: 0.34, metalness: 0.06, emissive: 0x2a3a52, emissiveIntensity: 0.25 });
     var teamMat = std(team === "A" ? COL.teamA : COL.teamB, {
@@ -710,7 +829,7 @@
       var m = tokenMeshes[t.id];
 
       if (!m) {
-        var g = makeBottle(t.player);
+        var g = makeBottle(t.charId, t.player);
         g.position.set(p.x, 0, p.z);
         g.scale.setScalar(0.01);
         g.userData.spawn = 0;
@@ -911,6 +1030,9 @@
       if (tvp2) { tvp2.textContent = "⤓ Vue de haut"; tvp2.classList.remove("active"); }
     }
     cam.lastPhase = state.phase;
+
+    /* Charge les modèles GLB des champions présents sur le plateau. */
+    loadAllModels();
 
     syncTokens();
 
@@ -1273,6 +1395,7 @@
     ensureThree(function () {
       mount();
       if (!mounted) return;
+      loadAllModels();
       resize();
       sync(true);
       lastFrame = performance.now();
@@ -1377,6 +1500,10 @@
     get camera() { return camera; },
     get cam() { return cam; },
     cameraSide: cameraSide,
+    get loadedModels() { return loadedModels; },
+    get loadingModels() { return loadingModels; },
+    loadAllModels: loadAllModels,
+    loadModel: loadModel,
     get tokens() { return tokenMeshes; },
     get cells() { return cur; },
     stats: function () {
