@@ -838,20 +838,20 @@
       new THREE.CylinderGeometry(barH / 2, barH / 2, barLen, 8),
       std(0x0a0a14, { roughness: 0.9, metalness: 0.05, transparent: true, opacity: 0.85 })
     );
-    bg.rotation.z = Math.PI / 2;
+    bg.rotation.x = Math.PI / 2;
     group.add(bg);
 
-    // remplissage (segments "pixel")
+    // remplissage (segments "pixel" le long de Z)
     var filledSegs = Math.round(numSegs * pct);
-    var startX = -barLen / 2 + segW / 2 + segGap;
+    var startZ = -barLen / 2 + segW / 2 + segGap;
     for (var i = 0; i < filledSegs; i++) {
       var seg = new THREE.Mesh(
-        new THREE.BoxGeometry(segW, barH, barH),
+        new THREE.BoxGeometry(barH, barH, segW),
         std(col, { emissive: col, emissiveIntensity: 0.6, roughness: 0.3 })
       );
-      seg.position.x = startX + i * (segW + segGap);
+      seg.position.x = 0;
       seg.position.y = 0;
-      seg.position.z = 0;
+      seg.position.z = startZ + i * (segW + segGap);
       seg.userData.isFill = true;
       group.add(seg);
     }
@@ -862,7 +862,7 @@
         new THREE.CylinderGeometry(barH / 2 + 0.01, barH / 2 + 0.01, barLen * pct + 0.02, 8),
         std(col, { emissive: col, emissiveIntensity: 1.2, transparent: true, opacity: 0.25, depthWrite: false })
       );
-      glow.rotation.z = Math.PI / 2;
+      glow.rotation.x = Math.PI / 2;
       glow.position.z = -barLen / 2 + (barLen * pct) / 2;
       group.add(glow);
     }
@@ -922,12 +922,12 @@
     var startX = -barLen / 2 + segW / 2 + segGap;
     for (var i = 0; i < filledSegs; i++) {
       var seg = new THREE.Mesh(
-        new THREE.BoxGeometry(segW, barH, barH),
+        new THREE.BoxGeometry(barH, barH, segW),
         std(col, { emissive: col, emissiveIntensity: 0.6, roughness: 0.3 })
       );
-      seg.position.x = startX + i * (segW + segGap);
+      seg.position.x = 0;
       seg.position.y = 0;
-      seg.position.z = 0;
+      seg.position.z = startX + i * (segW + segGap);
       seg.userData.isFill = true;
       bar.add(seg);
     }
@@ -938,7 +938,7 @@
         new THREE.CylinderGeometry(barH / 2 + 0.01, barH / 2 + 0.01, barLen * pct + 0.02, 8),
         std(col, { emissive: col, emissiveIntensity: 1.2, transparent: true, opacity: 0.25, depthWrite: false })
       );
-      glow.rotation.z = Math.PI / 2;
+      glow.rotation.x = Math.PI / 2;
       glow.position.z = -barLen / 2 + (barLen * pct) / 2;
       glow.userData.isGlow = true;
       bar.add(glow);
