@@ -211,7 +211,7 @@
         model.position.x -= c2.x;
         model.position.z -= c2.z;
         loadedModels[charId] = model;
-        loadingModels[charId] = false;
+        delete loadingModels[charId];
         // remove existing bottle meshes for this charId so they get recreated as GLB
         Object.keys(tokenMeshes).forEach(function (id) {
           var m = tokenMeshes[id];
@@ -225,7 +225,7 @@
         if (mounted) sync(true);
       }, undefined, function (e) {
         console.error("GLB load failed for " + charId + ":", e);
-        loadingModels[charId] = false;
+        delete loadingModels[charId];
       });
     });
   }
@@ -368,7 +368,6 @@
   function buildStatic() {
     var map = GAME.maps[state.mapName] || GAME.map;
     if (!map) return;
-    console.log("BUILDSTATIC map=", state.mapName, "voidCells=", JSON.stringify(map.voidCells), "cols=", map.cols, "rows=", map.rows);
 
     cur.cols = map.cols || 15;
     cur.rows = map.rows || 10;

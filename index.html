@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css?v=20261115">
   <link rel="stylesheet" href="style3d.css?v=11">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/",
+      "meshopt_decoder": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js"
+    }
+  }
+  </script>
 </head>
 <body>
   <div class="heartbeat" aria-hidden="true">
@@ -216,7 +225,15 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261115"></script>
-  <script src="game3d.js?v=23"></script>
+  <script src="game3d.js?v=25"></script>
   <script src="home3d.js?v=11"></script>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js';
+    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/loaders/GLTFLoader.js';
+    import { MeshoptDecoder } from 'meshopt_decoder';
+    window.__THREE_MOD = THREE;
+    window.__GLTFLoader = GLTFLoader;
+    window.__MeshoptDecoder = MeshoptDecoder;
+  </script>
 </body>
 </html>
