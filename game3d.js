@@ -820,30 +820,47 @@
     return g;
   }
 
-  /* ---------------- barre de PV flottante ---------------- */
+  /* ---------------- barre de PV flottante (sur le côté, esthétique) ---------------- */
 
   function makeHPBar(player, hp, maxHp) {
     var group = new THREE.Group();
     var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
     var col = player === "A" ? COL.teamA : COL.teamB;
 
-    // fond
+    // fond (cadre sombre)
     var bg = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 0.07, 0.14),
-      std(0x1a1a2e, { roughness: 0.8, metalness: 0.1 })
+      new THREE.BoxGeometry(0.14, 0.08, 0.9),
+      std(0x0a0e18, { roughness: 0.9, metalness: 0.1 })
     );
-    bg.position.y = 0;
+    bg.position.set(0, 0, 0);
     group.add(bg);
 
-    // remplissage
-    var fill = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9 * pct, 0.07, 0.14),
-      std(col, { emissive: col, emissiveIntensity: 0.5, roughness: 0.4 })
+    // bordure lumineuse
+    var border = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.02, 0.92),
+      std(col, { emissive: col, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.3, transparent: true, opacity: 0.6 })
     );
-    fill.position.x = -0.45 + 0.45 * pct;
-    fill.position.y = 0;
+    border.position.set(0, 0.05, 0);
+    group.add(border);
+
+    // remplissage
+    var fillH = 0.9 * pct;
+    var fill = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.06, fillH),
+      std(col, { emissive: col, emissiveIntensity: 0.7, roughness: 0.3 })
+    );
+    fill.position.set(0, 0, -0.45 + 0.45 * pct);
     fill.userData.isFill = true;
     group.add(fill);
+
+    // glow
+    var glow = new THREE.Mesh(
+      new THREE.BoxGeometry(0.13, 0.01, fillH),
+      std(col, { emissive: col, emissiveIntensity: 1.5, transparent: true, opacity: 0.4, depthWrite: false })
+    );
+    glow.position.set(0, 0.04, -0.45 + 0.45 * pct);
+    glow.userData.isGlow = true;
+    group.add(glow);
 
     return group;
   }
@@ -851,14 +868,17 @@
   function updateHPBar(bar, hp, maxHp) {
     if (!bar) return;
     var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
-    var fill = null;
     bar.traverse(function (o) {
-      if (o.userData && o.userData.isFill) fill = o;
+      if (!o.userData) return;
+      if (o.userData.isFill) {
+        o.scale.z = pct;
+        o.position.z = -0.45 + 0.45 * pct;
+      }
+      if (o.userData.isGlow) {
+        o.scale.z = pct;
+        o.position.z = -0.45 + 0.45 * pct;
+      }
     });
-    if (fill) {
-      fill.scale.x = pct;
-      fill.position.x = -0.45 + 0.45 * pct;
-    }
   }
 
   function syncTokens() {
