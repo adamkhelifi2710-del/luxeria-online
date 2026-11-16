@@ -774,6 +774,7 @@
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.02;
       group.add(ring);
+      if (team === "B") group.rotation.y = Math.PI;
       return group;
     }
     var g = new THREE.Group();
@@ -815,7 +816,49 @@
     ring.position.y = 0.055;
     g.add(ring);
 
+    if (team === "B") g.rotation.y = Math.PI;
     return g;
+  }
+
+  /* ---------------- barre de PV flottante ---------------- */
+
+  function makeHPBar(player, hp, maxHp) {
+    var group = new THREE.Group();
+    var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+    var col = player === "A" ? COL.teamA : COL.teamB;
+
+    // fond
+    var bg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.07, 0.14),
+      std(0x1a1a2e, { roughness: 0.8, metalness: 0.1 })
+    );
+    bg.position.y = 0;
+    group.add(bg);
+
+    // remplissage
+    var fill = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9 * pct, 0.07, 0.14),
+      std(col, { emissive: col, emissiveIntensity: 0.5, roughness: 0.4 })
+    );
+    fill.position.x = -0.45 + 0.45 * pct;
+    fill.position.y = 0;
+    fill.userData.isFill = true;
+    group.add(fill);
+
+    return group;
+  }
+
+  function updateHPBar(bar, hp, maxHp) {
+    if (!bar) return;
+    var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+    var fill = null;
+    bar.traverse(function (o) {
+      if (o.userData && o.userData.isFill) fill = o;
+    });
+    if (fill) {
+      fill.scale.x = pct;
+      fill.position.x = -0.45 + 0.45 * pct;
+    }
   }
 
   function syncTokens() {
@@ -835,11 +878,12 @@
         gTokens.add(g);
 
         var ch = charById(t.charId);
-        var lbl = makeLabel(ch ? ch.name : "?", t.player === "A" ? "#bcd7ff" : "#ffc4c4", t.hp + " PV");
-        lbl.position.set(0, 1.15, 0);
-        g.add(lbl);
+        var maxHp = ch ? ch.hp : t.hp;
+        var hpBar = makeHPBar(t.player, t.hp, maxHp);
+        hpBar.position.set(0, 2.0, 0);
+        g.add(hpBar);
 
-        m = tokenMeshes[t.id] = { g: g, label: lbl, tx: p.x, tz: p.z, hp: t.hp, phase: Math.random() * 6.28, dying: false };
+        m = tokenMeshes[t.id] = { g: g, hpBar: hpBar, tx: p.x, tz: p.z, hp: t.hp, maxHp: maxHp, phase: Math.random() * 6.28, dying: false };
         return;
       }
 
@@ -848,14 +892,7 @@
 
       if (m.hp !== t.hp) {
         m.hp = t.hp;
-        var ch2 = charById(t.charId);
-        var old = m.label;
-        var nl = makeLabel(ch2 ? ch2.name : "?", t.player === "A" ? "#bcd7ff" : "#ffc4c4", t.hp + " PV");
-        nl.position.copy(old.position);
-        m.g.remove(old);
-        disposeTree(old);
-        m.g.add(nl);
-        m.label = nl;
+        updateHPBar(m.hpBar, t.hp, m.maxHp);
       }
     });
 
