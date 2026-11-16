@@ -165,7 +165,8 @@
     ad: "ad-tripo.glb",
     scrab: "scrab-tripo.glb",
     xixz: "xixz-tripo.glb",
-    cazou: "cazou-tripo.glb"
+    cazou: "cazou-tripo.glb",
+    vini: "vini-tripo.glb"
   };
 
   function ensureGLTFLoader(cb) {
