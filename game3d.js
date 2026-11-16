@@ -820,47 +820,52 @@
     return g;
   }
 
-  /* ---------------- barre de PV flottante (sur le côté, esthétique) ---------------- */
+  /* ---------------- barre de PV flottante (pixel art, fine, arrondie) ---------------- */
 
   function makeHPBar(player, hp, maxHp) {
     var group = new THREE.Group();
     var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
     var col = player === "A" ? COL.teamA : COL.teamB;
 
-    // fond (cadre sombre)
+    var barLen = 0.9;
+    var barH = 0.04;
+    var segW = 0.09; // largeur d'un segment "pixel"
+    var numSegs = 10;
+    var segGap = 0.005;
+
+    // fond (barre sombre arrondie)
     var bg = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.08, 0.9),
-      std(0x0a0e18, { roughness: 0.9, metalness: 0.1 })
+      new THREE.CylinderGeometry(barH / 2, barH / 2, barLen, 8),
+      std(0x0a0a14, { roughness: 0.9, metalness: 0.05, transparent: true, opacity: 0.85 })
     );
-    bg.position.set(0, 0, 0);
+    bg.rotation.z = Math.PI / 2;
     group.add(bg);
 
-    // bordure lumineuse
-    var border = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.02, 0.92),
-      std(col, { emissive: col, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.3, transparent: true, opacity: 0.6 })
-    );
-    border.position.set(0, 0.05, 0);
-    group.add(border);
+    // remplissage (segments "pixel")
+    var filledSegs = Math.round(numSegs * pct);
+    var startX = -barLen / 2 + segW / 2 + segGap;
+    for (var i = 0; i < filledSegs; i++) {
+      var seg = new THREE.Mesh(
+        new THREE.BoxGeometry(segW, barH, barH),
+        std(col, { emissive: col, emissiveIntensity: 0.6, roughness: 0.3 })
+      );
+      seg.position.x = startX + i * (segW + segGap);
+      seg.position.y = 0;
+      seg.position.z = 0;
+      seg.userData.isFill = true;
+      group.add(seg);
+    }
 
-    // remplissage
-    var fillH = 0.9 * pct;
-    var fill = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 0.06, fillH),
-      std(col, { emissive: col, emissiveIntensity: 0.7, roughness: 0.3 })
-    );
-    fill.position.set(0, 0, -0.45 + 0.45 * pct);
-    fill.userData.isFill = true;
-    group.add(fill);
-
-    // glow
-    var glow = new THREE.Mesh(
-      new THREE.BoxGeometry(0.13, 0.01, fillH),
-      std(col, { emissive: col, emissiveIntensity: 1.5, transparent: true, opacity: 0.4, depthWrite: false })
-    );
-    glow.position.set(0, 0.04, -0.45 + 0.45 * pct);
-    glow.userData.isGlow = true;
-    group.add(glow);
+    // glow discret
+    if (filledSegs > 0) {
+      var glow = new THREE.Mesh(
+        new THREE.CylinderGeometry(barH / 2 + 0.01, barH / 2 + 0.01, barLen * pct + 0.02, 8),
+        std(col, { emissive: col, emissiveIntensity: 1.2, transparent: true, opacity: 0.25, depthWrite: false })
+      );
+      glow.rotation.z = Math.PI / 2;
+      glow.position.z = -barLen / 2 + (barLen * pct) / 2;
+      group.add(glow);
+    }
 
     return group;
   }
@@ -868,17 +873,76 @@
   function updateHPBar(bar, hp, maxHp) {
     if (!bar) return;
     var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+    var col = null;
+    // find team color from existing fill segments
     bar.traverse(function (o) {
-      if (!o.userData) return;
-      if (o.userData.isFill) {
-        o.scale.z = pct;
-        o.position.z = -0.45 + 0.45 * pct;
-      }
-      if (o.userData.isGlow) {
-        o.scale.z = pct;
-        o.position.z = -0.45 + 0.45 * pct;
+      if (o.userData && o.userData.isFill) {
+        if (!col) col = o.material.color.getHex();
       }
     });
+    // remove old fill segments and glow
+    var toRemove = [];
+    bar.traverse(function (o) {
+      if (o.userData && (o.userData.isFill || o.userData.isGlow)) toRemove.push(o);
+      if (o.userData && o.userData.isGlow) toRemove.push(o);
+    });
+    // remove glow meshes (those without isFill but with depthWrite false)
+    var allMeshes = [];
+    bar.children.forEach(function (c) { allMeshes.push(c); });
+    allMeshes.forEach(function (c) {
+      if (c.userData && c.userData.isFill) {
+        bar.remove(c);
+        c.geometry.dispose();
+        c.material.dispose();
+      }
+    });
+    // remove glow (meshes with depthWrite false)
+    var glowMeshes = [];
+    bar.children.forEach(function (c) {
+      if (c.material && c.material.depthWrite === false) glowMeshes.push(c);
+    });
+    glowMeshes.forEach(function (c) {
+      bar.remove(c);
+      c.geometry.dispose();
+      c.material.dispose();
+    });
+
+    var barLen = 0.9;
+    var barH = 0.04;
+    var segW = 0.09;
+    var numSegs = 10;
+    var segGap = 0.005;
+    var filledSegs = Math.round(numSegs * pct);
+
+    // determine color from bar's first fill's stored color or default
+    // (color is fixed at creation, so we re-derive from player via bar.userData)
+    var player = bar.userData.player || "A";
+    col = player === "A" ? COL.teamA : COL.teamB;
+
+    var startX = -barLen / 2 + segW / 2 + segGap;
+    for (var i = 0; i < filledSegs; i++) {
+      var seg = new THREE.Mesh(
+        new THREE.BoxGeometry(segW, barH, barH),
+        std(col, { emissive: col, emissiveIntensity: 0.6, roughness: 0.3 })
+      );
+      seg.position.x = startX + i * (segW + segGap);
+      seg.position.y = 0;
+      seg.position.z = 0;
+      seg.userData.isFill = true;
+      bar.add(seg);
+    }
+
+    // glow
+    if (filledSegs > 0) {
+      var glow = new THREE.Mesh(
+        new THREE.CylinderGeometry(barH / 2 + 0.01, barH / 2 + 0.01, barLen * pct + 0.02, 8),
+        std(col, { emissive: col, emissiveIntensity: 1.2, transparent: true, opacity: 0.25, depthWrite: false })
+      );
+      glow.rotation.z = Math.PI / 2;
+      glow.position.z = -barLen / 2 + (barLen * pct) / 2;
+      glow.userData.isGlow = true;
+      bar.add(glow);
+    }
   }
 
   function syncTokens() {
@@ -901,6 +965,7 @@
         var maxHp = ch ? ch.hp : t.hp;
         var hpBar = makeHPBar(t.player, t.hp, maxHp);
         hpBar.position.set(0, 2.0, 0);
+        hpBar.userData.player = t.player;
         g.add(hpBar);
 
         m = tokenMeshes[t.id] = { g: g, hpBar: hpBar, tx: p.x, tz: p.z, hp: t.hp, maxHp: maxHp, phase: Math.random() * 6.28, dying: false };
