@@ -1652,6 +1652,8 @@
     cameraSide: cameraSide,
     get loadedModels() { return loadedModels; },
     get loadingModels() { return loadingModels; },
+    tokenAnimCount: function () { return Object.keys(tokenAnim).length; },
+    effectsCount: function () { return effects.length; },
     loadAllModels: loadAllModels,
     detectStateChanges: detectStateChanges,
     loadModel: loadModel,
