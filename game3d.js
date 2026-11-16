@@ -1654,7 +1654,6 @@
     tokenAnimCount: function () { return Object.keys(tokenAnim).length; },
     effectsCount: function () { return effects.length; },
     loadAllModels: loadAllModels,
-    detectStateChanges: detectStateChanges,
     loadModel: loadModel,
     mount: mount,
     get tokens() { return tokenMeshes; },
