@@ -227,6 +227,17 @@
       }, undefined, function (e) {
         console.error("GLB load failed for " + charId + ":", e);
         delete loadingModels[charId];
+        // fallback: remove placeholder so syncTokens creates a bottle
+        Object.keys(tokenMeshes).forEach(function (id) {
+          var m = tokenMeshes[id];
+          var tok = (typeof tokenById === "function") ? tokenById(id) : null;
+          if (tok && tok.charId === charId && m && m.isPlaceholder) {
+            gTokens.remove(m.g);
+            disposeTree(m.g);
+            delete tokenMeshes[id];
+          }
+        });
+        if (mounted) sync(true);
       });
     });
   }
@@ -983,7 +994,21 @@
       var m = tokenMeshes[t.id];
 
       if (!m) {
-        var g = makeBottle(t.charId, t.player);
+        var hasGLB = !!MODEL_MAP[t.charId];
+        var g;
+        if (hasGLB && !loadedModels[t.charId]) {
+          g = new THREE.Group();
+          var placeholder = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 8, 6),
+            std(0x888888, { emissive: 0x444444, emissiveIntensity: 0.5, transparent: true, opacity: 0.6 })
+          );
+          placeholder.position.y = 0.6;
+          placeholder.userData.isPlaceholder = true;
+          g.add(placeholder);
+          g.userData.isPlaceholder = true;
+        } else {
+          g = makeBottle(t.charId, t.player);
+        }
         g.position.set(p.x, 0, p.z);
         g.scale.setScalar(0.01);
         g.userData.spawn = 0;
@@ -996,7 +1021,7 @@
         hpBar.userData.player = t.player;
         g.add(hpBar);
 
-        m = tokenMeshes[t.id] = { g: g, hpBar: hpBar, tx: p.x, tz: p.z, hp: t.hp, maxHp: maxHp, phase: Math.random() * 6.28, dying: false };
+        m = tokenMeshes[t.id] = { g: g, hpBar: hpBar, tx: p.x, tz: p.z, hp: t.hp, maxHp: maxHp, phase: Math.random() * 6.28, dying: false, charId: t.charId, isPlaceholder: hasGLB && !loadedModels[t.charId] };
         return;
       }
 
