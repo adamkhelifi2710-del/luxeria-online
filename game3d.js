@@ -205,7 +205,7 @@
         });
         var box = new THREE.Box3().setFromObject(model);
         var size = box.getSize(new THREE.Vector3());
-        var scale = 1.5 / Math.max(size.x, size.y, size.z);
+        var scale = 1.0 / Math.max(size.x, size.y, size.z);
         model.scale.setScalar(scale);
         var box2 = new THREE.Box3().setFromObject(model);
         var c2 = box2.getCenter(new THREE.Vector3());
@@ -992,7 +992,7 @@
         var ch = charById(t.charId);
         var maxHp = ch ? ch.hp : t.hp;
         var hpBar = makeHPBar(t.player, t.hp, maxHp);
-        hpBar.position.set(0, 2.0, 0);
+        hpBar.position.set(0, 1.6, 0);
         hpBar.userData.player = t.player;
         g.add(hpBar);
 
