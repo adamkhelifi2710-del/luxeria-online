@@ -1658,6 +1658,7 @@
       }
       sync(true);
     });
+    var next = el("b3d-next");
     if (next) next.addEventListener("click", function () {
       var b = el("next-turn");
       if (b) b.click();
