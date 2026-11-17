@@ -1,5 +1,22 @@
 const STORAGE_KEY = "boardgame_tracker_v2";
 
+const VERSION_CHAMPIONS = {
+  "0.1": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga"],
+  "1.0": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum"],
+  "1.x": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum", "rapido", "betta", "fakie", "guard", "ranium"]
+};
+
+let gameVersion = localStorage.getItem("luxeria.gameVersion") || "1.x";
+
+function isChampionAvailable(id) {
+  const list = VERSION_CHAMPIONS[gameVersion] || VERSION_CHAMPIONS["1.x"];
+  return list.indexOf(id) !== -1;
+}
+
+function availableCharacters() {
+  return GAME.characters.filter((c) => isChampionAvailable(c.id));
+}
+
 let state = load();
 let selectedTokenId = null;
 let reachable = [];
@@ -299,6 +316,7 @@ loadUserMapsIntoGame();
 function defaultState() {
   return {
     mapName: GAME.activeMap,
+    gameVersion: gameVersion,
     decks: { A: [], B: [] },
     starters: { A: [], B: [] },
     reserve: { A: [], B: [] },
@@ -424,6 +442,7 @@ function load() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.decks) {
         if (parsed.mapName && GAME.maps[parsed.mapName]) setActiveMap(parsed.mapName);
+      if (parsed.gameVersion && VERSION_CHAMPIONS[parsed.gameVersion]) gameVersion = parsed.gameVersion;
         parsed.walls = parsed.walls || [];
         parsed.arkWalls = (parsed.arkWalls || []).map((w) => (typeof w === "string" ? { key: w, hp: 1 } : w));
         parsed.guardZones = parsed.guardZones || [];
@@ -532,7 +551,7 @@ function randomTeam(size, exclude) {
   const team = [];
   for (const role of roles) {
     if (team.length >= size) break;
-    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id));
+    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id) && isChampionAvailable(c.id));
     if (!pool.length) continue;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     team.push(pick.id);
@@ -558,17 +577,33 @@ function openPlayMode() {
   aiMode = false;
   askChoicePrompt({
     icon: "🎮",
-    title: "Nouvelle partie",
-    text: "Choisissez le mode de jeu.",
-    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
-    cancel: "Annuler",
+    title: "Version du jeu",
+    text: "Choisissez la version.",
+    hint: "Choisissez la version du jeu.",
+    cancel: null,
     options: [
-      { label: "🎯 Mode Objectif", value: "classic" },
-      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
     ]
-  }).then((mode) => {
-    if (!mode) { showHome(); return; }
-    askSelectionMethod(mode);
+  }).then((ver) => {
+    if (!ver) { openPlayMode(); return; }
+    gameVersion = ver;
+    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
+    askChoicePrompt({
+      icon: "🎮",
+      title: "Nouvelle partie",
+      text: "Choisissez le mode de jeu.",
+      hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
+      cancel: "Annuler",
+      options: [
+        { label: "🎯 Mode Objectif", value: "classic" },
+        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+      ]
+    }).then((mode) => {
+      if (!mode) { showHome(); return; }
+      askSelectionMethod(mode);
+    });
   });
 }
 
@@ -1219,7 +1254,7 @@ function renderLibrary() {
   const q = libSearch.value.toLowerCase();
   const r = libRole.value;
   const chars = GAME.characters.filter(
-    (c) => (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
+    (c) => isChampionAvailable(c.id) && (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
   );
   if (!chars.length) {
     list.innerHTML = '<p class="empty-msg">Aucun Champion.</p>';
@@ -1366,7 +1401,7 @@ function askChoicePrompt(opts) {
   if (o.icon) askDialog.querySelector(".ask-icon").textContent = o.icon;
   askYes.style.display = "none";
   askNo.textContent = o.cancel || "Annuler";
-  askNo.style.display = "";
+  askNo.style.display = o.cancel ? "" : "none";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   (o.options || []).forEach((opt) => {
@@ -1450,7 +1485,7 @@ function openCalixTypeDialog(tokenId, avail) {
   askDialog.querySelector(".ask-icon").textContent = "🧱";
   askYes.style.display = "none";
   askNo.textContent = "Annuler";
-  askNo.style.display = "";
+  askNo.style.display = o.cancel ? "" : "none";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   avail.forEach((t) => {
@@ -5829,6 +5864,7 @@ function lanOnState(snap) {
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.activeMap !== mapName) setActiveMap(mapName);
   state = snap;
+  if (state && state.gameVersion && VERSION_CHAMPIONS[state.gameVersion]) gameVersion = state.gameVersion;
   pendingAbility = pendAb || null;
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
@@ -6104,7 +6140,7 @@ function onlineOnMessage(ev) {
       onlinePeerLeft();
       return;
     case "setup":
-      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method);
+      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method, msg.gameVersion);
       return;
     case "draft-pick":
       if (lanRole === "host") onlineHostDraftPick(msg.charId);
@@ -6203,7 +6239,7 @@ function onlineHostChooseMap() {
         state.decks = { A: [], B: [] };
         buildMode = null;
         undoStack = [];
-        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal });
+        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal, gameVersion: gameVersion });
         onlineInitMethod(methodVal, "host");
       });
     });
@@ -6324,15 +6360,17 @@ function onlineDraftFinishHost() {
   }
 }
 
-function onlineClientSetup(mapName, mapData, mode, method) {
+function onlineClientSetup(mapName, mapData, mode, method, gv) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
   onlineHideWaiting();
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.maps[mapName]) setActiveMap(mapName);
+  if (gv && VERSION_CHAMPIONS[gv]) { gameVersion = gv; try { localStorage.setItem("luxeria.gameVersion", gv); } catch (e) {} }
   state = defaultState();
   state.mode = mode === "rampage" ? "rampage" : "classic";
+  state.gameVersion = gv || gameVersion;
   state.decks = { A: [], B: [] };
   buildMode = null;
   undoStack = [];
@@ -7850,7 +7888,7 @@ function aiPickTeam(pool, size, rolePool) {
 
 function aiBuildTeamB() {
   const taken = state.decks.A || [];
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
   state.decks.B = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
   buildMode = null;
   save();
@@ -7999,7 +8037,7 @@ function aiSetupGame(mapId, mode, method) {
    pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties.
    `aiPickTeam` ajoute, dans ~45 % des cas, l'une de ses paires signature. */
 function aiChooseTeamAgainst(taken) {
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
   return aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
 }
 
