@@ -544,12 +544,12 @@ function openPlayMode() {
     icon: "🎮",
     title: "Version du jeu",
     text: "Choisissez la version.",
-    hint: "V0.1 : 10 champions. V1 : 15 champions. V1.X : 20 champions (tous).",
+    hint: "Choisissez la version du jeu.",
     cancel: "Annuler",
     options: [
-      { label: "V0.1 (10 champions)", value: "0.1" },
-      { label: "V1 (15 champions)", value: "1.0" },
-      { label: "V1.X (20 champions)", value: "1.x" }
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
     ]
   }).then((ver) => {
     if (!ver) { showHome(); return; }
@@ -6183,60 +6183,78 @@ function onlineOnMatched(role) {
   }
 }
 
-function onlineHostChooseMap() {
+﻿function onlineHostChooseMap() {
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) { onlineAbort("Aucun terrain disponible."); return; }
   askChoicePrompt({
     icon: "🌐",
-    title: "Mode de jeu en ligne",
-    text: "Choisissez le mode de la partie.",
+    title: "Version du jeu",
+    text: "Choisissez la version.",
+    hint: "Choisissez la version du jeu.",
     cancel: "Quitter la partie",
     options: [
-      { label: "Mode normal", value: "classic" },
-      { label: "💥 Rampage (3c3)", value: "rampage" }
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
     ]
-  }).then((modeVal) => {
+  }).then((ver) => {
     if (!onlineMode) return;
-    if (!modeVal) { onlineAbort("Partie annulée."); return; }
-    const mode = modeVal === "rampage" ? "rampage" : "classic";
-    const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
-    options.push({ label: "🎲 Au hasard", value: "__random__" });
+    if (!ver) { onlineAbort("Partie annulee."); return; }
+    gameVersion = ver;
+    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
     askChoicePrompt({
       icon: "🌐",
-      title: "Terrain en ligne",
-      text: mode === "rampage"
-        ? "Rampage (3c3, sans réserve ni objectif). Choisissez le terrain."
-        : "Choisissez le terrain de la partie.",
+      title: "Mode de jeu en ligne",
+      text: "Choisissez le mode de la partie.",
       cancel: "Quitter la partie",
-      options
-    }).then((val) => {
+      options: [
+        { label: "Mode normal", value: "classic" },
+        { label: "Rampage (3c3)", value: "rampage" }
+      ]
+    }).then((modeVal) => {
       if (!onlineMode) return;
-      if (!val) { onlineAbort("Partie annulée."); return; }
-      let id = val;
-      if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
+      if (!modeVal) { onlineAbort("Partie annulee."); return; }
+      const mode = modeVal === "rampage" ? "rampage" : "classic";
+      const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
+      options.push({ label: "Au hasard", value: "__random__" });
       askChoicePrompt({
-        icon: "🧩",
-        title: "Sélection des champions",
+        icon: "🌐",
+        title: "Terrain en ligne",
         text: mode === "rampage"
-          ? "Rampage : 3 champions de 3 classes différentes."
-          : "Mode normal : 5 champions, un par classe.",
+          ? "Rampage (3c3, sans reserve ni objectif). Choisissez le terrain."
+          : "Choisissez le terrain de la partie.",
         cancel: "Quitter la partie",
-        options: [
-          { label: "🔁 Tour par tour (draft)", value: "draft" },
-          { label: "🎲 Aléatoire", value: "random" },
-          { label: "✍️ Composition libre", value: "free" }
-        ]
-      }).then((methodVal) => {
+        options
+      }).then((val) => {
         if (!onlineMode) return;
-        if (!methodVal) { onlineAbort("Partie annulée."); return; }
-        setActiveMap(id);
-        state = defaultState();
-        state.mode = mode;
-        state.decks = { A: [], B: [] };
-        buildMode = null;
-        undoStack = [];
-        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal, gameVersion: gameVersion });
-        onlineInitMethod(methodVal, "host");
+        if (!val) { onlineAbort("Partie annulee."); return; }
+        let id = val;
+        if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
+        askChoicePrompt({
+          icon: "🧩",
+          title: "Selection des champions",
+          text: mode === "rampage"
+            ? "Rampage : 3 champions de 3 classes differentes."
+            : "Mode normal : 5 champions, un par classe.",
+          cancel: "Quitter la partie",
+          options: [
+            { label: "Tour par tour (draft)", value: "draft" },
+            { label: "Aleatoire", value: "random" },
+            { label: "Composition libre", value: "free" }
+          ]
+        }).then((methodVal) => {
+          if (!onlineMode) return;
+          if (!methodVal) { onlineAbort("Partie annulee."); return; }
+          setActiveMap(id);
+          state = defaultState();
+          state.mode = mode;
+          state.gameVersion = gameVersion;
+          state.decks = { A: [], B: [] };
+          buildMode = null;
+          undoStack = [];
+          onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal, gameVersion: gameVersion });
+          onlineInitMethod(methodVal, "host");
+        });
       });
     });
   });
@@ -7907,32 +7925,48 @@ function aiOpenMode() {
   aiMode = false;
   askChoicePrompt({
     icon: "🤖",
-    title: "Jouer contre l'IA",
-    text: "Choisissez la difficulté de l'ordinateur.",
-    hint: "Facile : impulsif · Normal : solide · Difficile : tactique · Expert : anticipe vos ripostes.",
+    title: "Version du jeu",
+    text: "Choisissez la version.",
+    hint: "Choisissez la version du jeu.",
     cancel: "Annuler",
     options: [
-      { label: "😌 Facile", value: "facile" },
-      { label: "🙂 Normal", value: "normal" },
-      { label: "😈 Difficile", value: "difficile" },
-      { label: "🔥 Expert", value: "expert" }
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
     ]
-  }).then((d) => {
-    if (!d) { showHome(); return; }
-    aiDifficulty = d;
+  }).then((ver) => {
+    if (!ver) { showHome(); return; }
+    gameVersion = ver;
+    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
     askChoicePrompt({
-      icon: "🎮",
-      title: "Mode de jeu",
-      text: "Choisissez le mode face à l'IA.",
-      hint: "Objectif : 5 champions, détruisez l'objectif adverse. Rampage : 3c3, éliminez tout.",
+      icon: "🤖",
+      title: "Jouer contre l'IA",
+      text: "Choisissez la difficulté de l'ordinateur.",
+      hint: "Facile : impulsif · Normal : solide · Difficile : tactique · Expert : anticipe vos ripostes.",
       cancel: "Annuler",
       options: [
-        { label: "🎯 Mode Objectif", value: "classic" },
-        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+        { label: "😌 Facile", value: "facile" },
+        { label: "🙂 Normal", value: "normal" },
+        { label: "😈 Difficile", value: "difficile" },
+        { label: "🔥 Expert", value: "expert" }
       ]
-    }).then((mode) => {
-      if (!mode) { showHome(); return; }
-      askSelectionMethodAI(mode);
+    }).then((d) => {
+      if (!d) { showHome(); return; }
+      aiDifficulty = d;
+      askChoicePrompt({
+        icon: "🎮",
+        title: "Mode de jeu",
+        text: "Choisissez le mode face à l'IA.",
+        hint: "Objectif : 5 champions, détruisez l'objectif adverse. Rampage : 3c3, éliminez tout.",
+        cancel: "Annuler",
+        options: [
+          { label: "🎯 Mode Objectif", value: "classic" },
+          { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+        ]
+      }).then((mode) => {
+        if (!mode) { showHome(); return; }
+        askSelectionMethodAI(mode);
+      });
     });
   });
 }
