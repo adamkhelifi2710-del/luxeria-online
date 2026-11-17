@@ -554,8 +554,7 @@ function openPlayMode() {
   }).then((ver) => {
     if (!ver) { openPlayMode(); return; }
     gameVersion = ver;
-    try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
-    updateVersionButton();
+    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
     askChoicePrompt({
       icon: "🎮",
       title: "Nouvelle partie",
@@ -5461,31 +5460,6 @@ document.getElementById("home-play").addEventListener("click", () => {
   openPlayMode();
 });
 
-document.getElementById("home-version").addEventListener("click", () => {
-  askChoicePrompt({
-    icon: "🎮",
-    title: "Version du jeu",
-    text: "Choisissez la version.",
-    hint: "Choisissez la version du jeu.",
-    cancel: "Annuler",
-    options: [
-      { label: "V0.1", value: "0.1" },
-      { label: "V1", value: "1.0" },
-      { label: "V1.X", value: "1.x" }
-    ]
-  }).then((ver) => {
-    if (!ver) return;
-    gameVersion = ver;
-    try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
-    updateVersionButton();
-  });
-});
-
-function updateVersionButton() {
-  const btn = document.getElementById("home-version");
-  if (btn) btn.textContent = "Version du jeu : " + gameVersion.toUpperCase();
-}
-
 document.getElementById("home-create").addEventListener("click", () => {
   hideHome();
   document.querySelector('[data-tab="maps"]').click();
@@ -6210,27 +6184,6 @@ function onlineOnMatched(role) {
 }
 
 function onlineHostChooseMap() {
-  if (!localStorage.getItem("luxeria.versionChosen")) {
-    askChoicePrompt({
-      icon: "🎮",
-      title: "Version du jeu",
-      text: "Choisissez la version.",
-      hint: "Choisissez la version du jeu.",
-      cancel: null,
-      options: [
-        { label: "V0.1", value: "0.1" },
-        { label: "V1", value: "1.0" },
-        { label: "V1.X", value: "1.x" }
-      ]
-    }).then((ver) => {
-      if (!ver) ver = "1.x";
-      gameVersion = ver;
-      try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
-      updateVersionButton();
-      onlineHostChooseMap();
-    });
-    return;
-  }
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) { onlineAbort("Aucun terrain disponible."); return; }
   askChoicePrompt({
@@ -7952,27 +7905,6 @@ function aiPickStartersInDialog() {
 /* ---------- Menu IA ---------- */
 
 function aiOpenMode() {
-  if (!localStorage.getItem("luxeria.versionChosen")) {
-    askChoicePrompt({
-      icon: "🎮",
-      title: "Version du jeu",
-      text: "Choisissez la version.",
-      hint: "Choisissez la version du jeu.",
-      cancel: null,
-      options: [
-        { label: "V0.1", value: "0.1" },
-        { label: "V1", value: "1.0" },
-        { label: "V1.X", value: "1.x" }
-      ]
-    }).then((ver) => {
-      if (!ver) ver = "1.x";
-      gameVersion = ver;
-      try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
-      updateVersionButton();
-      aiOpenMode();
-    });
-    return;
-  }
   aiMode = false;
   askChoicePrompt({
     icon: "🤖",
@@ -8428,9 +8360,4 @@ if (document.readyState !== "loading") {
 }
 
 /* ---------- Choix de version au démarrage ---------- */
-(function initVersionChoice() {
-  function updateBtn() { updateVersionButton(); }
-  if (localStorage.getItem("luxeria.versionChosen")) {
-    setTimeout(updateBtn, 0);
-  }
-})();
+
