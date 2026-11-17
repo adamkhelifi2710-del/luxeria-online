@@ -542,31 +542,48 @@ function openPlayMode() {
   aiMode = false;
   askChoicePrompt({
     icon: "🎮",
-    title: "Nouvelle partie",
-    text: "Choisissez le mode de jeu.",
-    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
-    cancel: "Annuler",
+    title: "Version du jeu",
+    text: "Choisissez la version.",
+    hint: "Choisissez la version du jeu.",
+    cancel: null,
     options: [
-      { label: "🎯 Mode Objectif", value: "classic" },
-      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
     ]
-  }).then((mode) => {
-    if (!mode) { showHome(); return; }
+  }).then((ver) => {
+    if (!ver) { openPlayMode(); return; }
+    gameVersion = ver;
+    try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
+    updateVersionButton();
     askChoicePrompt({
-      icon: "⏱️",
-      title: "Vitesse de jeu",
-      text: "Choisissez le temps par tour.",
-      hint: "Débutant : 30 s par tour. Expert : 15 s par tour.",
+      icon: "🎮",
+      title: "Nouvelle partie",
+      text: "Choisissez le mode de jeu.",
+      hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
       cancel: "Annuler",
       options: [
-        { label: "🐢 Débutant (30 s)", value: "30" },
-        { label: "⚡ Expert (15 s)", value: "15" }
+        { label: "🎯 Mode Objectif", value: "classic" },
+        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
       ]
-    }).then((timerVal) => {
-      if (timerVal === null || timerVal === undefined) { showHome(); return; }
-      turnTimerDuration = parseInt(timerVal, 10) || 15;
-      timerStopped = false;
-      askSelectionMethod(mode);
+    }).then((mode) => {
+      if (!mode) { showHome(); return; }
+      askChoicePrompt({
+        icon: "⏱️",
+        title: "Vitesse de jeu",
+        text: "Choisissez le temps par tour.",
+        hint: "Débutant : 30 s par tour. Expert : 15 s par tour.",
+        cancel: "Annuler",
+        options: [
+          { label: "🐢 Débutant (30 s)", value: "30" },
+          { label: "⚡ Expert (15 s)", value: "15" }
+        ]
+      }).then((timerVal) => {
+        if (timerVal === null || timerVal === undefined) { showHome(); return; }
+        turnTimerDuration = parseInt(timerVal, 10) || 15;
+        timerStopped = false;
+        askSelectionMethod(mode);
+      });
     });
   });
 }
@@ -1363,7 +1380,7 @@ function askChoicePrompt(opts) {
   if (o.icon) askDialog.querySelector(".ask-icon").textContent = o.icon;
   askYes.style.display = "none";
   askNo.textContent = o.cancel || "Annuler";
-  askNo.style.display = "";
+  askNo.style.display = o.cancel ? "" : "none";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   (o.options || []).forEach((opt) => {
@@ -6193,6 +6210,27 @@ function onlineOnMatched(role) {
 }
 
 function onlineHostChooseMap() {
+  if (!localStorage.getItem("luxeria.versionChosen")) {
+    askChoicePrompt({
+      icon: "🎮",
+      title: "Version du jeu",
+      text: "Choisissez la version.",
+      hint: "Choisissez la version du jeu.",
+      cancel: null,
+      options: [
+        { label: "V0.1", value: "0.1" },
+        { label: "V1", value: "1.0" },
+        { label: "V1.X", value: "1.x" }
+      ]
+    }).then((ver) => {
+      if (!ver) ver = "1.x";
+      gameVersion = ver;
+      try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
+      updateVersionButton();
+      onlineHostChooseMap();
+    });
+    return;
+  }
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   if (!ids.length) { onlineAbort("Aucun terrain disponible."); return; }
   askChoicePrompt({
@@ -7914,6 +7952,27 @@ function aiPickStartersInDialog() {
 /* ---------- Menu IA ---------- */
 
 function aiOpenMode() {
+  if (!localStorage.getItem("luxeria.versionChosen")) {
+    askChoicePrompt({
+      icon: "🎮",
+      title: "Version du jeu",
+      text: "Choisissez la version.",
+      hint: "Choisissez la version du jeu.",
+      cancel: null,
+      options: [
+        { label: "V0.1", value: "0.1" },
+        { label: "V1", value: "1.0" },
+        { label: "V1.X", value: "1.x" }
+      ]
+    }).then((ver) => {
+      if (!ver) ver = "1.x";
+      gameVersion = ver;
+      try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
+      updateVersionButton();
+      aiOpenMode();
+    });
+    return;
+  }
   aiMode = false;
   askChoicePrompt({
     icon: "🤖",
@@ -8370,28 +8429,8 @@ if (document.readyState !== "loading") {
 
 /* ---------- Choix de version au démarrage ---------- */
 (function initVersionChoice() {
-  function prompt() {
-    askChoicePrompt({
-      icon: "🎮",
-      title: "Version du jeu",
-      text: "Choisissez la version.",
-      hint: "Choisissez la version du jeu.",
-      cancel: null,
-      options: [
-        { label: "V0.1", value: "0.1" },
-        { label: "V1", value: "1.0" },
-        { label: "V1.X", value: "1.x" }
-      ]
-    }).then((ver) => {
-      if (!ver) ver = "1.x";
-      gameVersion = ver;
-      try { localStorage.setItem("luxeria.gameVersion", ver); localStorage.setItem("luxeria.versionChosen", "1"); } catch (e) {}
-      updateVersionButton();
-    });
-  }
-  if (!localStorage.getItem("luxeria.versionChosen")) {
-    setTimeout(prompt, 400);
-  } else {
-    setTimeout(updateVersionButton, 0);
+  function updateBtn() { updateVersionButton(); }
+  if (localStorage.getItem("luxeria.versionChosen")) {
+    setTimeout(updateBtn, 0);
   }
 })();
