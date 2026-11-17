@@ -1,25 +1,9 @@
-const VERSION_CHAMPIONS = {
-  "0.1": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga"],
-  "1.0": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum"],
-  "1.x": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum", "rapido", "betta", "fakie", "guard", "ranium"]
-};
-
-let gameVersion = localStorage.getItem("luxeria.gameVersion") || "1.x";
-
-function isChampionAvailable(id) {
-  const list = VERSION_CHAMPIONS[gameVersion] || VERSION_CHAMPIONS["1.x"];
-  return list.indexOf(id) !== -1;
-}
-
-function availableCharacters() {
-  return GAME.characters.filter((c) => isChampionAvailable(c.id));
-}
+const STORAGE_KEY = "boardgame_tracker_v2";
 
 let state = load();
 let selectedTokenId = null;
 let reachable = [];
 let attackCells = [];
-let abilityCells = []; // cases ciblables par la capacité en cours (ex: cazou)
 let pendingAbility = null;
 let pendingSpawn = null;
 /* Choix du remplaçant en cours (le propriétaire du champion éliminé choisit).
@@ -67,8 +51,6 @@ let turnTimerInterval = null;
 let turnTimerTimeout = null;
 let turnToastTimeout = null;
 let turnTimerRemaining = 0;
-let turnTimerDuration = 15; // secondes par tour (15 = expert, 30 = débutant, 0 = sans chrono)
-let timerStopped = false; // true si l'utilisateur a arrêté le chrono manuellement
 
 function emptyFx() {
   return { hits: [], deaths: [], heals: [], abilities: [], casters: [], entered: [], cellFx: [] };
@@ -317,7 +299,6 @@ loadUserMapsIntoGame();
 function defaultState() {
   return {
     mapName: GAME.activeMap,
-    gameVersion: gameVersion,
     decks: { A: [], B: [] },
     starters: { A: [], B: [] },
     reserve: { A: [], B: [] },
@@ -380,6 +361,42 @@ function undoLast() {
   if (lanMode && lanRole === "client") return;
   if (busy) return;
   if (aiBlocksInput()) return;
+  /* Annulation pendant le draft : retire le dernier champion choisi. */
+  if (buildMode && buildMode.draft && buildMode.draftHistory && buildMode.draftHistory.length) {
+    const last = buildMode.draftHistory.pop();
+    const idx = state.decks[last.player].lastIndexOf(last.charId);
+    if (idx >= 0) state.decks[last.player].splice(idx, 1);
+    buildMode.pickCount = last.prevPickCount;
+    buildMode.player = last.prevPlayer;
+    save();
+    renderLibrary();
+    renderDecks();
+    return;
+  }
+  /* Annulation pendant la sélection des titulaires : déselectionne le dernier chip. */
+  const starterDlg = document.getElementById("starter-dialog");
+  if (starterDlg && starterDlg.open && window._starterPickHistory && window._starterPickHistory.length) {
+    const last = window._starterPickHistory.pop();
+    if (last && last.classList.contains("picked")) last.classList.remove("picked");
+    const confirmBtn = document.getElementById("starter-confirm");
+    if (confirmBtn) {
+      const n = document.querySelectorAll(".starter-chip.picked").length;
+      confirmBtn.disabled = n !== 3;
+    }
+    return;
+  }
+  /* Annulation pendant la construction (non-draft) : retire le dernier champion ajouté. */
+  if (buildMode && !buildMode.draft) {
+    const cur = buildMode.player;
+    const deck = state.decks[cur];
+    if (deck && deck.length) {
+      deck.pop();
+      save();
+      renderDecks();
+      renderLibrary();
+      return;
+    }
+  }
   if (!undoStack.length) {
     alert("Rien à annuler.");
     return;
@@ -407,7 +424,6 @@ function load() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.decks) {
         if (parsed.mapName && GAME.maps[parsed.mapName]) setActiveMap(parsed.mapName);
-        if (parsed.gameVersion && VERSION_CHAMPIONS[parsed.gameVersion]) gameVersion = parsed.gameVersion;
         parsed.walls = parsed.walls || [];
         parsed.arkWalls = (parsed.arkWalls || []).map((w) => (typeof w === "string" ? { key: w, hp: 1 } : w));
         parsed.guardZones = parsed.guardZones || [];
@@ -516,7 +532,7 @@ function randomTeam(size, exclude) {
   const team = [];
   for (const role of roles) {
     if (team.length >= size) break;
-    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id) && isChampionAvailable(c.id));
+    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id));
     if (!pool.length) continue;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     team.push(pick.id);
@@ -542,48 +558,17 @@ function openPlayMode() {
   aiMode = false;
   askChoicePrompt({
     icon: "🎮",
-    title: "Version du jeu",
-    text: "Choisissez la version.",
-    hint: "Choisissez la version du jeu.",
-    cancel: null,
+    title: "Nouvelle partie",
+    text: "Choisissez le mode de jeu.",
+    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
+    cancel: "Annuler",
     options: [
-      { label: "V0.1", value: "0.1" },
-      { label: "V1", value: "1.0" },
-      { label: "V1.X", value: "1.x" }
+      { label: "🎯 Mode Objectif", value: "classic" },
+      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
     ]
-  }).then((ver) => {
-    if (!ver) { openPlayMode(); return; }
-    gameVersion = ver;
-    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
-    askChoicePrompt({
-      icon: "🎮",
-      title: "Nouvelle partie",
-      text: "Choisissez le mode de jeu.",
-      hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
-      cancel: "Annuler",
-      options: [
-        { label: "🎯 Mode Objectif", value: "classic" },
-        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
-      ]
-    }).then((mode) => {
-      if (!mode) { showHome(); return; }
-      askChoicePrompt({
-        icon: "⏱️",
-        title: "Vitesse de jeu",
-        text: "Choisissez le temps par tour.",
-        hint: "Débutant : 30 s par tour. Expert : 15 s par tour.",
-        cancel: "Annuler",
-        options: [
-          { label: "🐢 Débutant (30 s)", value: "30" },
-          { label: "⚡ Expert (15 s)", value: "15" }
-        ]
-      }).then((timerVal) => {
-        if (timerVal === null || timerVal === undefined) { showHome(); return; }
-        turnTimerDuration = parseInt(timerVal, 10) || 15;
-        timerStopped = false;
-        askSelectionMethod(mode);
-      });
-    });
+  }).then((mode) => {
+    if (!mode) { showHome(); return; }
+    askSelectionMethod(mode);
   });
 }
 
@@ -836,6 +821,8 @@ function draftPick(charId) {
     return;
   }
   state.decks[cur].push(charId);
+  buildMode.draftHistory = buildMode.draftHistory || [];
+  buildMode.draftHistory.push({ player: cur, charId, prevPlayer: buildMode.player, prevPickCount: buildMode.pickCount });
   save();
   if (onlineMode) { onlineDraftAfterPick(); return; }
   afterDraftPickLocal();
@@ -1232,7 +1219,7 @@ function renderLibrary() {
   const q = libSearch.value.toLowerCase();
   const r = libRole.value;
   const chars = GAME.characters.filter(
-    (c) => isChampionAvailable(c.id) && (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
+    (c) => (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
   );
   if (!chars.length) {
     list.innerHTML = '<p class="empty-msg">Aucun Champion.</p>';
@@ -1379,7 +1366,7 @@ function askChoicePrompt(opts) {
   if (o.icon) askDialog.querySelector(".ask-icon").textContent = o.icon;
   askYes.style.display = "none";
   askNo.textContent = o.cancel || "Annuler";
-  askNo.style.display = o.cancel ? "" : "none";
+  askNo.style.display = "";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   (o.options || []).forEach((opt) => {
@@ -1612,7 +1599,6 @@ function startGame() {
   state.swapCd = { A: 0, B: 0 };
   state.activatedTokenId = null;
   state.winner = null;
-  timerStopped = false;
   if (!isRampage()) {
     ["A", "B"].forEach((player) => {
       const inReserve = state.decks[player].filter((id) => !state.starters[player].includes(id));
@@ -1629,7 +1615,6 @@ function startGame() {
   selectedTokenId = null;
     reachable = [];
     attackCells = [];
-    abilityCells = [];
     pendingAbility = null;
     pendingSpawn = null;
     pendingReplaceChoice = null;
@@ -1746,7 +1731,6 @@ function renderBoard() {
 
   const reachSet = new Set(reachable.map(([x, y]) => `${x},${y}`));
   const atkSet = new Set(attackCells.map(([x, y]) => `${x},${y}`));
-  const abilitySet = new Set((abilityCells || []).map(([x, y]) => `${x},${y}`));
   const dangerSet = dangerCellSet();
 
   const selTok = tokenById(selectedTokenId);
@@ -1992,7 +1976,6 @@ if (x === o.x && y === o.y) {
 
       if (reachSet.has(`${x},${y}`)) cell.classList.add("reachable");
       if (atkSet.has(`${x},${y}`)) cell.classList.add("attackable");
-      if (abilitySet.has(`${x},${y}`)) cell.classList.add("ability-target");
       if (scrabTok && inScrabGelZone(scrabTok.x, scrabTok.y, x, y)) cell.classList.add("scrab-zone");
       if (scrabTargetSet.has(`${x},${y}`)) cell.classList.add("scrab-target");
       if (jayAura.has(`${x},${y}`)) cell.classList.add("jay-aura");
@@ -2825,7 +2808,6 @@ function selectToken(id) {
   } else {
     reachable = [];
     attackCells = [];
-    abilityCells = [];
   }
   pendingAbility = null;
   renderBoard();
@@ -3197,6 +3179,7 @@ function fireAt(tok, x, y, staying) {
 /* Soins uniquement sur la case où le champion s'arrête (case soin du terrain et
    case soin posée par KOGA ou CALIX). Le feu, lui, se compte par case traversée. */
 function healCellKindAt(x, y) {
+  if (isBurned(x, y)) return false;
   if (isHealCell(x, y)) return true;
   const sp = specialCellAt(x, y);
   return !!sp && sp.type === "heal";
@@ -3205,10 +3188,16 @@ function healCellKindAt(x, y) {
 function healCellOnStop(tok) {
   if (!tok || tok.dead || tok.healCellUsed) return;
   const max = charById(tok.charId).hp;
-  if (tok.hp >= max) return;
   const sp = specialCellAt(tok.x, tok.y);
   const isSpecial = !!sp && sp.type === "heal";
   if (!isSpecial && !isHealCell(tok.x, tok.y)) return;
+  /* Case de soin dans la zone de feu : plus de soin, mais le poison est dissipé. */
+  if (isBurned(tok.x, tok.y)) {
+    if (tok.poison > 0) clearPoison(tok, "case soin (brûlée)");
+    tok.healCellUsed = true;
+    return;
+  }
+  if (tok.hp >= max) return;
   if (healToken(tok, 1, "case soin") > 0) {
     tok.healCellUsed = true;
     fxHeal(tok.id, 1);
@@ -3344,7 +3333,6 @@ if (target.hp <= 0 && !target.dead) {
       selectedTokenId = null;
       reachable = [];
       attackCells = [];
-    abilityCells = [];
     }
     fxDeath(target.id);
     log(`${charById(target.charId).name} (${target.player}) est éliminé.`);
@@ -3926,13 +3914,6 @@ async function useAbility(tokenId) {
         renderBoard();
         return;
       }
-      const inRange = enemies.filter((t) => cazouInRange5(tok, t));
-      if (!inRange.length) {
-        alert("Aucun champion adverse dans la portée de CAZOU (zone 5×5).");
-        renderBoard();
-        return;
-      }
-      abilityCells = inRange.map((t) => [t.x, t.y]);
       log("Cliquez d'abord le champion adverse à manipuler, puis la case libre où le déposer.");
       tok.cd = 6;
       fxAbility(tok.id);
@@ -4054,7 +4035,6 @@ async function useAbility(tokenId) {
             selectedTokenId = null;
             reachable = [];
             attackCells = [];
-    abilityCells = [];
           }
           fxDeath(tok.id);
           log("SE7EN est éliminé par son propre dé.");
@@ -4586,14 +4566,6 @@ async function resolvePendingOnCell(x, y) {
 
 /* ---------- Tour ---------- */
 
-/* Bouton pour arrêter le chrono manuellement. */
-document.getElementById("stop-timer").addEventListener("click", () => {
-  timerStopped = true;
-  stopTurnTimer();
-  const btn = document.getElementById("stop-timer");
-  if (btn) btn.textContent = "⏸ Chrono arrêté";
-});
-
 document.getElementById("next-turn").addEventListener("click", () => {
   if (busy) return;
   if (aiBlocksInput()) return;
@@ -4606,11 +4578,6 @@ document.getElementById("next-turn").addEventListener("click", () => {
     return;
   }
   pushUndo();
-  timerStopped = false;
-  const stopBtn = document.getElementById("stop-timer");
-  if (stopBtn) stopBtn.textContent = "⏸ Stop chrono";
-  attackCells = [];
-  abilityCells = [];
   endPlayerTurn();
 });
 
@@ -4837,7 +4804,11 @@ function endPlayerTurn() {
           }
         }
       }
-      if (healCellKindAt(t.x, t.y) && !t.healCellUsed && t.hp < charById(t.charId).hp) {
+      /* Case de soin dans la zone de feu : plus de soin, mais le poison est dissipé. */
+      if (healCellKindAt(t.x, t.y) && isBurned(t.x, t.y) && !t.healCellUsed) {
+        if (t.poison > 0) clearPoison(t, "case soin (brûlée)");
+        t.healCellUsed = true;
+      } else if (healCellKindAt(t.x, t.y) && !t.healCellUsed && t.hp < charById(t.charId).hp && !isBurned(t.x, t.y)) {
         if (healToken(t, 1, "case soin") > 0) {
           t.healCellUsed = true;
           fxHeal(t.id, 1);
@@ -5201,7 +5172,6 @@ function commitSpawnPlacement(x, y) {
     selectedTokenId = null;
     reachable = [];
     attackCells = [];
-    abilityCells = [];
     pendingAbility = null;
     save();
     checkFire(tokenById(newId));
@@ -5321,7 +5291,6 @@ function changeHP(id, delta) {
       selectedTokenId = null;
       reachable = [];
       attackCells = [];
-    abilityCells = [];
     }
     log(`${charById(tok.charId).name} (${tok.player}) est éliminé.`);
     applyEliminationSideEffects(tok);
@@ -5860,7 +5829,6 @@ function lanOnState(snap) {
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.activeMap !== mapName) setActiveMap(mapName);
   state = snap;
-  if (state && state.gameVersion && VERSION_CHAMPIONS[state.gameVersion]) gameVersion = state.gameVersion;
   pendingAbility = pendAb || null;
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
@@ -6136,7 +6104,7 @@ function onlineOnMessage(ev) {
       onlinePeerLeft();
       return;
     case "setup":
-      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method, msg.gameVersion);
+      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method);
       return;
     case "draft-pick":
       if (lanRole === "host") onlineHostDraftPick(msg.charId);
@@ -6197,7 +6165,7 @@ function onlineHostChooseMap() {
     ]
   }).then((modeVal) => {
     if (!onlineMode) return;
-    if (!modeVal) { onlineAbort("Partie annulee."); return; }
+    if (!modeVal) { onlineAbort("Partie annulée."); return; }
     const mode = modeVal === "rampage" ? "rampage" : "classic";
     const options = ids.map((id) => ({ label: GAME.maps[id].name, value: id }));
     options.push({ label: "🎲 Au hasard", value: "__random__" });
@@ -6205,38 +6173,37 @@ function onlineHostChooseMap() {
       icon: "🌐",
       title: "Terrain en ligne",
       text: mode === "rampage"
-        ? "Rampage (3c3, sans reserve ni objectif). Choisissez le terrain."
+        ? "Rampage (3c3, sans réserve ni objectif). Choisissez le terrain."
         : "Choisissez le terrain de la partie.",
       cancel: "Quitter la partie",
       options
     }).then((val) => {
       if (!onlineMode) return;
-      if (!val) { onlineAbort("Partie annulee."); return; }
+      if (!val) { onlineAbort("Partie annulée."); return; }
       let id = val;
       if (id === "__random__") id = ids[Math.floor(Math.random() * ids.length)];
       askChoicePrompt({
         icon: "🧩",
-        title: "Selection des champions",
+        title: "Sélection des champions",
         text: mode === "rampage"
-          ? "Rampage : 3 champions de 3 classes differentes."
+          ? "Rampage : 3 champions de 3 classes différentes."
           : "Mode normal : 5 champions, un par classe.",
         cancel: "Quitter la partie",
         options: [
-          { label: "Tour par tour (draft)", value: "draft" },
-          { label: "Aleatoire", value: "random" },
-          { label: "Composition libre", value: "free" }
+          { label: "🔁 Tour par tour (draft)", value: "draft" },
+          { label: "🎲 Aléatoire", value: "random" },
+          { label: "✍️ Composition libre", value: "free" }
         ]
       }).then((methodVal) => {
         if (!onlineMode) return;
-        if (!methodVal) { onlineAbort("Partie annulee."); return; }
+        if (!methodVal) { onlineAbort("Partie annulée."); return; }
         setActiveMap(id);
         state = defaultState();
         state.mode = mode;
-        state.gameVersion = gameVersion;
         state.decks = { A: [], B: [] };
         buildMode = null;
         undoStack = [];
-        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal, gameVersion: gameVersion });
+        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal });
         onlineInitMethod(methodVal, "host");
       });
     });
@@ -6357,17 +6324,15 @@ function onlineDraftFinishHost() {
   }
 }
 
-function onlineClientSetup(mapName, mapData, mode, method, gv) {
+function onlineClientSetup(mapName, mapData, mode, method) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
   onlineHideWaiting();
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.maps[mapName]) setActiveMap(mapName);
-  if (gv && VERSION_CHAMPIONS[gv]) { gameVersion = gv; try { localStorage.setItem("luxeria.gameVersion", gv); } catch (e) {} }
   state = defaultState();
   state.mode = mode === "rampage" ? "rampage" : "classic";
-  state.gameVersion = gv || gameVersion;
   state.decks = { A: [], B: [] };
   buildMode = null;
   undoStack = [];
@@ -6463,12 +6428,21 @@ function onlineOpenStarterPicker(team) {
     const n = content.querySelectorAll(".starter-chip.picked").length;
     confirmBtn.disabled = n !== 3;
   };
+  const starterPickHistory = [];
   content.querySelectorAll(".starter-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
+      const wasPicked = chip.classList.contains("picked");
       chip.classList.toggle("picked");
+      if (!wasPicked) starterPickHistory.push(chip);
+      else {
+        const idx = starterPickHistory.lastIndexOf(chip);
+        if (idx >= 0) starterPickHistory.splice(idx, 1);
+      }
       update();
     });
   });
+  /* Expose history for undo */
+  window._starterPickHistory = starterPickHistory;
   confirmBtn.onclick = () => {
     const picks = [];
     content.querySelectorAll(".starter-chip.picked").forEach((chip) => {
@@ -7876,7 +7850,7 @@ function aiPickTeam(pool, size, rolePool) {
 
 function aiBuildTeamB() {
   const taken = state.decks.A || [];
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
   state.decks.B = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
   buildMode = null;
   save();
@@ -8025,7 +7999,7 @@ function aiSetupGame(mapId, mode, method) {
    pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties.
    `aiPickTeam` ajoute, dans ~45 % des cas, l'une de ses paires signature. */
 function aiChooseTeamAgainst(taken) {
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
   return aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
 }
 
@@ -8094,11 +8068,9 @@ function stopTurnTimer() {
 
 function startTurnTimer(showToast) {
   stopTurnTimer();
-  if (turnTimerDuration <= 0) return; // mode sans chrono
   if (!turnTimerShouldRun()) return;
-  if (timerStopped) return; // l'utilisateur a arrêté le chrono
   const player = state.turn;
-  turnTimerRemaining = turnTimerDuration;
+  turnTimerRemaining = 15;
   if (showToast) showTurnToast("Tour du joueur " + player, player);
   const timerEl = document.getElementById("turn-timer");
   if (timerEl) {
@@ -8358,6 +8330,3 @@ if (document.readyState !== "loading") {
   if (btn) btn.addEventListener("click", playIntro);
   preloadIntroImage();
 }
-
-/* ---------- Choix de version au démarrage ---------- */
-
