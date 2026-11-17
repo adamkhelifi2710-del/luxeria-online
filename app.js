@@ -539,16 +539,15 @@ function openPlayMode() {
       icon: "⏱️",
       title: "Vitesse de jeu",
       text: "Choisissez le temps par tour.",
-      hint: "Débutant : 30 s par tour. Expert : 15 s par tour. Sans chrono : pas de limite de temps.",
+      hint: "Débutant : 30 s par tour. Expert : 15 s par tour.",
       cancel: "Annuler",
       options: [
         { label: "🐢 Débutant (30 s)", value: "30" },
-        { label: "⚡ Expert (15 s)", value: "15" },
-        { label: "♾️ Sans chrono", value: "0" }
+        { label: "⚡ Expert (15 s)", value: "15" }
       ]
     }).then((timerVal) => {
       if (timerVal === null || timerVal === undefined) { showHome(); return; }
-      turnTimerDuration = parseInt(timerVal, 10) || 0;
+      turnTimerDuration = parseInt(timerVal, 10) || 15;
       timerStopped = false;
       askSelectionMethod(mode);
     });
