@@ -7,6 +7,30 @@ const VERSION_CHAMPIONS = {
 };
 
 let gameVersion = localStorage.getItem("luxeria.gameVersion") || "1.x";
+/* Version demandée une seule fois par chargement, au clic sur JOUER. */
+let versionChosenThisLoad = false;
+
+function askVersion() {
+  versionChosenThisLoad = true;
+  return askChoicePrompt({
+    icon: "🎮",
+    title: "Version du jeu",
+    text: "Choisissez la version.",
+    hint: "Choisissez la version du jeu.",
+    cancel: null,
+    options: [
+      { label: "V0.1", value: "0.1" },
+      { label: "V1", value: "1.0" },
+      { label: "V1.X", value: "1.x" }
+    ]
+  }).then((ver) => {
+    /* Pas d'annulation : Échap ou fermeture relance la question. */
+    if (!ver) return askVersion();
+    gameVersion = ver;
+    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
+    return ver;
+  });
+}
 
 function isChampionAvailable(id) {
   const list = VERSION_CHAMPIONS[gameVersion] || VERSION_CHAMPIONS["1.x"];
@@ -575,35 +599,22 @@ function randomStarters(team) {
 
 function openPlayMode() {
   aiMode = false;
+  /* Filet de sécurité : si l'écran JOUER n'a pas été traversé, on demande
+     quand même la version (une seule fois par chargement). */
+  if (!versionChosenThisLoad) { askVersion().then(openPlayMode); return; }
   askChoicePrompt({
     icon: "🎮",
-    title: "Version du jeu",
-    text: "Choisissez la version.",
-    hint: "Choisissez la version du jeu.",
-    cancel: null,
+    title: "Nouvelle partie",
+    text: "Choisissez le mode de jeu.",
+    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
+    cancel: "Annuler",
     options: [
-      { label: "V0.1", value: "0.1" },
-      { label: "V1", value: "1.0" },
-      { label: "V1.X", value: "1.x" }
+      { label: "🎯 Mode Objectif", value: "classic" },
+      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
     ]
-  }).then((ver) => {
-    if (!ver) { openPlayMode(); return; }
-    gameVersion = ver;
-    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
-    askChoicePrompt({
-      icon: "🎮",
-      title: "Nouvelle partie",
-      text: "Choisissez le mode de jeu.",
-      hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
-      cancel: "Annuler",
-      options: [
-        { label: "🎯 Mode Objectif", value: "classic" },
-        { label: "💥 Mode Rampage (3c3)", value: "rampage" }
-      ]
-    }).then((mode) => {
-      if (!mode) { showHome(); return; }
-      askSelectionMethod(mode);
-    });
+  }).then((mode) => {
+    if (!mode) { showHome(); return; }
+    askSelectionMethod(mode);
   });
 }
 
@@ -1485,7 +1496,7 @@ function openCalixTypeDialog(tokenId, avail) {
   askDialog.querySelector(".ask-icon").textContent = "🧱";
   askYes.style.display = "none";
   askNo.textContent = "Annuler";
-  askNo.style.display = o.cancel ? "" : "none";
+  askNo.style.display = "";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   avail.forEach((t) => {
@@ -8342,6 +8353,13 @@ function playIntro() {
   if (!intro || intro.dataset.playing === "1") return;
   intro.dataset.playing = "1";
   if (btn) btn.style.pointerEvents = "none";
+  /* Choix de la version dès le clic sur JOUER, avant l'animation d'accueil. */
+  askVersion().then(() => { runIntroAnimation(); });
+}
+
+function runIntroAnimation() {
+  const intro = document.getElementById("intro-screen");
+  if (!intro) return;
   intro.classList.add("zoom-out");
   setTimeout(() => {
     intro.classList.remove("zoom-out");
