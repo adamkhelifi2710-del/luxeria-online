@@ -4,6 +4,7 @@ let state = load();
 let selectedTokenId = null;
 let reachable = [];
 let attackCells = [];
+let abilityCells = []; // cases ciblables par la capacité en cours (ex: cazou)
 let pendingAbility = null;
 let pendingSpawn = null;
 /* Choix du remplaçant en cours (le propriétaire du champion éliminé choisit).
@@ -51,6 +52,8 @@ let turnTimerInterval = null;
 let turnTimerTimeout = null;
 let turnToastTimeout = null;
 let turnTimerRemaining = 0;
+let turnTimerDuration = 15; // secondes par tour (15 = expert, 30 = débutant, 0 = sans chrono)
+let timerStopped = false; // true si l'utilisateur a arrêté le chrono manuellement
 
 function emptyFx() {
   return { hits: [], deaths: [], heals: [], abilities: [], casters: [], entered: [], cellFx: [] };
@@ -532,7 +535,23 @@ function openPlayMode() {
     ]
   }).then((mode) => {
     if (!mode) { showHome(); return; }
-    askSelectionMethod(mode);
+    askChoicePrompt({
+      icon: "⏱️",
+      title: "Vitesse de jeu",
+      text: "Choisissez le temps par tour.",
+      hint: "Débutant : 30 s par tour. Expert : 15 s par tour. Sans chrono : pas de limite de temps.",
+      cancel: "Annuler",
+      options: [
+        { label: "🐢 Débutant (30 s)", value: "30" },
+        { label: "⚡ Expert (15 s)", value: "15" },
+        { label: "♾️ Sans chrono", value: "0" }
+      ]
+    }).then((timerVal) => {
+      if (timerVal === null || timerVal === undefined) { showHome(); return; }
+      turnTimerDuration = parseInt(timerVal, 10) || 0;
+      timerStopped = false;
+      askSelectionMethod(mode);
+    });
   });
 }
 
@@ -1561,6 +1580,7 @@ function startGame() {
   state.swapCd = { A: 0, B: 0 };
   state.activatedTokenId = null;
   state.winner = null;
+  timerStopped = false;
   if (!isRampage()) {
     ["A", "B"].forEach((player) => {
       const inReserve = state.decks[player].filter((id) => !state.starters[player].includes(id));
@@ -1577,6 +1597,7 @@ function startGame() {
   selectedTokenId = null;
     reachable = [];
     attackCells = [];
+    abilityCells = [];
     pendingAbility = null;
     pendingSpawn = null;
     pendingReplaceChoice = null;
@@ -1693,6 +1714,7 @@ function renderBoard() {
 
   const reachSet = new Set(reachable.map(([x, y]) => `${x},${y}`));
   const atkSet = new Set(attackCells.map(([x, y]) => `${x},${y}`));
+  const abilitySet = new Set((abilityCells || []).map(([x, y]) => `${x},${y}`));
   const dangerSet = dangerCellSet();
 
   const selTok = tokenById(selectedTokenId);
@@ -1938,6 +1960,7 @@ if (x === o.x && y === o.y) {
 
       if (reachSet.has(`${x},${y}`)) cell.classList.add("reachable");
       if (atkSet.has(`${x},${y}`)) cell.classList.add("attackable");
+      if (abilitySet.has(`${x},${y}`)) cell.classList.add("ability-target");
       if (scrabTok && inScrabGelZone(scrabTok.x, scrabTok.y, x, y)) cell.classList.add("scrab-zone");
       if (scrabTargetSet.has(`${x},${y}`)) cell.classList.add("scrab-target");
       if (jayAura.has(`${x},${y}`)) cell.classList.add("jay-aura");
@@ -2770,6 +2793,7 @@ function selectToken(id) {
   } else {
     reachable = [];
     attackCells = [];
+    abilityCells = [];
   }
   pendingAbility = null;
   renderBoard();
@@ -3288,6 +3312,7 @@ if (target.hp <= 0 && !target.dead) {
       selectedTokenId = null;
       reachable = [];
       attackCells = [];
+    abilityCells = [];
     }
     fxDeath(target.id);
     log(`${charById(target.charId).name} (${target.player}) est éliminé.`);
@@ -3869,6 +3894,13 @@ async function useAbility(tokenId) {
         renderBoard();
         return;
       }
+      const inRange = enemies.filter((t) => cazouInRange5(tok, t));
+      if (!inRange.length) {
+        alert("Aucun champion adverse dans la portée de CAZOU (zone 5×5).");
+        renderBoard();
+        return;
+      }
+      abilityCells = inRange.map((t) => [t.x, t.y]);
       log("Cliquez d'abord le champion adverse à manipuler, puis la case libre où le déposer.");
       tok.cd = 6;
       fxAbility(tok.id);
@@ -3990,6 +4022,7 @@ async function useAbility(tokenId) {
             selectedTokenId = null;
             reachable = [];
             attackCells = [];
+    abilityCells = [];
           }
           fxDeath(tok.id);
           log("SE7EN est éliminé par son propre dé.");
@@ -4521,6 +4554,14 @@ async function resolvePendingOnCell(x, y) {
 
 /* ---------- Tour ---------- */
 
+/* Bouton pour arrêter le chrono manuellement. */
+document.getElementById("stop-timer").addEventListener("click", () => {
+  timerStopped = true;
+  stopTurnTimer();
+  const btn = document.getElementById("stop-timer");
+  if (btn) btn.textContent = "⏸ Chrono arrêté";
+});
+
 document.getElementById("next-turn").addEventListener("click", () => {
   if (busy) return;
   if (aiBlocksInput()) return;
@@ -4533,6 +4574,11 @@ document.getElementById("next-turn").addEventListener("click", () => {
     return;
   }
   pushUndo();
+  timerStopped = false;
+  const stopBtn = document.getElementById("stop-timer");
+  if (stopBtn) stopBtn.textContent = "⏸ Stop chrono";
+  attackCells = [];
+  abilityCells = [];
   endPlayerTurn();
 });
 
@@ -5123,6 +5169,7 @@ function commitSpawnPlacement(x, y) {
     selectedTokenId = null;
     reachable = [];
     attackCells = [];
+    abilityCells = [];
     pendingAbility = null;
     save();
     checkFire(tokenById(newId));
@@ -5242,6 +5289,7 @@ function changeHP(id, delta) {
       selectedTokenId = null;
       reachable = [];
       attackCells = [];
+    abilityCells = [];
     }
     log(`${charById(tok.charId).name} (${tok.player}) est éliminé.`);
     applyEliminationSideEffects(tok);
@@ -8010,9 +8058,11 @@ function stopTurnTimer() {
 
 function startTurnTimer(showToast) {
   stopTurnTimer();
+  if (turnTimerDuration <= 0) return; // mode sans chrono
   if (!turnTimerShouldRun()) return;
+  if (timerStopped) return; // l'utilisateur a arrêté le chrono
   const player = state.turn;
-  turnTimerRemaining = 15;
+  turnTimerRemaining = turnTimerDuration;
   if (showToast) showTurnToast("Tour du joueur " + player, player);
   const timerEl = document.getElementById("turn-timer");
   if (timerEl) {

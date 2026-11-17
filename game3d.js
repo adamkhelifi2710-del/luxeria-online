@@ -1048,10 +1048,11 @@
     var sel = typeof selectedTokenId !== "undefined" ? selectedTokenId : null;
     var r = (typeof reachable !== "undefined" ? reachable : []).map(function (c) { return c[0] + "," + c[1]; }).join("|");
     var a = (typeof attackCells !== "undefined" ? attackCells : []).map(function (c) { return c[0] + "," + c[1]; }).join("|");
+    var ab = (typeof abilityCells !== "undefined" ? abilityCells : []).map(function (c) { return c[0] + "," + c[1]; }).join("|");
     var h = hoverCell ? hoverCell.x + "," + hoverCell.y : "-";
     var ph = state.phase;
     var pl = ph === "placement" ? state.placingPlayer : "";
-    return sel + "#" + r + "#" + a + "#" + h + "#" + ph + pl + "#" + state.turn;
+    return sel + "#" + r + "#" + a + "#" + ab + "#" + h + "#" + ph + pl + "#" + state.turn;
   }
 
   function rebuildHighlights() {
@@ -1087,6 +1088,9 @@
       });
       (typeof attackCells !== "undefined" ? attackCells : []).forEach(function (c) {
         flat(c[0], c[1], COL.attack, 0.3, 0.121);
+      });
+      (typeof abilityCells !== "undefined" ? abilityCells : []).forEach(function (c) {
+        flat(c[0], c[1], COL.attack, 0.4, 0.122);
       });
     }
 
@@ -1640,10 +1644,26 @@
       if (mounted) { resize(); }
     });
 
-    var next = el("b3d-next");
+    var stoptimer = el("b3d-stoptimer");
+    if (stoptimer) stoptimer.addEventListener("click", function () {
+      timerStopped = true;
+      stopTurnTimer();
+      stoptimer.textContent = "⏸ Arrêté";
+    });
+
+    var ability = el("b3d-ability");
+    if (ability) ability.addEventListener("click", function () {
+      if (typeof selectedTokenId !== "undefined" && selectedTokenId && typeof useAbility === "function") {
+        useAbility(selectedTokenId);
+      }
+      sync(true);
+    });
     if (next) next.addEventListener("click", function () {
       var b = el("next-turn");
       if (b) b.click();
+      timerStopped = false;
+      var st = el("b3d-stoptimer");
+      if (st) st.textContent = "⏸ Stop chrono";
       sync(true);
     });
 

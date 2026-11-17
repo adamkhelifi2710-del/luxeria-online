@@ -89,6 +89,7 @@
         <span id="objective-hp"></span>
         <button id="undo-btn" title="Annuler la dernière action (raccourci : U ou A)">↩ Annuler</button>
         <button id="next-turn" class="btn-accent" title="Passer au tour suivant (raccourci : Espace ou Z)">Passer au tour suivant</button>
+        <button id="stop-timer" title="Arrêter le chronomètre pour ce tour">⏸ Stop chrono</button>
         <button id="reserve-block">Activer le blocage réserve</button>
         <button id="fullscreen-btn" title="Passer le terrain en plein écran (raccourci : F)">⛶ Grand écran</button>
         <button id="reset-board">Nouvelle partie</button>
@@ -129,6 +130,8 @@
               <button id="b3d-undo" title="Annuler la dernière action">↩ Annuler</button>
               <button id="b3d-topview" title="Basculer vers une vue tactique verticale">◉ Vue de haut</button>
               <button id="b3d-fullscreen" title="Grand écran">⛶ Grand écran</button>
+              <button id="b3d-stoptimer" title="Arrêter le chronomètre">⏸ Stop chrono</button>
+              <button id="b3d-ability" title="Utiliser la capacité du champion sélectionné">✨ Capacité</button>
               <button id="b3d-recenter" title="Revenir à la vue de l'équipe qui joue">⌖ Vue équipe</button>
               <button id="b3d-next" title="Passer au tour suivant">Tour suivant</button>
             </div>
@@ -225,7 +228,7 @@
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
   <script src="app.js?v=20261115"></script>
-  <script src="game3d.js?v=37"></script>
+  <script src="game3d.js?v=38"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js';

@@ -1364,6 +1364,18 @@ dialog::backdrop {
   cursor: crosshair;
 }
 
+.cell.ability-target {
+  background: #4a1a1a;
+  box-shadow: inset 0 0 0 2px rgba(255, 60, 60, 0.8);
+  cursor: crosshair;
+  animation: pulse-ability 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-ability {
+  from { box-shadow: inset 0 0 0 2px rgba(255, 60, 60, 0.6); }
+  to { box-shadow: inset 0 0 0 2px rgba(255, 60, 60, 1.0); }
+}
+
 .cell.se7en-target {
   background: #4a1f38;
   box-shadow: inset 0 0 0 2px rgba(244, 114, 182, 0.8);

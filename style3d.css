@@ -479,11 +479,16 @@
   border-bottom: none;
 }
 
-#b3d-topview.active {
+#b3d-ability {
   color: #1a1203;
-  background: linear-gradient(180deg, #ffd97a, var(--accent));
-  border-color: var(--accent);
-  box-shadow: 0 0 14px rgba(246, 194, 75, 0.35);
+  background: linear-gradient(180deg, #c4a0ff, #8a5cff);
+  border-color: #8a5cff;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(138, 92, 255, 0.3);
+}
+
+#b3d-ability:hover {
+  background: linear-gradient(180deg, #d4b0ff, #9a6cff);
 }
 
 /* ---------- responsive (enrichi) ---------- */
