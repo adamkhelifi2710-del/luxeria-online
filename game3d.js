@@ -166,7 +166,11 @@
     scrab: "scrab-tripo.glb",
     xixz: "xixz-tripo.glb",
     cazou: "cazou-tripo.glb",
-    vini: "vini-tripo.glb"
+    vini: "vini-tripo.glb",
+    koga: "koga-tripo.glb",
+    jay: "jay-tripo.glb",
+    abyss: "abyss-tripo.glb",
+    prince: "prince-tripo.glb"
   };
 
   function ensureGLTFLoader(cb) {
