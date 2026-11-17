@@ -160,6 +160,7 @@
   var loadingModels = {};   // charId -> boolean
 
   /* Mapping champion -> fichier GLB */
+  var MODEL_VERSION = 2;   // a incrementer quand les GLB sont remplaces (cache navigateur)
   var MODEL_MAP = {
     braut: "braut-tripo.glb",
     ad: "ad-tripo.glb",
@@ -202,7 +203,7 @@
     loadingModels[charId] = true;
     ensureGLTFLoader(function () {
       if (!gltfLoader) { loadingModels[charId] = false; return; }
-      gltfLoader.load("models/" + MODEL_MAP[charId], function (gltf) {
+      gltfLoader.load("models/" + MODEL_MAP[charId] + "?v=" + MODEL_VERSION, function (gltf) {
         var model = gltf.scene;
         model.traverse(function (child) {
           if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
