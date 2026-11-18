@@ -39,13 +39,51 @@
   </div>
 
   <div id="home-screen">
-    <button id="home-3d-toggle" title="Ouvrir l'accueil 3D">🧊 Accueil 3D</button>
-    <div class="home-box">
-      <h1 class="home-title">Luxeria</h1>
-      <button id="home-play" class="home-btn">Lancer une partie</button>
-      <button id="home-online" class="home-btn">Partie en ligne</button>
-      <button id="home-create" class="home-btn">Terrains</button>
-      <button id="home-maps" class="home-btn">Voir les champions</button>
+    <div class="home-layout" id="home-layout">
+      <div class="home-topbar">
+        <div class="home-updates" id="home-updates">
+          <h3 class="home-panel-title">Dernières modifications</h3>
+          <ul class="home-updates-list">
+            <li>Ajout du chrono de tour (15 s)</li>
+            <li>Écran d'intro avec carte floutée</li>
+            <li>Remplacement par le propriétaire</li>
+            <li>Auto-soin des soutiens (sauf MOM'S)</li>
+          </ul>
+        </div>
+        <div class="home-menu-indicator">
+          <button class="menu-arrow" id="menu-prev" title="Menu précédent">◀</button>
+          <div class="menu-dots">
+            <span class="menu-dot" data-menu="0"></span>
+            <span class="menu-dot active" data-menu="1"></span>
+            <span class="menu-dot" data-menu="2"></span>
+          </div>
+          <button class="menu-arrow" id="menu-next" title="Menu suivant">▶</button>
+        </div>
+        <div class="home-play-wrap">
+          <button id="home-play-toggle" class="home-play-btn">Jouer ▾</button>
+          <div id="home-play-menu" class="home-play-menu" style="display:none;">
+            <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
+            <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
+            <button class="home-play-option" data-mode="online">Jouer en ligne</button>
+            <div class="home-mode-toggle">
+              <button id="mode-droitier" class="mode-btn active">Droitier</button>
+              <button id="mode-gaucher" class="mode-btn">Gaucher</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="home-main">
+        <div class="home-stats-panel" id="home-stats">
+          <h3 class="home-panel-title">Dernière partie</h3>
+          <div class="stat-row"><span>Attaques</span><span id="stat-attacks">0</span></div>
+          <div class="stat-row"><span>Soins</span><span id="stat-heals">0</span></div>
+          <div class="stat-row"><span>Capacités</span><span id="stat-abilities">0</span></div>
+          <div class="stat-row"><span>Champion le plus utilisé</span><span id="stat-most">-</span></div>
+          <div class="stat-row"><span>Tours joués</span><span id="stat-turns">0</span></div>
+        </div>
+        <div class="home-center" id="home-center">
+        </div>
+      </div>
     </div>
   </div>
 
