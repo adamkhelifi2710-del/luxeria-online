@@ -16,9 +16,6 @@
   position: fixed;
   inset: 0;
   z-index: 9990;
-  align-items: center;
-  justify-content: center;
-  background: url("luxeria-map.png") center / cover no-repeat, var(--bg);
 }
 .home-box {
   background: rgba(26, 32, 41, 0.85);
@@ -5008,3 +5005,233 @@ button:hover, .btn-random-inline:hover {
   50% { box-shadow: 0 0 0 14px rgba(245, 197, 66, 0), 0 6px 24px rgba(0, 0, 0, 0.5); }
 }
 .intro-screen.fade { opacity: 0; transition: opacity 0.7s ease; pointer-events: none; }
+
+/* ---------- New Home Menu ---------- */
+.home-layout {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  display: flex;
+  flex-direction: column;
+  background: url("luxeria-map.png") center / cover no-repeat;
+  overflow: hidden;
+}
+.home-layout::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 20, 0.72);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+.home-topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  flex-wrap: wrap;
+}
+.home-updates {
+  flex: 1 1 220px;
+  max-width: 320px;
+  background: rgba(12, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.home-panel-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent, #9c80ff);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.home-updates-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: #c9d6e6;
+  line-height: 1.6;
+}
+.home-menu-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.menu-arrow {
+  background: rgba(12, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #eaf1fa;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s, transform 0.2s;
+}
+.menu-arrow:hover {
+  background: rgba(106, 69, 224, 0.4);
+  transform: scale(1.08);
+}
+.menu-dots {
+  display: flex;
+  gap: 8px;
+}
+.menu-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: background 0.2s, transform 0.2s;
+}
+.menu-dot.active {
+  background: #f5c542;
+  transform: scale(1.2);
+}
+.home-play-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.home-play-btn {
+  background: linear-gradient(180deg, #f5c542, #d4a017);
+  border: 2px solid #f5c542;
+  color: #1a1200;
+  font-family: "Cinzel Decorative", "Cinzel", serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  padding: 10px 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(245, 197, 66, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.home-play-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px rgba(245, 197, 66, 0.6);
+}
+.home-play-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(12, 18, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.home-play-option {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eaf1fa;
+  font-family: "Cinzel", serif;
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+.home-play-option:hover {
+  background: rgba(106, 69, 224, 0.35);
+}
+.home-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.mode-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #c9d6e6;
+  font-family: "Cinzel", serif;
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.mode-btn.active {
+  background: rgba(106, 69, 224, 0.4);
+  color: #f0e9ff;
+  border-color: rgba(106, 69, 224, 0.6);
+}
+.home-main {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  padding: 0 24px 24px;
+  overflow: hidden;
+}
+.home-stats-panel {
+  width: 260px;
+  flex-shrink: 0;
+  background: rgba(12, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  align-self: flex-start;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  color: #c9d6e6;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-row span:last-child {
+  font-weight: 700;
+  color: #f0e9ff;
+}
+.home-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.home-layout.gaucher .home-topbar {
+  flex-direction: row-reverse;
+}
+.home-layout.gaucher .home-updates {
+  order: 3;
+}
+.home-layout.gaucher .home-play-wrap {
+  order: 1;
+}
+.home-layout.gaucher .home-menu-indicator {
+  order: 2;
+}
+.home-layout.gaucher .home-main {
+  flex-direction: row-reverse;
+}
+.home-center {
+  transition: transform 0.4s ease, opacity 0.4s ease;
+}
+.home-center.slide-left { transform: translateX(-30px); opacity: 0; }
+.home-center.slide-right { transform: translateX(30px); opacity: 0; }
+.menu-placeholder {
+  text-align: center;
+  color: #c9d6e6;
+}
+.menu-placeholder h2 {
+  color: #f0e9ff;
+  margin-bottom: 8px;
+}
