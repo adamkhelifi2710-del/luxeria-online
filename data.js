@@ -194,7 +194,7 @@ const GAME = {
       name: "CAZOU",
       number: 13,
       role: "expert",
-      hp: 11,
+      hp: 10,
       atk: 3,
       mouvement: 3,
       range: 1,
