@@ -8514,3 +8514,65 @@ if (document.readyState !== "loading") {
     }
   }, 100);
 }
+/* ---------- Braut 3D viewer on home screen ---------- */
+function initBrautViewer() {
+  const canvas = document.getElementById("braut-canvas");
+  if (!canvas || typeof window.__THREE_MOD === "undefined") {
+    setTimeout(initBrautViewer, 500);
+    return;
+  }
+  const THREE = window.__THREE_MOD;
+  const GLTFLoader = window.__GLTFLoader;
+  const MeshoptDecoder = window.__MeshoptDecoder;
+  if (!THREE || !GLTFLoader) {
+    setTimeout(initBrautViewer, 500);
+    return;
+  }
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setSize(canvas.clientWidth || 280, canvas.clientHeight || 320);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, (canvas.clientWidth || 280) / (canvas.clientHeight || 320), 0.1, 100);
+  camera.position.set(0, 1.2, 3);
+  camera.lookAt(0, 0.5, 0);
+  const light = new THREE.DirectionalLight(0xffffff, 1.2);
+  light.position.set(2, 3, 2);
+  scene.add(light);
+  const amb = new THREE.AmbientLight(0x404060, 0.8);
+  scene.add(amb);
+  const loader = new GLTFLoader();
+  if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load("models/braut-tripo.glb?v=1", (gltf) => {
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const scale = 1.5 / Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(scale);
+    const box2 = new THREE.Box3().setFromObject(model);
+    const c = box2.getCenter(new THREE.Vector3());
+    model.position.x -= c.x;
+    model.position.y -= c.y;
+    model.position.z -= c.z;
+    scene.add(model);
+    // animate rotation
+    function animate() {
+      requestAnimationFrame(animate);
+      model.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+    animate();
+  }, undefined, (e) => {
+    console.error("Braut model load failed:", e);
+  });
+}
+
+// Init when home screen is shown
+const origShowHome = (typeof showHome === "function") ? showHome : null;
+if (origShowHome) {
+  const wrapped = function() {
+    origShowHome();
+    setTimeout(initBrautViewer, 300);
+  };
+  // replace showHome
+  window.showHome = wrapped;
+}
