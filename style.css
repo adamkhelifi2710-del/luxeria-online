@@ -5062,16 +5062,37 @@ button:hover, .btn-random-inline:hover {
   align-items: center;
   gap: 12px;
 }
-.menu-arrow {
-  background: rgba(12, 18, 28, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #eaf1fa;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.2s, transform 0.2s;
+.menu-arrow-left {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+.menu-arrow-right {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+.braut-viewer {
+  width: 280px;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+#braut-canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: radial-gradient(circle, rgba(106, 69, 224, 0.15) 0%, transparent 70%);
+}
+.home-play-main {
+  font-size: 1.4rem;
+  padding: 14px 48px;
 }
 .menu-arrow:hover {
   background: rgba(106, 69, 224, 0.4);
