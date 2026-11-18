@@ -1,46 +1,5 @@
 const STORAGE_KEY = "boardgame_tracker_v2";
 
-const VERSION_CHAMPIONS = {
-  "0.1": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga"],
-  "1.0": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum"],
-  "1.x": ["braut", "vini", "ad", "jay", "abyss", "xixz", "cazou", "prince", "scrab", "koga", "se7en", "moms", "ark", "calix", "dicrum", "rapido", "betta", "fakie", "guard", "ranium"]
-};
-
-let gameVersion = localStorage.getItem("luxeria.gameVersion") || "1.x";
-/* Version demandée une seule fois par chargement, au clic sur JOUER. */
-let versionChosenThisLoad = false;
-
-function askVersion() {
-  versionChosenThisLoad = true;
-  return askChoicePrompt({
-    icon: "🎮",
-    title: "Version du jeu",
-    text: "Choisissez la version.",
-    hint: "Choisissez la version du jeu.",
-    cancel: null,
-    options: [
-      { label: "V0.1", value: "0.1" },
-      { label: "V1", value: "1.0" },
-      { label: "V1.X", value: "1.x" }
-    ]
-  }).then((ver) => {
-    /* Pas d'annulation : Échap ou fermeture relance la question. */
-    if (!ver) return askVersion();
-    gameVersion = ver;
-    try { localStorage.setItem("luxeria.gameVersion", ver); } catch (e) {}
-    return ver;
-  });
-}
-
-function isChampionAvailable(id) {
-  const list = VERSION_CHAMPIONS[gameVersion] || VERSION_CHAMPIONS["1.x"];
-  return list.indexOf(id) !== -1;
-}
-
-function availableCharacters() {
-  return GAME.characters.filter((c) => isChampionAvailable(c.id));
-}
-
 let state = load();
 let selectedTokenId = null;
 let reachable = [];
@@ -340,7 +299,6 @@ loadUserMapsIntoGame();
 function defaultState() {
   return {
     mapName: GAME.activeMap,
-    gameVersion: gameVersion,
     decks: { A: [], B: [] },
     starters: { A: [], B: [] },
     reserve: { A: [], B: [] },
@@ -466,7 +424,6 @@ function load() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.decks) {
         if (parsed.mapName && GAME.maps[parsed.mapName]) setActiveMap(parsed.mapName);
-      if (parsed.gameVersion && VERSION_CHAMPIONS[parsed.gameVersion]) gameVersion = parsed.gameVersion;
         parsed.walls = parsed.walls || [];
         parsed.arkWalls = (parsed.arkWalls || []).map((w) => (typeof w === "string" ? { key: w, hp: 1 } : w));
         parsed.guardZones = parsed.guardZones || [];
@@ -575,7 +532,7 @@ function randomTeam(size, exclude) {
   const team = [];
   for (const role of roles) {
     if (team.length >= size) break;
-    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id) && isChampionAvailable(c.id));
+    const pool = GAME.characters.filter((c) => c.role === role && !used.has(c.id));
     if (!pool.length) continue;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     team.push(pick.id);
@@ -599,9 +556,6 @@ function randomStarters(team) {
 
 function openPlayMode() {
   aiMode = false;
-  /* Filet de sécurité : si l'écran JOUER n'a pas été traversé, on demande
-     quand même la version (une seule fois par chargement). */
-  if (!versionChosenThisLoad) { askVersion().then(openPlayMode); return; }
   askChoicePrompt({
     icon: "🎮",
     title: "Nouvelle partie",
@@ -1265,7 +1219,7 @@ function renderLibrary() {
   const q = libSearch.value.toLowerCase();
   const r = libRole.value;
   const chars = GAME.characters.filter(
-    (c) => isChampionAvailable(c.id) && (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
+    (c) => (r === "" || c.role === r) && (q === "" || c.name.toLowerCase().includes(q))
   );
   if (!chars.length) {
     list.innerHTML = '<p class="empty-msg">Aucun Champion.</p>';
@@ -1412,7 +1366,7 @@ function askChoicePrompt(opts) {
   if (o.icon) askDialog.querySelector(".ask-icon").textContent = o.icon;
   askYes.style.display = "none";
   askNo.textContent = o.cancel || "Annuler";
-  askNo.style.display = o.cancel ? "" : "none";
+  askNo.style.display = "";
   askChoice.innerHTML = "";
   askChoice.style.display = "flex";
   (o.options || []).forEach((opt) => {
@@ -3177,7 +3131,10 @@ function healToken(tok, amount, source) {
   const before = tok.hp;
   tok.hp = Math.min(max, tok.hp + amount);
   const gained = tok.hp - before;
-  if (gained > 0) clearPoison(tok, source);
+  if (gained > 0) {
+    clearPoison(tok, source);
+    if (typeof trackHeal === "function") trackHeal();
+  }
   return gained;
 }
 
@@ -3484,6 +3441,7 @@ function checkTeamWipe() {
     if (pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player === p) return;
     if (!allDead(p)) return;
     state.winner = turnOfOther(p);
+    if (typeof trackWin === "function") trackWin(state.winner);
     log(`Tous les champions de l'équipe ${p} sont éliminés. Victoire de l'équipe ${state.winner}.`);
   });
 }
@@ -3649,6 +3607,7 @@ function attackAt(x, y) {
     renderBoard();
     return;
   }
+  if (typeof trackAttack === "function") trackAttack(tok.charId);
   if (tok.charId === "rapido" && tok.flurry && tok.flurrySecond && !tok.hasMoved) {
     alert("RAPIDO doit se déplacer après sa 1ère attaque de Déferlement avant de porter la 2ème.");
     renderBoard();
@@ -3888,6 +3847,7 @@ async function useAbility(tokenId) {
   pendingAbility = null;
   pushUndo();
   markActivated(tok);
+  if (typeof trackAbility === "function") trackAbility(tok.charId);
   if (c.id !== "rapido") tok.abilityUsed = true;
 
   if (c.id !== "koga" && c.id !== "betta" && c.id !== "guard") {
@@ -4738,6 +4698,7 @@ document.getElementById("undo-btn").addEventListener("click", undoLast);
 
 function endPlayerTurn() {
   const current = state.turn;
+  if (typeof trackTurn === "function") trackTurn();
   state.rapidoBuff = null;
 
   state.tokens.forEach((t) => {
@@ -5471,16 +5432,17 @@ function hideHome() {
 
 document.getElementById("nav-home").addEventListener("click", showHome);
 
-document.getElementById("home-play").addEventListener("click", () => {
-  openPlayMode();
-});
+const homePlay = document.getElementById("home-play");
+if (homePlay) homePlay.addEventListener("click", () => { openPlayMode(); });
 
-document.getElementById("home-create").addEventListener("click", () => {
+const homeCreate = document.getElementById("home-create");
+if (homeCreate) homeCreate.addEventListener("click", () => {
   hideHome();
   document.querySelector('[data-tab="maps"]').click();
 });
 
-document.getElementById("home-maps").addEventListener("click", () => {
+const homeMaps = document.getElementById("home-maps");
+if (homeMaps) homeMaps.addEventListener("click", () => {
   hideHome();
   document.querySelector('[data-tab="library"]').click();
 });
@@ -5875,7 +5837,6 @@ function lanOnState(snap) {
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.activeMap !== mapName) setActiveMap(mapName);
   state = snap;
-  if (state && state.gameVersion && VERSION_CHAMPIONS[state.gameVersion]) gameVersion = state.gameVersion;
   pendingAbility = pendAb || null;
   pendingSpawn = pendSp || null;
   lanApplySelection(sel);
@@ -6151,7 +6112,7 @@ function onlineOnMessage(ev) {
       onlinePeerLeft();
       return;
     case "setup":
-      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method, msg.gameVersion);
+      if (lanRole === "client") onlineClientSetup(msg.mapName, msg.map, msg.mode, msg.method);
       return;
     case "draft-pick":
       if (lanRole === "host") onlineHostDraftPick(msg.charId);
@@ -6250,7 +6211,7 @@ function onlineHostChooseMap() {
         state.decks = { A: [], B: [] };
         buildMode = null;
         undoStack = [];
-        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal, gameVersion: gameVersion });
+        onlineSend({ type: "setup", mapName: id, map: GAME.maps[id], mode, method: methodVal });
         onlineInitMethod(methodVal, "host");
       });
     });
@@ -6371,17 +6332,15 @@ function onlineDraftFinishHost() {
   }
 }
 
-function onlineClientSetup(mapName, mapData, mode, method, gv) {
+function onlineClientSetup(mapName, mapData, mode, method) {
   if (!onlineMode) return;
   const dlg = document.getElementById("online-dialog");
   if (dlg && dlg.open) dlg.close();
   onlineHideWaiting();
   if (mapData) applyRemoteMap(mapName, mapData);
   if (mapName && GAME.maps[mapName]) setActiveMap(mapName);
-  if (gv && VERSION_CHAMPIONS[gv]) { gameVersion = gv; try { localStorage.setItem("luxeria.gameVersion", gv); } catch (e) {} }
   state = defaultState();
   state.mode = mode === "rampage" ? "rampage" : "classic";
-  state.gameVersion = gv || gameVersion;
   state.decks = { A: [], B: [] };
   buildMode = null;
   undoStack = [];
@@ -6543,7 +6502,8 @@ function onlineClientStart() {
   if (dlg && dlg.open) dlg.close();
 }
 
-document.getElementById("home-online").addEventListener("click", openOnlineLobby);
+const homeOnline = document.getElementById("home-online");
+if (homeOnline) homeOnline.addEventListener("click", openOnlineLobby);
 
 document.getElementById("online-search").addEventListener("click", onlineSearch);
 
@@ -7899,7 +7859,7 @@ function aiPickTeam(pool, size, rolePool) {
 
 function aiBuildTeamB() {
   const taken = state.decks.A || [];
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
   state.decks.B = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
   buildMode = null;
   save();
@@ -8048,7 +8008,7 @@ function aiSetupGame(mapId, mode, method) {
    pour que l'IA apprenne à maîtriser davantage de personnages au fil des parties.
    `aiPickTeam` ajoute, dans ~45 % des cas, l'une de ses paires signature. */
 function aiChooseTeamAgainst(taken) {
-  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0 && isChampionAvailable(id));
+  const pool = GAME.characters.map((c) => c.id).filter((id) => taken.indexOf(id) < 0);
   return aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
 }
 
@@ -8353,13 +8313,6 @@ function playIntro() {
   if (!intro || intro.dataset.playing === "1") return;
   intro.dataset.playing = "1";
   if (btn) btn.style.pointerEvents = "none";
-  /* Choix de la version dès le clic sur JOUER, avant l'animation d'accueil. */
-  askVersion().then(() => { runIntroAnimation(); });
-}
-
-function runIntroAnimation() {
-  const intro = document.getElementById("intro-screen");
-  if (!intro) return;
   intro.classList.add("zoom-out");
   setTimeout(() => {
     intro.classList.remove("zoom-out");
@@ -8385,4 +8338,179 @@ if (document.readyState !== "loading") {
   const btn = document.getElementById("intro-play");
   if (btn) btn.addEventListener("click", playIntro);
   preloadIntroImage();
+}
+
+/* ---------- New Home Menu Logic ---------- */
+
+/* Stats tracking */
+function loadGameStats() {
+  try {
+    const raw = localStorage.getItem("luxeriaStats");
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { attacks: 0, heals: 0, abilities: 0, championCounts: {}, turns: 0, lastWinner: null };
+}
+
+function saveGameStats(s) {
+  try { localStorage.setItem("luxeriaStats", JSON.stringify(s)); } catch (e) {}
+}
+
+function trackAttack(charId) {
+  const s = loadGameStats();
+  s.attacks = (s.attacks || 0) + 1;
+  s.championCounts = s.championCounts || {};
+  s.championCounts[charId] = (s.championCounts[charId] || 0) + 1;
+  saveGameStats(s);
+}
+
+function trackHeal() {
+  const s = loadGameStats();
+  s.heals = (s.heals || 0) + 1;
+  saveGameStats(s);
+}
+
+function trackAbility(charId) {
+  const s = loadGameStats();
+  s.abilities = (s.abilities || 0) + 1;
+  s.championCounts = s.championCounts || {};
+  s.championCounts[charId] = (s.championCounts[charId] || 0) + 1;
+  saveGameStats(s);
+}
+
+function trackTurn() {
+  const s = loadGameStats();
+  s.turns = (s.turns || 0) + 1;
+  saveGameStats(s);
+}
+
+function trackWin(winner) {
+  const s = loadGameStats();
+  s.lastWinner = winner;
+  saveGameStats(s);
+}
+
+function renderHomeStats() {
+  const s = loadGameStats();
+  const el = (id) => document.getElementById(id);
+  if (el("stat-attacks")) el("stat-attacks").textContent = s.attacks || 0;
+  if (el("stat-heals")) el("stat-heals").textContent = s.heals || 0;
+  if (el("stat-abilities")) el("stat-abilities").textContent = s.abilities || 0;
+  if (el("stat-turns")) el("stat-turns").textContent = s.turns || 0;
+  if (el("stat-most")) {
+    const counts = s.championCounts || {};
+    let best = null, bestN = 0;
+    for (const id in counts) {
+      if (counts[id] > bestN) { bestN = counts[id]; best = id; }
+    }
+    el("stat-most").textContent = best ? (charById(best) ? charById(best).name : best) : "-";
+  }
+}
+
+/* Menu navigation */
+let currentMenu = 1;
+const menuLabels = ["Terrains", "Menu principal", "Champions"];
+
+function switchMenu(dir) {
+  const center = document.getElementById("home-center");
+  if (!center) return;
+  const newMenu = Math.max(0, Math.min(2, currentMenu + dir));
+  if (newMenu === currentMenu) return;
+  center.classList.add(dir > 0 ? "slide-left" : "slide-right");
+  setTimeout(() => {
+    currentMenu = newMenu;
+    renderMenuContent();
+    center.classList.remove("slide-left", "slide-right");
+    // update dots
+    document.querySelectorAll(".menu-dot").forEach((d) => {
+      d.classList.toggle("active", parseInt(d.dataset.menu) === currentMenu);
+    });
+  }, 200);
+}
+
+function renderMenuContent() {
+  const center = document.getElementById("home-center");
+  if (!center) return;
+  if (currentMenu === 0) {
+    center.innerHTML = "<div class='menu-placeholder'><h2>Terrains</h2><p>Choisissez un terrain pour jouer.</p><button class='home-play-option' onclick='hideHome();document.querySelector(\"[data-tab=maps]\").click();'>Voir les terrains</button></div>";
+  } else if (currentMenu === 1) {
+    center.innerHTML = "<div class='menu-placeholder'><h2>Luxeria</h2><p>Bienvenue. Cliquez sur « Jouer » pour commencer.</p></div>";
+  } else {
+    center.innerHTML = "<div class='menu-placeholder'><h2>Champions</h2><p>Consultez la liste des champions.</p><button class='home-play-option' onclick='hideHome();document.querySelector(\"[data-tab=library]\").click();'>Voir les champions</button></div>";
+  }
+}
+
+/* Play button toggle */
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = document.getElementById("home-play-toggle");
+  const menu = document.getElementById("home-play-menu");
+  if (toggle && menu) {
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === "none" ? "flex" : "none";
+    });
+    document.addEventListener("click", (e) => {
+      if (!menu.contains(e.target) && e.target !== toggle) {
+        menu.style.display = "none";
+      }
+    });
+  }
+  // play options
+  document.querySelectorAll(".home-play-option").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.mode;
+      if (mode === "pvp") {
+        // start local game
+        hideHome();
+        openPlayMode();
+      } else if (mode === "ai") {
+        hideHome();
+        aiOpenMode();
+      } else if (mode === "online") {
+        hideHome();
+        openOnlineLobby();
+      }
+      if (menu) menu.style.display = "none";
+    });
+  });
+  // mode toggle
+  const droitier = document.getElementById("mode-droitier");
+  const gaucher = document.getElementById("mode-gaucher");
+  const layout = document.getElementById("home-layout");
+  function setMode(gaucherMode) {
+    if (gaucherMode) {
+      layout.classList.add("gaucher");
+      if (gaucher) gaucher.classList.add("active");
+      if (droitier) droitier.classList.remove("active");
+    } else {
+      layout.classList.remove("gaucher");
+      if (droitier) droitier.classList.add("active");
+      if (gaucher) gaucher.classList.remove("active");
+    }
+    try { localStorage.setItem("luxeriaMode", gaucherMode ? "gaucher" : "droitier"); } catch (e) {}
+  }
+  if (droitier) droitier.addEventListener("click", () => setMode(false));
+  if (gaucher) gaucher.addEventListener("click", () => setMode(true));
+  // restore mode
+  try {
+    if (localStorage.getItem("luxeriaMode") === "gaucher") setMode(true);
+  } catch (e) {}
+  // menu nav
+  const prev = document.getElementById("menu-prev");
+  const next = document.getElementById("menu-next");
+  if (prev) prev.addEventListener("click", () => switchMenu(-1));
+  if (next) next.addEventListener("click", () => switchMenu(1));
+  // render stats
+  renderHomeStats();
+  renderMenuContent();
+});
+
+if (document.readyState !== "loading") {
+  // trigger manually
+  setTimeout(() => {
+    const toggle = document.getElementById("home-play-toggle");
+    if (toggle && !toggle.dataset.bound) {
+      toggle.dataset.bound = "1";
+      // re-run binding by dispatching a custom event
+    }
+  }, 100);
 }
