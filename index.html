@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261119c">
+  <link rel="stylesheet" href="style.css?v=20261119d">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -40,42 +40,68 @@
 
   <div id="home-screen">
     <div class="home-layout" id="home-layout">
-      <!-- Flèches blanches sur les bords de l'écran -->
-      <button class="menu-arrow menu-arrow-left" id="menu-prev" title="Terrains (menu précédent)">‹</button>
-      <button class="menu-arrow menu-arrow-right" id="menu-next" title="Champions (menu suivant)">›</button>
+      <!-- Flèches blanches dessinées à la main, sur les bords -->
+      <button class="menu-arrow menu-arrow-left" id="menu-prev" title="Terrains (menu précédent)">
+        <svg viewBox="0 0 80 140" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <path d="M60 16 Q 28 70 62 124" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+          <path d="M10 70 L 52 72" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+          <path d="M27 52 L 10 72 L 29 91" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="menu-arrow menu-arrow-right" id="menu-next" title="Champions (menu suivant)">
+        <svg viewBox="0 0 80 140" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <path d="M60 16 Q 28 70 62 124" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+          <path d="M10 70 L 52 72" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+          <path d="M27 52 L 10 72 L 29 91" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
 
-      <!-- Barre supérieure -->
-      <div class="home-topbar">
-        <div class="home-updates" id="home-updates">
-          <h3 class="home-panel-title">Dernières modifications</h3>
-          <ul class="home-updates-list">
-            <li>Chrono de tour fixe (15 s)</li>
-            <li>Intro avec carte floutée</li>
-            <li>Remplacement par le propriétaire</li>
-            <li>Auto-soin des soutiens (sauf MOM'S)</li>
-            <li>Réduction du feu tous les 7 tours</li>
-          </ul>
-        </div>
+      <!-- Aperçu de la carte, en haut à gauche -->
+      <div class="map-preview" id="home-updates">
+        <img src="luxeria-map.png" alt="Aperçu de la carte du monde">
+      </div>
 
-        <div class="home-menu-indicator">
-          <span class="menu-dot" data-menu="0" title="Terrains"></span>
-          <span class="menu-dot active" data-menu="1" title="Accueil"></span>
-          <span class="menu-dot" data-menu="2" title="Champions"></span>
-        </div>
+      <!-- Trois icônes dessinées à la main, en haut au centre -->
+      <div class="home-menu-indicator">
+        <span class="menu-dot" data-menu="0" title="Terrains">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M7 11 Q 19 6 26 11 Q 34 6 41 10 L 40 34 Q 33 30 26 34 Q 18 30 8 35 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M26 11 L 26 34" fill="none" stroke="#fff" stroke-width="2.4"/>
+            <circle cx="27" cy="20" r="4.5" fill="#e53935" stroke="#fff" stroke-width="2"/>
+          </svg>
+        </span>
+        <span class="menu-dot active" data-menu="1" title="Accueil">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M24 5 Q 30 9 34 11 L 32 30 Q 28 37 24 41 Q 20 37 16 30 L 14 11 Q 19 8 24 5 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M24 17 L 29 23 L 24 31 L 19 23 Z" fill="#e53935"/>
+          </svg>
+        </span>
+        <span class="menu-dot" data-menu="2" title="Champions">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M24 7 Q 31 7 31 15 Q 31 22 24 23 Q 17 22 17 15 Q 17 7 24 7 Z" fill="none" stroke="#fff" stroke-width="3"/>
+            <path d="M9 42 Q 11 27 24 26 Q 37 27 39 42" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+      </div>
 
-        <div class="home-mode-wrap">
-          <button id="home-mode-toggle" class="home-mode-btn" title="Mode droitier / gaucher">☰</button>
-          <div id="home-mode-menu" class="home-mode-menu" style="display:none;">
-            <button id="mode-droitier" class="mode-btn active">Droitier</button>
-            <button id="mode-gaucher" class="mode-btn">Gaucher</button>
-          </div>
+      <!-- Bouton menu jaune dessiné à la main, en haut à droite -->
+      <div class="home-mode-wrap">
+        <button id="home-mode-toggle" class="home-mode-btn" title="Mode droitier / gaucher">
+          <span></span><span></span><span></span>
+        </button>
+        <div id="home-mode-menu" class="home-mode-menu" style="display:none;">
+          <button id="mode-droitier" class="mode-btn active">Droitier</button>
+          <button id="mode-gaucher" class="mode-btn">Gaucher</button>
         </div>
       </div>
 
-      <!-- Contenu principal -->
-      <div class="home-main">
-        <div class="home-stats-panel" id="home-stats">
-          <h3 class="home-panel-title">Résumé de la dernière partie</h3>
+      <!-- GRAND panneau unique des statistiques, à gauche -->
+      <div class="stats-panel" id="home-stats">
+        <h3 class="stats-title">STATISTIQUES DE LA DERNIÈRE PARTIE</h3>
+        <svg class="stats-separator" viewBox="0 0 400 10" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M2 5 Q 60 1 118 5 T 238 4 T 398 5" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div class="stats-body">
           <div class="stat-row"><span>Attaques faites</span><span id="stat-attacks">0</span></div>
           <div class="stat-row"><span>Soins prodigués</span><span id="stat-heals">0</span></div>
           <div class="stat-row"><span>Capacités utilisées</span><span id="stat-abilities">0</span></div>
@@ -83,46 +109,40 @@
           <div class="stat-row"><span>Tours joués</span><span id="stat-turns">0</span></div>
           <div class="stat-row"><span>Vainqueur</span><span id="stat-winner">-</span></div>
         </div>
+      </div>
 
-        <div class="home-center" id="home-center">
-          <div class="home-menu-track" id="home-menu-track" data-menu="1">
-            <!-- Menu 0 : terrains -->
-            <section class="home-panel" data-panel="0">
-              <h2 class="home-panel-heading">Terrains</h2>
-              <p class="home-panel-sub">Choisissez le terrain de la prochaine partie.</p>
-              <div class="terrain-cards" id="home-terrain-cards"></div>
-            </section>
-
-            <!-- Menu 1 : accueil (image Braut + bouton JOUER) -->
-            <section class="home-panel home-panel-active" data-panel="1">
-              <div id="braut-viewer" class="braut-viewer">
-                <img id="braut-photo" src="braut.png?v=1" alt="Braut, champion de Luxeria">
-              </div>
-              <div class="home-play-main-wrap">
-                <button id="home-play-main" class="home-play-btn home-play-main">JOUER</button>
-                <div id="home-play-menu" class="home-play-menu" style="display:none;">
-                  <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
-                  <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
-                  <button class="home-play-option" data-mode="online">Jouer en ligne</button>
-                </div>
-              </div>
-            </section>
-
-            <!-- Menu 2 : champions -->
-            <section class="home-panel" data-panel="2">
-              <div id="champion-grid-view" class="champion-grid-view">
-                <h2 class="home-panel-heading">Champions</h2>
-                <p class="home-panel-sub">Cliquez sur un champion pour consulter sa fiche.</p>
-                <div class="champion-grid" id="home-champion-grid"></div>
-              </div>
-              <div id="champion-detail" class="champion-detail" style="display:none;">
-                <button id="champion-detail-back" class="champion-back">← Retour aux champions</button>
-                <div class="a4-sheet" id="a4-sheet"></div>
-              </div>
-            </section>
+      <!-- Personnage 3D imposant + bouton JOUER (menu 1) -->
+      <div class="home-center" id="home-center">
+        <div id="braut-viewer" class="braut-viewer">
+          <canvas id="braut-canvas"></canvas>
+        </div>
+        <div class="home-play-main-wrap">
+          <button id="home-play-main" class="home-play-main">JOUER</button>
+          <div id="home-play-menu" class="home-play-menu" style="display:none;">
+            <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
+            <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
+            <button class="home-play-option" data-mode="online">Jouer en ligne</button>
           </div>
         </div>
       </div>
+
+      <!-- Menus latéraux : terrains (0) et champions (2) -->
+      <section class="side-panel side-panel-left" id="panel-terrains" data-panel="0">
+        <h2 class="home-panel-heading">TERRAINS</h2>
+        <p class="home-panel-sub">Choisissez le terrain de la prochaine partie.</p>
+        <div class="terrain-cards" id="home-terrain-cards"></div>
+      </section>
+      <section class="side-panel side-panel-right" id="panel-champions" data-panel="2">
+        <div id="champion-grid-view" class="champion-grid-view">
+          <h2 class="home-panel-heading">CHAMPIONS</h2>
+          <p class="home-panel-sub">Cliquez sur un champion pour consulter sa fiche.</p>
+          <div class="champion-grid" id="home-champion-grid"></div>
+        </div>
+        <div id="champion-detail" class="champion-detail" style="display:none;">
+          <button id="champion-detail-back" class="champion-back">← Retour aux champions</button>
+          <div class="a4-sheet" id="a4-sheet"></div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -304,7 +324,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261119c"></script>
+  <script src="app.js?v=20261119d"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
