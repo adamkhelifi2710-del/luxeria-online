@@ -5369,7 +5369,7 @@ button:hover, .btn-random-inline:hover {
   font-size: clamp(0.7rem, 1vw, 1rem);
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
-.terrain-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+.terrain-cards { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px; }
 .champion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
 .terrain-card, .champion-card {
   background: rgba(255, 210, 30, 0.9);
@@ -5382,7 +5382,15 @@ button:hover, .btn-random-inline:hover {
   text-align: center;
   transition: transform 0.2s;
 }
-.terrain-card { width: 160px; min-height: 90px; }
+.terrain-card {
+  width: 100%;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
 .champion-card { font-size: 0.82rem; }
 .terrain-card small, .champion-card small {
   display: block;
@@ -5409,31 +5417,113 @@ button:hover, .btn-random-inline:hover {
   height: min(100%, 470px);
   aspect-ratio: 1 / 1.414;
   max-width: 94%;
-  overflow: auto;
+  overflow: hidden;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px 14px;
-  background: linear-gradient(180deg, #f7f1e3 0%, #ece0c8 100%);
+  gap: 0.5em;
+  padding: 0.85em 1.05em 0.7em;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 30%),
+    repeating-linear-gradient(0deg, rgba(27, 34, 48, 0.025) 0 1px, transparent 1px 24px),
+    linear-gradient(180deg, #faf4e6 0%, #eee1c9 100%);
   color: #1b2230;
   border: 4px solid #141414;
+  border-top: 7px solid var(--role-color, #6a45e0);
   border-radius: 6px;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
   font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: var(--sheet-font, 13px);
 }
-.sheet-header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid rgba(27, 34, 48, 0.25); }
-.sheet-num { font-size: 0.68rem; letter-spacing: 0.14em; color: #8a6a2f; }
-.sheet-name { margin-top: 2px; font-size: 1.5rem; font-weight: 700; color: var(--role-color, #6a45e0); }
-.sheet-role { display: inline-block; margin-top: 4px; padding: 3px 12px; border-radius: 999px; background: var(--role-color, #6a45e0); color: #fff; font-size: 0.7rem; text-transform: uppercase; }
-.sheet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.sheet-stat { background: rgba(27, 34, 48, 0.07); border: 2px solid rgba(27, 34, 48, 0.3); border-radius: 5px; padding: 6px 8px; text-align: center; }
-.sheet-stat b { display: block; font-size: 1rem; color: #1b2230; }
-.sheet-stat span { font-size: 0.6rem; text-transform: uppercase; color: #6a5a42; }
-.sheet-section h4 { margin: 0 0 4px; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: #8a6a2f; border-bottom: 1px solid rgba(27, 34, 48, 0.18); padding-bottom: 3px; }
-.sheet-section strong { display: block; font-size: 0.9rem; color: var(--role-color, #6a45e0); margin-bottom: 3px; }
-.sheet-section p { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 0.72rem; line-height: 1.45; color: #2a303c; }
-.sheet-foot { margin-top: auto; text-align: center; font-size: 0.6rem; letter-spacing: 0.14em; color: #8a6a2f; border-top: 1px solid rgba(27, 34, 48, 0.18); padding-top: 6px; }
+.sheet-header { text-align: center; padding-bottom: 0.45em; border-bottom: 2px solid rgba(27, 34, 48, 0.22); }
+.sheet-num { font-size: 0.58em; letter-spacing: 0.14em; color: #8a6a2f; }
+.sheet-name { margin-top: 1px; font-size: 1.15em; font-weight: 700; letter-spacing: 0.04em; color: var(--role-color, #6a45e0); }
+.sheet-role { display: inline-block; margin-top: 0.2em; padding: 0.15em 0.85em; border-radius: 999px; background: var(--role-color, #6a45e0); color: #fff; font-size: 0.6em; letter-spacing: 0.08em; text-transform: uppercase; }
+.sheet-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35em; }
+.sheet-stat { background: rgba(27, 34, 48, 0.07); border: 2px solid rgba(27, 34, 48, 0.28); border-radius: 5px; padding: 0.3em 0.2em; text-align: center; }
+.sheet-stat b { display: block; font-size: 0.88em; color: #1b2230; }
+.sheet-stat span { font-size: 0.5em; text-transform: uppercase; color: #6a5a42; }
+.sheet-section h4 { margin: 0 0 0.15em; font-size: 0.6em; letter-spacing: 0.1em; text-transform: uppercase; color: #8a6a2f; border-bottom: 1px solid rgba(27, 34, 48, 0.18); padding-bottom: 0.15em; }
+.sheet-section strong { display: block; font-size: 0.75em; color: var(--role-color, #6a45e0); margin-bottom: 0.15em; }
+.sheet-section p { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 0.66em; line-height: 1.25; color: #2a303c; }
+.sheet-foot { margin-top: auto; text-align: center; font-size: 0.53em; letter-spacing: 0.12em; color: #8a6a2f; border-top: 1px solid rgba(27, 34, 48, 0.18); padding-top: 0.3em; }
+
+/* ---- Menu Style de jeu (paramètres) ---- */
+.game-settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9994;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: url("luxeria-map.png") center center / cover no-repeat;
+}
+.game-settings-screen.open { display: flex; }
+.settings-panel {
+  position: relative;
+  width: min(760px, 86vw);
+  max-height: 88vh;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 34px 38px 30px;
+  background: rgba(8, 12, 18, 0.82);
+  border: 5px solid #fff;
+  border-radius: 18px 26px 16px 24px / 24px 16px 26px 18px;
+  box-shadow: 5px 5px 0 rgba(255, 255, 255, 0.32), 0 16px 44px rgba(0, 0, 0, 0.5);
+}
+.settings-back {
+  position: absolute;
+  left: 22px;
+  top: 18px;
+  background: #ffd21e;
+  border: 3px solid #141414;
+  border-radius: 10px 7px 12px 8px;
+  color: #111;
+  font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: 0.85rem;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+.settings-title {
+  margin: 6px 0 26px;
+  text-align: center;
+  color: #ffd21e;
+  font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: clamp(1.4rem, 3vw, 2.6rem);
+  letter-spacing: 0.05em;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+.settings-group { margin-bottom: 22px; }
+.settings-group h3 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: clamp(0.85rem, 1.4vw, 1.2rem);
+  letter-spacing: 0.06em;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+.settings-options { display: flex; flex-wrap: wrap; gap: 12px; }
+.setting-option {
+  min-width: 150px;
+  flex: 1 1 150px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  border-radius: 12px 8px 14px 9px / 8px 13px 9px 12px;
+  color: #fff;
+  font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: clamp(0.8rem, 1.2vw, 1.05rem);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.setting-option:hover { transform: rotate(-2deg) scale(1.04); background: rgba(255, 210, 30, 0.25); }
+.setting-option.active {
+  background: #ffd21e;
+  border-color: #141414;
+  color: #111;
+  transform: rotate(-1deg);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+}
 
 /* ---- Mode gaucher : inversion complète ---- */
 .home-layout.gaucher .home-mode-wrap { right: auto; left: 3%; }
