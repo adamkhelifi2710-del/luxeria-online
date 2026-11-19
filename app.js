@@ -8427,6 +8427,7 @@ var currentMenu = 1;
 function setHomeMenu(idx) {
   const next = Math.max(0, Math.min(2, idx));
   if (next === currentMenu) return;
+  if (next !== 2) closeChampionDetail();
   currentMenu = next;
   const track = document.getElementById("home-menu-track");
   if (track) track.setAttribute("data-menu", String(next));
@@ -8461,14 +8462,61 @@ function renderHomeCards() {
       const b = document.createElement("button");
       b.className = "champion-card";
       b.innerHTML = "<strong>" + (c.name || c.id) + "</strong><small>" + (c.role || "") + "</small>";
-      b.addEventListener("click", () => {
-        hideHome();
-        const libTab = document.querySelector('[data-tab="library"]');
-        if (libTab) libTab.click();
-      });
+      b.addEventListener("click", () => openChampionDetail(c));
       cg.appendChild(b);
     });
   }
+}
+
+/* Fiche détaillée d'un champion (format A4) */
+var CHAMPION_ROLE_COLORS = {
+  colosse: "#3f6fcc",
+  expert: "#8a55d6",
+  assassin: "#d24b5a",
+  ravageur: "#d97b25",
+  soutien: "#2e9e72"
+};
+function escHtml(v) {
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function openChampionDetail(c) {
+  const detail = document.getElementById("champion-detail");
+  const grid = document.getElementById("champion-grid-view");
+  const sheet = document.getElementById("a4-sheet");
+  if (!detail || !grid || !sheet) return;
+  const ability = c.ability || {};
+  const passive = c.passive || {};
+  const color = CHAMPION_ROLE_COLORS[c.role] || "#6a45e0";
+  const stat = (label, value) =>
+    '<div class="sheet-stat"><b>' + escHtml(value) + "</b><span>" + escHtml(label) + "</span></div>";
+  sheet.style.setProperty("--role-color", color);
+  sheet.innerHTML =
+    '<div class="sheet-header">' +
+      '<div class="sheet-num">FICHE N° ' + escHtml(c.number != null ? c.number : "-") + "</div>" +
+      '<div class="sheet-name">' + escHtml(c.name || c.id) + "</div>" +
+      '<div class="sheet-role">' + escHtml(c.role || "-") + "</div>" +
+    "</div>" +
+    '<div class="sheet-stats">' +
+      stat("PV", c.hp) + stat("Attaque", c.atk) +
+      stat("Mobilité", c.mouvement) + stat("Portée", c.range) +
+    "</div>" +
+    '<div class="sheet-section"><h4>Capacité spéciale</h4>' +
+      "<strong>" + escHtml(ability.name || "—") + "</strong>" +
+      "<p>" + escHtml(ability.desc || "Aucune capacité spéciale.") + "</p></div>" +
+    '<div class="sheet-section"><h4>Passif</h4>' +
+      "<strong>" + escHtml(passive.name || "—") + "</strong>" +
+      "<p>" + escHtml(passive.desc || "Aucun passif.") + "</p></div>" +
+    '<div class="sheet-foot">LUXERIA · CHAMPION ' + escHtml((c.name || c.id)).toUpperCase() + "</div>";
+  grid.style.display = "none";
+  detail.style.display = "flex";
+}
+function closeChampionDetail() {
+  const detail = document.getElementById("champion-detail");
+  const grid = document.getElementById("champion-grid-view");
+  if (detail) detail.style.display = "none";
+  if (grid) grid.style.display = "flex";
 }
 
 /* Initialisation du menu */
@@ -8493,6 +8541,8 @@ function initHomeMenu() {
   const next = document.getElementById("menu-next");
   if (prev) prev.addEventListener("click", () => switchMenu(-1));
   if (next) next.addEventListener("click", () => switchMenu(1));
+  const backDetail = document.getElementById("champion-detail-back");
+  if (backDetail) backDetail.addEventListener("click", closeChampionDetail);
 
   const modeToggle = document.getElementById("home-mode-toggle");
   const modeMenu = document.getElementById("home-mode-menu");
