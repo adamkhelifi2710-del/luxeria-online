@@ -5065,7 +5065,7 @@ button:hover, .btn-random-inline:hover {
 }
 .home-updates {
   flex: 1 1 0;
-  max-width: 320px;
+  max-width: none;
   background: rgba(12, 18, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
@@ -5241,8 +5241,8 @@ button:hover, .btn-random-inline:hover {
 
 /* Image 3D de Braut + bouton JOUER */
 .braut-viewer {
-  width: min(360px, 60%);
-  height: min(420px, 62%);
+  width: min(400px, 65%);
+  height: min(440px, 76%);
   min-height: 240px;
   display: flex;
   align-items: center;
