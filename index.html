@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261119e">
+  <link rel="stylesheet" href="style.css?v=20261119f">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -56,11 +56,6 @@
         </svg>
       </button>
 
-      <!-- Aperçu de la carte, en haut à gauche -->
-      <div class="map-preview" id="home-updates">
-        <img src="luxeria-map.png" alt="Aperçu de la carte du monde">
-      </div>
-
       <!-- Trois carrés vides, plein centre : repère de position dans le menu -->
       <div class="home-menu-indicator">
         <span class="menu-dot" data-menu="0" title="Terrains"></span>
@@ -79,26 +74,21 @@
         </div>
       </div>
 
-      <!-- GRAND panneau unique des statistiques, à gauche -->
-      <div class="stats-panel" id="home-stats">
-        <h3 class="stats-title">STATISTIQUES DE LA DERNIÈRE PARTIE</h3>
-        <svg class="stats-separator" viewBox="0 0 400 10" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M2 5 Q 60 1 118 5 T 238 4 T 398 5" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-        </svg>
-        <div class="stats-body">
-          <div class="stat-row"><span>Attaques faites</span><span id="stat-attacks">0</span></div>
-          <div class="stat-row"><span>Soins prodigués</span><span id="stat-heals">0</span></div>
-          <div class="stat-row"><span>Capacités utilisées</span><span id="stat-abilities">0</span></div>
-          <div class="stat-row"><span>Champion le plus utilisé</span><span id="stat-most">-</span></div>
-          <div class="stat-row"><span>Tours joués</span><span id="stat-turns">0</span></div>
-          <div class="stat-row"><span>Vainqueur</span><span id="stat-winner">-</span></div>
-        </div>
+      <!-- Ancien panneau des statistiques de la dernière partie (menu 1 uniquement) -->
+      <div class="home-stats-panel" id="home-stats">
+        <h3 class="home-panel-title">Résumé de la dernière partie</h3>
+        <div class="stat-row"><span>Attaques faites</span><span id="stat-attacks">0</span></div>
+        <div class="stat-row"><span>Soins prodigués</span><span id="stat-heals">0</span></div>
+        <div class="stat-row"><span>Capacités utilisées</span><span id="stat-abilities">0</span></div>
+        <div class="stat-row"><span>Champion le plus utilisé</span><span id="stat-most">-</span></div>
+        <div class="stat-row"><span>Tours joués</span><span id="stat-turns">0</span></div>
+        <div class="stat-row"><span>Vainqueur</span><span id="stat-winner">-</span></div>
       </div>
 
-      <!-- Personnage 3D imposant + bouton JOUER (menu 1) -->
+      <!-- Image de Braut + bouton JOUER (menu 1) -->
       <div class="home-center" id="home-center">
         <div id="braut-viewer" class="braut-viewer">
-          <canvas id="braut-canvas"></canvas>
+          <img id="braut-photo" src="braut.png?v=1" alt="Braut, champion de Luxeria">
         </div>
         <div class="home-play-main-wrap">
           <button id="home-play-main" class="home-play-main">JOUER</button>
@@ -308,7 +298,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261119e"></script>
+  <script src="app.js?v=20261119f"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
