@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261120a">
+  <link rel="stylesheet" href="style.css?v=20261120b">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -69,8 +69,7 @@
           <span></span><span></span><span></span>
         </button>
         <div id="home-mode-menu" class="home-mode-menu" style="display:none;">
-          <button id="mode-droitier" class="mode-btn active">Droitier</button>
-          <button id="mode-gaucher" class="mode-btn">Gaucher</button>
+          <button id="game-settings-open" class="mode-btn">Style de jeu</button>
           <button id="home-mode-3d" class="mode-btn">Mode 3D</button>
         </div>
       </div>
@@ -123,6 +122,39 @@
           <div class="champion-grid" id="home-champion-grid"></div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Menu Style de jeu, accessible depuis le bouton paramètres -->
+  <div id="game-settings-screen" class="game-settings-screen">
+    <div class="settings-panel">
+      <button id="game-settings-back" class="settings-back">← Retour au menu</button>
+      <h2 class="settings-title">STYLE DE JEU</h2>
+
+      <div class="settings-group">
+        <h3>VERSION</h3>
+        <div class="settings-options">
+          <button class="setting-option" data-version="v0.1">V0.1</button>
+          <button class="setting-option" data-version="v1">V1</button>
+          <button class="setting-option" data-version="v1x">V1.X</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3>AFFICHAGE DU MENU</h3>
+        <div class="settings-options">
+          <button id="mode-droitier" class="setting-option active">Droitier</button>
+          <button id="mode-gaucher" class="setting-option">Gaucher</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3>DIFFICULTÉ (TEMPS)</h3>
+        <div class="settings-options">
+          <button class="setting-option" data-difficulty="debutant">Débutant · 30 s</button>
+          <button class="setting-option active" data-difficulty="expert">Expert · 15 s</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -304,7 +336,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261120a"></script>
+  <script src="app.js?v=20261120b"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
