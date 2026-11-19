@@ -8079,7 +8079,7 @@ function startTurnTimer(showToast) {
   stopTurnTimer();
   if (!turnTimerShouldRun()) return;
   const player = state.turn;
-  turnTimerRemaining = 15;
+  turnTimerRemaining = getTurnDuration();
   if (showToast) showTurnToast("Tour du joueur " + player, player);
   const timerEl = document.getElementById("turn-timer");
   if (timerEl) {
@@ -8111,7 +8111,7 @@ function resetTurnTimer() {
   startTurnTimer();
 }
 
-// (timer is fixed 15s; no reset on actions)
+// La durée dépend du réglage Débutant / Expert ; pas de reset sur les actions.
 
 const _origEndPlayerTurnTT = endPlayerTurn;
 window.endPlayerTurn = function () {
@@ -8422,6 +8422,35 @@ function setHomeMode(gaucher) {
   try { localStorage.setItem("luxeriaMode", gaucher ? "gaucher" : "droitier"); } catch (e) {}
 }
 
+/* Durée du chrono selon la difficulté : débutant 30 s, expert 15 s */
+function getTurnDuration() {
+  let d = "expert";
+  try { d = localStorage.getItem("luxeriaDifficulty") || "expert"; } catch (e) {}
+  return d === "debutant" ? 30 : 15;
+}
+
+/* Synchronise l'état des boutons du menu Style de jeu */
+function refreshGameSettings() {
+  let version = "v1x", difficulty = "expert", mode = "droitier";
+  try {
+    version = localStorage.getItem("luxeriaVersion") || "v1x";
+    difficulty = localStorage.getItem("luxeriaDifficulty") || "expert";
+    mode = localStorage.getItem("luxeriaMode") || "droitier";
+  } catch (e) {}
+  document.querySelectorAll("[data-version]").forEach((b) => {
+    b.classList.toggle("active", b.getAttribute("data-version") === version);
+  });
+  document.querySelectorAll("[data-difficulty]").forEach((b) => {
+    b.classList.toggle("active", b.getAttribute("data-difficulty") === difficulty);
+  });
+  const d = document.getElementById("mode-droitier");
+  const g = document.getElementById("mode-gaucher");
+  if (d) d.classList.toggle("active", mode !== "gaucher");
+  if (g) g.classList.toggle("active", mode === "gaucher");
+  const timerEl = document.getElementById("turn-timer");
+  if (timerEl && !turnTimerInterval) timerEl.textContent = getTurnDuration() + "s";
+}
+
 /* Navigation entre les 3 menus */
 var currentMenu = 1;
 function setHomeMenu(idx) {
@@ -8593,6 +8622,20 @@ function openChampionDetail(c) {
   if (terrain) terrain.style.display = "none";
   if (space) space.classList.add("open");
   detail.style.display = "flex";
+  fitChampionSheet();
+}
+
+/* Réduit progressivement la typographie pour que la fiche tienne sur une seule page. */
+function fitChampionSheet() {
+  const sheet = document.getElementById("a4-sheet");
+  if (!sheet || !sheet.offsetParent) return;
+  sheet.style.setProperty("--sheet-font", "");
+  let size = 13;
+  let guard = 0;
+  while (sheet.scrollHeight > sheet.clientHeight + 1 && guard++ < 32 && size > 6) {
+    size -= 0.35;
+    sheet.style.setProperty("--sheet-font", size + "px");
+  }
 }
 function closeChampionDetail() {
   const detail = document.getElementById("champion-detail");
@@ -8645,6 +8688,37 @@ function initHomeMenu() {
   if (mode3d) mode3d.addEventListener("click", () => {
     if (modeMenu) modeMenu.style.display = "none";
     if (window.__luxhome && typeof window.__luxhome.open === "function") window.__luxhome.open();
+  });
+
+  /* Menu Style de jeu */
+  const settingsScreen = document.getElementById("game-settings-screen");
+  const settingsOpen = document.getElementById("game-settings-open");
+  const settingsBack = document.getElementById("game-settings-back");
+  if (settingsOpen) settingsOpen.addEventListener("click", () => {
+    if (modeMenu) modeMenu.style.display = "none";
+    refreshGameSettings();
+    if (settingsScreen) settingsScreen.classList.add("open");
+  });
+  if (settingsBack) settingsBack.addEventListener("click", () => {
+    if (settingsScreen) settingsScreen.classList.remove("open");
+  });
+
+  document.querySelectorAll("[data-version]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      try { localStorage.setItem("luxeriaVersion", btn.getAttribute("data-version")); } catch (e) {}
+      refreshGameSettings();
+    });
+  });
+  document.querySelectorAll("[data-difficulty]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      try { localStorage.setItem("luxeriaDifficulty", btn.getAttribute("data-difficulty")); } catch (e) {}
+      refreshGameSettings();
+    });
+  });
+  refreshGameSettings();
+  window.addEventListener("resize", () => {
+    const detail = document.getElementById("champion-detail");
+    if (detail && detail.style.display === "flex") fitChampionSheet();
   });
 
   const playMain = document.getElementById("home-play-main");
