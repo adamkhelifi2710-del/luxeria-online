@@ -5247,15 +5247,38 @@ button:hover, .btn-random-inline:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at center, rgba(156, 128, 255, 0.16) 0%, transparent 68%);
+  background: radial-gradient(ellipse at center, rgba(156, 128, 255, 0.18) 0%, transparent 68%);
 }
-#braut-canvas { width: 100%; height: 100%; display: block; }
-.home-play-main-wrap { position: relative; margin-top: 6px; }
+#braut-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.55));
+}
+.home-play-main-wrap { position: relative; margin-top: 10px; }
 .home-play-main {
-  font-size: 1.55rem;
-  padding: 16px 60px;
+  font-family: "Cinzel Decorative", "Cinzel", serif;
+  font-size: 2.1rem;
+  font-weight: 700;
   letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 20px 84px;
+  border: 3px solid #f5c542;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5c542, #d4a017);
+  color: #1a1200;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(245, 197, 66, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  animation: intro-pulse 2.4s ease-in-out infinite;
 }
+.home-play-main:hover {
+  transform: scale(1.05);
+  filter: brightness(1.08);
+  box-shadow: 0 10px 36px rgba(245, 197, 66, 0.65);
+}
+.home-play-main:active { transform: scale(0.98); }
 .home-play-menu {
   position: absolute;
   top: calc(100% + 10px);
