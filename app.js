@@ -8426,14 +8426,18 @@ function setHomeMode(gaucher) {
 var currentMenu = 1;
 function setHomeMenu(idx) {
   const next = Math.max(0, Math.min(2, idx));
-  if (next === currentMenu) return;
   if (next !== 2) closeChampionDetail();
   currentMenu = next;
-  const track = document.getElementById("home-menu-track");
-  if (track) track.setAttribute("data-menu", String(next));
+  const center = document.getElementById("home-center");
+  const left = document.getElementById("panel-terrains");
+  const right = document.getElementById("panel-champions");
+  if (center) center.classList.toggle("hidden", next !== 1);
+  if (left) left.classList.toggle("active", next === 0);
+  if (right) right.classList.toggle("active", next === 2);
   document.querySelectorAll(".menu-dot").forEach((d) => {
     d.classList.toggle("active", parseInt(d.getAttribute("data-menu"), 10) === next);
   });
+  if (next === 1) setTimeout(initBrautViewer, 60);
 }
 function switchMenu(dir) { setHomeMenu(currentMenu + dir); }
 
@@ -8519,6 +8523,72 @@ function closeChampionDetail() {
   if (grid) grid.style.display = "flex";
 }
 
+/* Image 3D de BRAUT, grand format sur la moitié droite du menu 1 */
+var brautInitDone = false;
+var brautInitBusy = false;
+function initBrautViewer() {
+  if (brautInitDone || brautInitBusy) return;
+  const canvas = document.getElementById("braut-canvas");
+  if (!canvas) return;
+  if (typeof window.__THREE_MOD === "undefined" || typeof window.__GLTFLoader === "undefined") {
+    setTimeout(initBrautViewer, 400);
+    return;
+  }
+  const THREE = window.__THREE_MOD;
+  brautInitBusy = true;
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+  } catch (e) {
+    brautInitBusy = false;
+    return;
+  }
+  const w = canvas.clientWidth || 400;
+  const h = canvas.clientHeight || 480;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w, h, false);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 100);
+  camera.position.set(0, 1.15, 3.4);
+  camera.lookAt(0, 0.45, 0);
+  scene.add(new THREE.AmbientLight(0x707090, 1.15));
+  const key = new THREE.DirectionalLight(0xffffff, 1.6);
+  key.position.set(2, 4, 3);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9c80ff, 0.85);
+  rim.position.set(-3, 2, -2);
+  scene.add(rim);
+  const loader = new window.__GLTFLoader();
+  if (window.__MeshoptDecoder) loader.setMeshoptDecoder(window.__MeshoptDecoder);
+  loader.load("models/braut-tripo.glb?v=101", (gltf) => {
+    const model = gltf.scene;
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const scale = 1.85 / Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(scale);
+    const box2 = new THREE.Box3().setFromObject(model);
+    const c = box2.getCenter(new THREE.Vector3());
+    model.position.x -= c.x;
+    model.position.y -= box2.min.y;
+    model.position.z -= c.z;
+    scene.add(model);
+    brautInitDone = true;
+    brautInitBusy = false;
+    let raf;
+    function animate() {
+      raf = requestAnimationFrame(animate);
+      if (!document.getElementById("braut-canvas")) { cancelAnimationFrame(raf); return; }
+      model.rotation.y += 0.006;
+      renderer.render(scene, camera);
+    }
+    animate();
+  }, undefined, (e) => {
+    console.error("Braut 3D load failed:", e);
+    brautInitBusy = false;
+  });
+}
+
 /* Initialisation du menu */
 function initHomeMenu() {
   const bound = document.getElementById("home-layout");
@@ -8532,8 +8602,6 @@ function initHomeMenu() {
   } catch (e) {}
 
   setHomeMenu(1);
-  const track = document.getElementById("home-menu-track");
-  if (track) track.setAttribute("data-menu", "1");
   document.querySelectorAll(".menu-dot").forEach((d) => {
     d.addEventListener("click", () => setHomeMenu(parseInt(d.getAttribute("data-menu"), 10)));
   });
@@ -8581,6 +8649,7 @@ function initHomeMenu() {
     });
   });
 
+  setTimeout(initBrautViewer, 200);
 }
 
 if (typeof document !== "undefined") {
@@ -8589,4 +8658,9 @@ if (typeof document !== "undefined") {
   } else {
     initHomeMenu();
   }
+  /* Le modèle 3D se charge dès que l'accueil s'ouvre. */
+  setInterval(() => {
+    const hs = document.getElementById("home-screen");
+    if (hs && hs.classList.contains("open")) initBrautViewer();
+  }, 600);
 }
