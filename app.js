@@ -8340,9 +8340,9 @@ if (document.readyState !== "loading") {
   preloadIntroImage();
 }
 
-/* ---------- New Home Menu Logic ---------- */
+/* ---------- Menu d'accueil (mockup) ---------- */
 
-/* Stats tracking */
+/* Statistiques de la dernière partie */
 function loadGameStats() {
   try {
     const raw = localStorage.getItem("luxeriaStats");
@@ -8350,11 +8350,9 @@ function loadGameStats() {
   } catch (e) {}
   return { attacks: 0, heals: 0, abilities: 0, championCounts: {}, turns: 0, lastWinner: null };
 }
-
 function saveGameStats(s) {
-  try { localStorage.setItem("luxeriaStats", JSON.stringify(s)); } catch (e) {}
+  try { localStorage.setItem("luxeriaStats", JSON.parse(JSON.stringify(s))); } catch (e) {}
 }
-
 function trackAttack(charId) {
   const s = loadGameStats();
   s.attacks = (s.attacks || 0) + 1;
@@ -8362,13 +8360,11 @@ function trackAttack(charId) {
   s.championCounts[charId] = (s.championCounts[charId] || 0) + 1;
   saveGameStats(s);
 }
-
 function trackHeal() {
   const s = loadGameStats();
   s.heals = (s.heals || 0) + 1;
   saveGameStats(s);
 }
-
 function trackAbility(charId) {
   const s = loadGameStats();
   s.abilities = (s.abilities || 0) + 1;
@@ -8376,19 +8372,17 @@ function trackAbility(charId) {
   s.championCounts[charId] = (s.championCounts[charId] || 0) + 1;
   saveGameStats(s);
 }
-
 function trackTurn() {
   const s = loadGameStats();
   s.turns = (s.turns || 0) + 1;
   saveGameStats(s);
 }
-
 function trackWin(winner) {
   const s = loadGameStats();
-  s.lastWinner = winner;
+  s.lastWinner = winner || null;
   saveGameStats(s);
+  renderHomeStats();
 }
-
 function renderHomeStats() {
   const s = loadGameStats();
   const el = (id) => document.getElementById(id);
@@ -8396,183 +8390,226 @@ function renderHomeStats() {
   if (el("stat-heals")) el("stat-heals").textContent = s.heals || 0;
   if (el("stat-abilities")) el("stat-abilities").textContent = s.abilities || 0;
   if (el("stat-turns")) el("stat-turns").textContent = s.turns || 0;
+  if (el("stat-winner")) {
+    const w = s.lastWinner;
+    el("stat-winner").textContent = w === "A" ? "Équipe A" : w === "B" ? "Équipe B" : "-";
+  }
   if (el("stat-most")) {
     const counts = s.championCounts || {};
     let best = null, bestN = 0;
     for (const id in counts) {
       if (counts[id] > bestN) { bestN = counts[id]; best = id; }
     }
-    el("stat-most").textContent = best ? (charById(best) ? charById(best).name : best) : "-";
+    let name = "-";
+    if (best) {
+      try {
+        const c = (typeof charById === "function") ? charById(best) : null;
+        name = c ? c.name : best;
+      } catch (e) { name = best; }
+    }
+    el("stat-most").textContent = name;
   }
 }
 
-/* Menu navigation */
-let currentMenu = 1;
-const menuLabels = ["Terrains", "Menu principal", "Champions"];
-
-function switchMenu(dir) {
-  const center = document.getElementById("home-center");
-  if (!center) return;
-  const newMenu = Math.max(0, Math.min(2, currentMenu + dir));
-  if (newMenu === currentMenu) return;
-  center.classList.add(dir > 0 ? "slide-left" : "slide-right");
-  setTimeout(() => {
-    currentMenu = newMenu;
-    renderMenuContent();
-    center.classList.remove("slide-left", "slide-right");
-    // update dots
-    document.querySelectorAll(".menu-dot").forEach((d) => {
-      d.classList.toggle("active", parseInt(d.dataset.menu) === currentMenu);
-    });
-  }, 200);
-}
-
-function renderMenuContent() {
-  const center = document.getElementById("home-center");
-  if (!center) return;
-  if (currentMenu === 0) {
-    center.innerHTML = "<div class='menu-placeholder'><h2>Terrains</h2><p>Choisissez un terrain pour jouer.</p><button class='home-play-option' onclick='hideHome();document.querySelector(\"[data-tab=maps]\").click();'>Voir les terrains</button></div>";
-  } else if (currentMenu === 1) {
-    center.innerHTML = "<div class='menu-placeholder'><h2>Luxeria</h2><p>Bienvenue. Cliquez sur « Jouer » pour commencer.</p></div>";
-  } else {
-    center.innerHTML = "<div class='menu-placeholder'><h2>Champions</h2><p>Consultez la liste des champions.</p><button class='home-play-option' onclick='hideHome();document.querySelector(\"[data-tab=library]\").click();'>Voir les champions</button></div>";
-  }
-}
-
-/* Play button toggle */
-document.addEventListener("DOMContentLoaded", () => {
-  const toggle = document.getElementById("home-play-toggle");
-  const menu = document.getElementById("home-play-menu");
-  if (toggle && menu) {
-    toggle.addEventListener("click", (e) => {
-      e.stopPropagation();
-      menu.style.display = menu.style.display === "none" ? "flex" : "none";
-    });
-    document.addEventListener("click", (e) => {
-      if (!menu.contains(e.target) && e.target !== toggle) {
-        menu.style.display = "none";
-      }
-    });
-  }
-  // play options
-  document.querySelectorAll(".home-play-option").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mode = btn.dataset.mode;
-      if (mode === "pvp") {
-        // start local game
-        hideHome();
-        openPlayMode();
-      } else if (mode === "ai") {
-        hideHome();
-        aiOpenMode();
-      } else if (mode === "online") {
-        hideHome();
-        openOnlineLobby();
-      }
-      if (menu) menu.style.display = "none";
-    });
-  });
-  // mode toggle
-  const droitier = document.getElementById("mode-droitier");
-  const gaucher = document.getElementById("mode-gaucher");
+/* Mode droitier / gaucher (inversion complète) */
+function setHomeMode(gaucher) {
   const layout = document.getElementById("home-layout");
-  function setMode(gaucherMode) {
-    if (gaucherMode) {
-      layout.classList.add("gaucher");
-      if (gaucher) gaucher.classList.add("active");
-      if (droitier) droitier.classList.remove("active");
-    } else {
-      layout.classList.remove("gaucher");
-      if (droitier) droitier.classList.add("active");
-      if (gaucher) gaucher.classList.remove("active");
-    }
-    try { localStorage.setItem("luxeriaMode", gaucherMode ? "gaucher" : "droitier"); } catch (e) {}
-  }
-  if (droitier) droitier.addEventListener("click", () => setMode(false));
-  if (gaucher) gaucher.addEventListener("click", () => setMode(true));
-  // restore mode
-  try {
-    if (localStorage.getItem("luxeriaMode") === "gaucher") setMode(true);
-  } catch (e) {}
-  // menu nav
-  const prev = document.getElementById("menu-prev");
-  const next = document.getElementById("menu-next");
-  if (prev) prev.addEventListener("click", () => switchMenu(-1));
-  if (next) next.addEventListener("click", () => switchMenu(1));
-  // render stats
-  renderHomeStats();
-  renderMenuContent();
-});
-
-if (document.readyState !== "loading") {
-  // trigger manually
-  setTimeout(() => {
-    const toggle = document.getElementById("home-play-toggle");
-    if (toggle && !toggle.dataset.bound) {
-      toggle.dataset.bound = "1";
-      // re-run binding by dispatching a custom event
-    }
-  }, 100);
+  if (layout) layout.classList.toggle("gaucher", !!gaucher);
+  const d = document.getElementById("mode-droitier");
+  const g = document.getElementById("mode-gaucher");
+  if (d) d.classList.toggle("active", !gaucher);
+  if (g) g.classList.toggle("active", !!gaucher);
+  try { localStorage.setItem("luxeriaMode", gaucher ? "gaucher" : "droitier"); } catch (e) {}
 }
-/* ---------- Braut 3D viewer on home screen ---------- */
+
+/* Navigation entre les 3 menus */
+var currentMenu = 1;
+function setHomeMenu(idx) {
+  const next = Math.max(0, Math.min(2, idx));
+  if (next === currentMenu) return;
+  currentMenu = next;
+  const track = document.getElementById("home-menu-track");
+  if (track) track.setAttribute("data-menu", String(next));
+  document.querySelectorAll(".menu-dot").forEach((d) => {
+    d.classList.toggle("active", parseInt(d.getAttribute("data-menu"), 10) === next);
+  });
+  if (next === 1) setTimeout(initBrautViewer, 60);
+}
+function switchMenu(dir) { setHomeMenu(currentMenu + dir); }
+
+/* Cartes des terrains et des champions */
+function renderHomeCards() {
+  const tc = document.getElementById("home-terrain-cards");
+  if (tc) {
+    tc.innerHTML = "";
+    Object.keys(GAME.maps).forEach((key) => {
+      const m = GAME.maps[key];
+      const b = document.createElement("button");
+      b.className = "terrain-card";
+      b.innerHTML = "<strong>" + (m.name || key) + "</strong><small>" + (m.cols || "?") + "x" + (m.rows || "?") + "</small>";
+      b.addEventListener("click", () => {
+        hideHome();
+        const mapsTab = document.querySelector('[data-tab="maps"]');
+        if (mapsTab) mapsTab.click();
+      });
+      tc.appendChild(b);
+    });
+  }
+  const cg = document.getElementById("home-champion-grid");
+  if (cg) {
+    cg.innerHTML = "";
+    (GAME.characters || []).forEach((c) => {
+      const b = document.createElement("button");
+      b.className = "champion-card";
+      b.innerHTML = "<strong>" + (c.name || c.id) + "</strong><small>" + (c.role || "") + "</small>";
+      b.addEventListener("click", () => {
+        hideHome();
+        const libTab = document.querySelector('[data-tab="library"]');
+        if (libTab) libTab.click();
+      });
+      cg.appendChild(b);
+    });
+  }
+}
+
+/* Image 3D de BRAUT au centre du menu 1 */
+var brautInitDone = false;
+var brautInitBusy = false;
 function initBrautViewer() {
+  if (brautInitDone || brautInitBusy) return;
   const canvas = document.getElementById("braut-canvas");
-  if (!canvas || typeof window.__THREE_MOD === "undefined") {
-    setTimeout(initBrautViewer, 500);
+  if (!canvas) return;
+  if (typeof window.__THREE_MOD === "undefined" || typeof window.__GLTFLoader === "undefined") {
+    setTimeout(initBrautViewer, 400);
     return;
   }
   const THREE = window.__THREE_MOD;
-  const GLTFLoader = window.__GLTFLoader;
-  const MeshoptDecoder = window.__MeshoptDecoder;
-  if (!THREE || !GLTFLoader) {
-    setTimeout(initBrautViewer, 500);
+  brautInitBusy = true;
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+  } catch (e) {
+    brautInitBusy = false;
     return;
   }
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  renderer.setSize(canvas.clientWidth || 280, canvas.clientHeight || 320);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const w = canvas.clientWidth || 340;
+  const h = canvas.clientHeight || 400;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w, h, false);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, (canvas.clientWidth || 280) / (canvas.clientHeight || 320), 0.1, 100);
-  camera.position.set(0, 1.2, 3);
-  camera.lookAt(0, 0.5, 0);
-  const light = new THREE.DirectionalLight(0xffffff, 1.2);
-  light.position.set(2, 3, 2);
-  scene.add(light);
-  const amb = new THREE.AmbientLight(0x404060, 0.8);
-  scene.add(amb);
-  const loader = new GLTFLoader();
-  if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
-  loader.load("models/braut-tripo.glb?v=1", (gltf) => {
+  const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
+  camera.position.set(0, 1.1, 3.2);
+  camera.lookAt(0, 0.45, 0);
+  scene.add(new THREE.AmbientLight(0x606080, 1.1));
+  const key = new THREE.DirectionalLight(0xffffff, 1.5);
+  key.position.set(2, 4, 3);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9c80ff, 0.8);
+  rim.position.set(-3, 2, -2);
+  scene.add(rim);
+  const loader = new window.__GLTFLoader();
+  if (window.__MeshoptDecoder) loader.setMeshoptDecoder(window.__MeshoptDecoder);
+  loader.load("models/braut-tripo.glb?v=101", (gltf) => {
     const model = gltf.scene;
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
-    const scale = 1.5 / Math.max(size.x, size.y, size.z);
+    const scale = 1.8 / Math.max(size.x, size.y, size.z);
     model.scale.setScalar(scale);
     const box2 = new THREE.Box3().setFromObject(model);
     const c = box2.getCenter(new THREE.Vector3());
     model.position.x -= c.x;
-    model.position.y -= c.y;
+    model.position.y -= box2.min.y;
     model.position.z -= c.z;
     scene.add(model);
-    // animate rotation
+    brautInitDone = true;
+    brautInitBusy = false;
+    let raf;
     function animate() {
-      requestAnimationFrame(animate);
-      model.rotation.y += 0.01;
+      raf = requestAnimationFrame(animate);
+      if (!document.getElementById("braut-canvas")) { cancelAnimationFrame(raf); return; }
+      model.rotation.y += 0.008;
       renderer.render(scene, camera);
     }
     animate();
   }, undefined, (e) => {
-    console.error("Braut model load failed:", e);
+    console.error("Braut 3D load failed:", e);
+    brautInitBusy = false;
   });
 }
 
-// Init when home screen is shown
-const origShowHome = (typeof showHome === "function") ? showHome : null;
-if (origShowHome) {
-  const wrapped = function() {
-    origShowHome();
-    setTimeout(initBrautViewer, 300);
-  };
-  // replace showHome
-  window.showHome = wrapped;
+/* Initialisation du menu */
+function initHomeMenu() {
+  const bound = document.getElementById("home-layout");
+  if (!bound || bound.dataset.bound === "1") return;
+  bound.dataset.bound = "1";
+
+  renderHomeStats();
+  renderHomeCards();
+  try {
+    if (localStorage.getItem("luxeriaMode") === "gaucher") setHomeMode(true);
+  } catch (e) {}
+
+  setHomeMenu(1);
+  const track = document.getElementById("home-menu-track");
+  if (track) track.setAttribute("data-menu", "1");
+  document.querySelectorAll(".menu-dot").forEach((d) => {
+    d.addEventListener("click", () => setHomeMenu(parseInt(d.getAttribute("data-menu"), 10)));
+  });
+  const prev = document.getElementById("menu-prev");
+  const next = document.getElementById("menu-next");
+  if (prev) prev.addEventListener("click", () => switchMenu(-1));
+  if (next) next.addEventListener("click", () => switchMenu(1));
+
+  const modeToggle = document.getElementById("home-mode-toggle");
+  const modeMenu = document.getElementById("home-mode-menu");
+  if (modeToggle && modeMenu) {
+    modeToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      modeMenu.style.display = (modeMenu.style.display === "none") ? "flex" : "none";
+    });
+    document.addEventListener("click", (e) => {
+      if (!modeMenu.contains(e.target) && e.target !== modeToggle) modeMenu.style.display = "none";
+    });
+  }
+  const dm = document.getElementById("mode-droitier");
+  const gm = document.getElementById("mode-gaucher");
+  if (dm) dm.addEventListener("click", () => setHomeMode(false));
+  if (gm) gm.addEventListener("click", () => setHomeMode(true));
+
+  const playMain = document.getElementById("home-play-main");
+  const playMenu = document.getElementById("home-play-menu");
+  if (playMain && playMenu) {
+    playMain.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playMenu.style.display = (playMenu.style.display === "none") ? "flex" : "none";
+    });
+    document.addEventListener("click", (e) => {
+      if (!playMenu.contains(e.target) && e.target !== playMain) playMenu.style.display = "none";
+    });
+  }
+  document.querySelectorAll(".home-play-option").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-mode");
+      if (mode === "pvp") { hideHome(); openPlayMode(); }
+      else if (mode === "ai") { hideHome(); aiOpenMode(); }
+      else if (mode === "online") { hideHome(); openOnlineLobby(); }
+      if (playMenu) playMenu.style.display = "none";
+    });
+  });
+
+  setTimeout(initBrautViewer, 200);
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initHomeMenu);
+  } else {
+    initHomeMenu();
+  }
+  /* L'image 3D est initialisée dès que l'accueil s'ouvre. */
+  setInterval(() => {
+    const hs = document.getElementById("home-screen");
+    if (hs && hs.classList.contains("open")) initBrautViewer();
+  }, 600);
 }
