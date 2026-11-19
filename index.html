@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261119f">
+  <link rel="stylesheet" href="style.css?v=20261120a">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -71,6 +71,16 @@
         <div id="home-mode-menu" class="home-mode-menu" style="display:none;">
           <button id="mode-droitier" class="mode-btn active">Droitier</button>
           <button id="mode-gaucher" class="mode-btn">Gaucher</button>
+          <button id="home-mode-3d" class="mode-btn">Mode 3D</button>
+        </div>
+      </div>
+
+      <!-- Espace libre à gauche : aperçu du terrain ou fiche champion -->
+      <div class="home-detail-space" id="home-detail-space">
+        <div id="terrain-preview" class="terrain-preview" style="display:none;"></div>
+        <div id="champion-detail" class="champion-detail" style="display:none;">
+          <button id="champion-detail-back" class="champion-back">← Retour aux champions</button>
+          <div class="a4-sheet" id="a4-sheet"></div>
         </div>
       </div>
 
@@ -111,10 +121,6 @@
           <h2 class="home-panel-heading">CHAMPIONS</h2>
           <p class="home-panel-sub">Cliquez sur un champion pour consulter sa fiche.</p>
           <div class="champion-grid" id="home-champion-grid"></div>
-        </div>
-        <div id="champion-detail" class="champion-detail" style="display:none;">
-          <button id="champion-detail-back" class="champion-back">← Retour aux champions</button>
-          <div class="a4-sheet" id="a4-sheet"></div>
         </div>
       </section>
     </div>
@@ -298,7 +304,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261119f"></script>
+  <script src="app.js?v=20261120a"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
