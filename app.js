@@ -8433,7 +8433,6 @@ function setHomeMenu(idx) {
   document.querySelectorAll(".menu-dot").forEach((d) => {
     d.classList.toggle("active", parseInt(d.getAttribute("data-menu"), 10) === next);
   });
-  if (next === 1) setTimeout(initBrautViewer, 60);
 }
 function switchMenu(dir) { setHomeMenu(currentMenu + dir); }
 
@@ -8470,72 +8469,6 @@ function renderHomeCards() {
       cg.appendChild(b);
     });
   }
-}
-
-/* Image 3D de BRAUT au centre du menu 1 */
-var brautInitDone = false;
-var brautInitBusy = false;
-function initBrautViewer() {
-  if (brautInitDone || brautInitBusy) return;
-  const canvas = document.getElementById("braut-canvas");
-  if (!canvas) return;
-  if (typeof window.__THREE_MOD === "undefined" || typeof window.__GLTFLoader === "undefined") {
-    setTimeout(initBrautViewer, 400);
-    return;
-  }
-  const THREE = window.__THREE_MOD;
-  brautInitBusy = true;
-  let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-  } catch (e) {
-    brautInitBusy = false;
-    return;
-  }
-  const w = canvas.clientWidth || 340;
-  const h = canvas.clientHeight || 400;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(w, h, false);
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
-  camera.position.set(0, 1.1, 3.2);
-  camera.lookAt(0, 0.45, 0);
-  scene.add(new THREE.AmbientLight(0x606080, 1.1));
-  const key = new THREE.DirectionalLight(0xffffff, 1.5);
-  key.position.set(2, 4, 3);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9c80ff, 0.8);
-  rim.position.set(-3, 2, -2);
-  scene.add(rim);
-  const loader = new window.__GLTFLoader();
-  if (window.__MeshoptDecoder) loader.setMeshoptDecoder(window.__MeshoptDecoder);
-  loader.load("models/braut-tripo.glb?v=101", (gltf) => {
-    const model = gltf.scene;
-    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const scale = 1.8 / Math.max(size.x, size.y, size.z);
-    model.scale.setScalar(scale);
-    const box2 = new THREE.Box3().setFromObject(model);
-    const c = box2.getCenter(new THREE.Vector3());
-    model.position.x -= c.x;
-    model.position.y -= box2.min.y;
-    model.position.z -= c.z;
-    scene.add(model);
-    brautInitDone = true;
-    brautInitBusy = false;
-    let raf;
-    function animate() {
-      raf = requestAnimationFrame(animate);
-      if (!document.getElementById("braut-canvas")) { cancelAnimationFrame(raf); return; }
-      model.rotation.y += 0.008;
-      renderer.render(scene, camera);
-    }
-    animate();
-  }, undefined, (e) => {
-    console.error("Braut 3D load failed:", e);
-    brautInitBusy = false;
-  });
 }
 
 /* Initialisation du menu */
@@ -8598,7 +8531,6 @@ function initHomeMenu() {
     });
   });
 
-  setTimeout(initBrautViewer, 200);
 }
 
 if (typeof document !== "undefined") {
@@ -8607,9 +8539,4 @@ if (typeof document !== "undefined") {
   } else {
     initHomeMenu();
   }
-  /* L'image 3D est initialisée dès que l'accueil s'ouvre. */
-  setInterval(() => {
-    const hs = document.getElementById("home-screen");
-    if (hs && hs.classList.contains("open")) initBrautViewer();
-  }, 600);
 }
