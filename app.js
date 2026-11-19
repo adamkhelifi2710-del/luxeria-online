@@ -8432,15 +8432,93 @@ function setHomeMenu(idx) {
   const left = document.getElementById("panel-terrains");
   const right = document.getElementById("panel-champions");
   const stats = document.getElementById("home-stats");
+  const detailSpace = document.getElementById("home-detail-space");
   if (center) center.classList.toggle("hidden", next !== 1);
   if (left) left.classList.toggle("active", next === 0);
   if (right) right.classList.toggle("active", next === 2);
   if (stats) stats.classList.toggle("hidden", next !== 1);
+  if (detailSpace && next === 1) {
+    detailSpace.classList.remove("open");
+    const tp = document.getElementById("terrain-preview");
+    if (tp) tp.style.display = "none";
+  }
   document.querySelectorAll(".menu-dot").forEach((d) => {
     d.classList.toggle("active", parseInt(d.getAttribute("data-menu"), 10) === next);
   });
 }
 function switchMenu(dir) { setHomeMenu(currentMenu + dir); }
+
+/* Aperçu d'un terrain dans l'espace libre de gauche (murs, cases spéciales, quadrillage) */
+function showTerrainPreview(key) {
+  const m = GAME.maps[key];
+  const host = document.getElementById("terrain-preview");
+  const space = document.getElementById("home-detail-space");
+  const detail = document.getElementById("champion-detail");
+  if (!m || !host || !space) return;
+  if (detail) detail.style.display = "none";
+  host.innerHTML = "";
+  const title = document.createElement("h3");
+  title.className = "terrain-preview-title";
+  title.textContent = m.name || key;
+  host.appendChild(title);
+
+  const board = document.createElement("div");
+  board.className = "terrain-map-board";
+  board.style.gridTemplateColumns = "repeat(" + m.cols + ", 1fr)";
+  board.style.gridTemplateRows = "repeat(" + m.rows + ", 1fr)";
+  const edges = new Set(m.edgesWalls || []);
+  const has = (list, x, y) => (list || []).some((p) => p[0] === x && p[1] === y);
+  const walled = (x1, y1, x2, y2) =>
+    edges.has(x1 + "," + y1 + "-" + x2 + "," + y2) ||
+    edges.has(x2 + "," + y2 + "-" + x1 + "," + y1);
+
+  for (let y = 0; y < m.rows; y++) {
+    for (let x = 0; x < m.cols; x++) {
+      const c = document.createElement("div");
+      c.className = "cell";
+      const tile = m.tiles && m.tiles[y] ? m.tiles[y][x] : 0;
+      if (tile === 1) {
+        c.classList.add("wall");
+      } else {
+        if (has((m.startZones || {}).A, x, y)) c.classList.add("spawn-a");
+        if (has((m.startZones || {}).B, x, y)) c.classList.add("spawn-b");
+        if (has(m.fireCells, x, y)) {
+          const f = document.createElement("div");
+          f.className = "fire";
+          c.appendChild(f);
+        } else if (has(m.healCells, x, y)) {
+          const h = document.createElement("div");
+          h.className = "special-heal";
+          h.textContent = "✚";
+          c.appendChild(h);
+        } else if (has(m.speedCells, x, y)) {
+          const s = document.createElement("div");
+          s.className = "special-speed";
+          s.textContent = "⚡";
+          c.appendChild(s);
+        } else if (has(m.voidCells, x, y)) {
+          const v = document.createElement("div");
+          v.className = "special-void";
+          c.appendChild(v);
+        }
+      }
+      if (walled(x, y, x, y - 1)) {
+        const b = document.createElement("div");
+        b.className = "ewall ewall-h";
+        c.appendChild(b);
+      }
+      if (walled(x, y, x - 1, y)) {
+        const b = document.createElement("div");
+        b.className = "ewall ewall-v";
+        c.appendChild(b);
+      }
+      board.appendChild(c);
+    }
+  }
+  host.appendChild(board);
+  host.style.display = "flex";
+  space.classList.add("open");
+}
 
 /* Cartes des terrains et des champions */
 function renderHomeCards() {
@@ -8452,11 +8530,7 @@ function renderHomeCards() {
       const b = document.createElement("button");
       b.className = "terrain-card";
       b.innerHTML = "<strong>" + (m.name || key) + "</strong><small>" + (m.cols || "?") + "x" + (m.rows || "?") + "</small>";
-      b.addEventListener("click", () => {
-        hideHome();
-        const mapsTab = document.querySelector('[data-tab="maps"]');
-        if (mapsTab) mapsTab.click();
-      });
+      b.addEventListener("click", () => showTerrainPreview(key));
       tc.appendChild(b);
     });
   }
@@ -8514,14 +8588,19 @@ function openChampionDetail(c) {
       "<strong>" + escHtml(passive.name || "—") + "</strong>" +
       "<p>" + escHtml(passive.desc || "Aucun passif.") + "</p></div>" +
     '<div class="sheet-foot">LUXERIA · CHAMPION ' + escHtml((c.name || c.id)).toUpperCase() + "</div>";
-  grid.style.display = "none";
+  const space = document.getElementById("home-detail-space");
+  const terrain = document.getElementById("terrain-preview");
+  if (terrain) terrain.style.display = "none";
+  if (space) space.classList.add("open");
   detail.style.display = "flex";
 }
 function closeChampionDetail() {
   const detail = document.getElementById("champion-detail");
   const grid = document.getElementById("champion-grid-view");
+  const space = document.getElementById("home-detail-space");
   if (detail) detail.style.display = "none";
   if (grid) grid.style.display = "flex";
+  if (space) space.classList.remove("open");
 }
 
 /* Initialisation du menu */
@@ -8562,6 +8641,11 @@ function initHomeMenu() {
   const gm = document.getElementById("mode-gaucher");
   if (dm) dm.addEventListener("click", () => setHomeMode(false));
   if (gm) gm.addEventListener("click", () => setHomeMode(true));
+  const mode3d = document.getElementById("home-mode-3d");
+  if (mode3d) mode3d.addEventListener("click", () => {
+    if (modeMenu) modeMenu.style.display = "none";
+    if (window.__luxhome && typeof window.__luxhome.open === "function") window.__luxhome.open();
+  });
 
   const playMain = document.getElementById("home-play-main");
   const playMenu = document.getElementById("home-play-menu");
