@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261115">
+  <link rel="stylesheet" href="style.css?v=20261119">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -40,55 +40,81 @@
 
   <div id="home-screen">
     <div class="home-layout" id="home-layout">
-      <!-- Arrows on far left/right -->
-      <button class="menu-arrow menu-arrow-left" id="menu-prev" title="Menu précédent">◀</button>
-      <button class="menu-arrow menu-arrow-right" id="menu-next" title="Menu suivant">▶</button>
-      <!-- Top bar -->
+      <!-- Flèches blanches sur les bords de l'écran -->
+      <button class="menu-arrow menu-arrow-left" id="menu-prev" title="Terrains (menu précédent)">‹</button>
+      <button class="menu-arrow menu-arrow-right" id="menu-next" title="Champions (menu suivant)">›</button>
+
+      <!-- Barre supérieure -->
       <div class="home-topbar">
         <div class="home-updates" id="home-updates">
           <h3 class="home-panel-title">Dernières modifications</h3>
           <ul class="home-updates-list">
-            <li>Ajout du chrono de tour (15 s)</li>
-            <li>Écran d'intro avec carte floutée</li>
+            <li>Chrono de tour fixe (15 s)</li>
+            <li>Intro avec carte floutée</li>
             <li>Remplacement par le propriétaire</li>
             <li>Auto-soin des soutiens (sauf MOM'S)</li>
+            <li>Réduction du feu tous les 7 tours</li>
           </ul>
         </div>
+
         <div class="home-menu-indicator">
-          <div class="menu-dots">
-            <span class="menu-dot" data-menu="0"></span>
-            <span class="menu-dot active" data-menu="1"></span>
-            <span class="menu-dot" data-menu="2"></span>
-          </div>
+          <span class="menu-dot" data-menu="0" title="Terrains"></span>
+          <span class="menu-dot active" data-menu="1" title="Accueil"></span>
+          <span class="menu-dot" data-menu="2" title="Champions"></span>
         </div>
-        <div class="home-play-wrap">
-          <button id="home-play-toggle" class="home-play-btn">Jouer ▾</button>
-          <div id="home-play-menu" class="home-play-menu" style="display:none;">
-            <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
-            <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
-            <button class="home-play-option" data-mode="online">Jouer en ligne</button>
-            <div class="home-mode-toggle">
-              <button id="mode-droitier" class="mode-btn active">Droitier</button>
-              <button id="mode-gaucher" class="mode-btn">Gaucher</button>
-            </div>
+
+        <div class="home-mode-wrap">
+          <button id="home-mode-toggle" class="home-mode-btn" title="Mode droitier / gaucher">☰</button>
+          <div id="home-mode-menu" class="home-mode-menu" style="display:none;">
+            <button id="mode-droitier" class="mode-btn active">Droitier</button>
+            <button id="mode-gaucher" class="mode-btn">Gaucher</button>
           </div>
         </div>
       </div>
-      <!-- Main content area -->
+
+      <!-- Contenu principal -->
       <div class="home-main">
         <div class="home-stats-panel" id="home-stats">
-          <h3 class="home-panel-title">Dernière partie</h3>
-          <div class="stat-row"><span>Attaques</span><span id="stat-attacks">0</span></div>
-          <div class="stat-row"><span>Soins</span><span id="stat-heals">0</span></div>
-          <div class="stat-row"><span>Capacités</span><span id="stat-abilities">0</span></div>
+          <h3 class="home-panel-title">Résumé de la dernière partie</h3>
+          <div class="stat-row"><span>Attaques faites</span><span id="stat-attacks">0</span></div>
+          <div class="stat-row"><span>Soins prodigués</span><span id="stat-heals">0</span></div>
+          <div class="stat-row"><span>Capacités utilisées</span><span id="stat-abilities">0</span></div>
           <div class="stat-row"><span>Champion le plus utilisé</span><span id="stat-most">-</span></div>
           <div class="stat-row"><span>Tours joués</span><span id="stat-turns">0</span></div>
+          <div class="stat-row"><span>Vainqueur</span><span id="stat-winner">-</span></div>
         </div>
+
         <div class="home-center" id="home-center">
-          <div id="braut-viewer" class="braut-viewer">
-            <canvas id="braut-canvas"></canvas>
+          <div class="home-menu-track" id="home-menu-track" data-menu="1">
+            <!-- Menu 0 : terrains -->
+            <section class="home-panel" data-panel="0">
+              <h2 class="home-panel-heading">Terrains</h2>
+              <p class="home-panel-sub">Choisissez le terrain de la prochaine partie.</p>
+              <div class="terrain-cards" id="home-terrain-cards"></div>
+            </section>
+
+            <!-- Menu 1 : accueil (image Braut + bouton JOUER) -->
+            <section class="home-panel home-panel-active" data-panel="1">
+              <div id="braut-viewer" class="braut-viewer">
+                <canvas id="braut-canvas"></canvas>
+              </div>
+              <div class="home-play-main-wrap">
+                <button id="home-play-main" class="home-play-btn home-play-main">JOUER</button>
+                <div id="home-play-menu" class="home-play-menu" style="display:none;">
+                  <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
+                  <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
+                  <button class="home-play-option" data-mode="online">Jouer en ligne</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- Menu 2 : champions -->
+            <section class="home-panel" data-panel="2">
+              <h2 class="home-panel-heading">Champions</h2>
+              <p class="home-panel-sub">Découvrez les champions de Luxeria.</p>
+              <div class="champion-grid" id="home-champion-grid"></div>
+            </section>
           </div>
-          <button id="home-play-main" class="home-play-btn home-play-main">JOUER</button>
         </div>
       </div>
     </div>
@@ -272,7 +298,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261126"></script>
+  <script src="app.js?v=20261119"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
