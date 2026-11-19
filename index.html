@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261119b">
+  <link rel="stylesheet" href="style.css?v=20261119c">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -110,9 +110,15 @@
 
             <!-- Menu 2 : champions -->
             <section class="home-panel" data-panel="2">
-              <h2 class="home-panel-heading">Champions</h2>
-              <p class="home-panel-sub">Découvrez les champions de Luxeria.</p>
-              <div class="champion-grid" id="home-champion-grid"></div>
+              <div id="champion-grid-view" class="champion-grid-view">
+                <h2 class="home-panel-heading">Champions</h2>
+                <p class="home-panel-sub">Cliquez sur un champion pour consulter sa fiche.</p>
+                <div class="champion-grid" id="home-champion-grid"></div>
+              </div>
+              <div id="champion-detail" class="champion-detail" style="display:none;">
+                <button id="champion-detail-back" class="champion-back">← Retour aux champions</button>
+                <div class="a4-sheet" id="a4-sheet"></div>
+              </div>
             </section>
           </div>
         </div>
@@ -298,7 +304,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261119b"></script>
+  <script src="app.js?v=20261119c"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
