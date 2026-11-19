@@ -5042,6 +5042,7 @@ button:hover, .btn-random-inline:hover {
 .menu-arrow-left { left: 0.5%; }
 .menu-arrow-right { right: 0.5%; transform: translateY(-50%) scaleX(-1) rotate(2deg); }
 .menu-arrow-right:hover { transform: translateY(-50%) scaleX(-1) scale(1.08) rotate(0deg); }
+.menu-arrow.hidden { opacity: 0; pointer-events: none; }
 
 /* ---- Aperçu de la carte, haut gauche ---- */
 .map-preview {
@@ -5187,9 +5188,10 @@ button:hover, .btn-random-inline:hover {
 .terrain-map-board {
   display: grid;
   gap: 2px;
-  width: 100%;
-  max-height: calc(100% - 46px);
-  aspect-ratio: 15 / 10;
+  height: calc(100% - 46px);
+  max-width: 100%;
+  aspect-ratio: 10 / 15;
+  margin: 0 auto;
   background: #0b0e13;
   border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 8px;
@@ -5251,25 +5253,6 @@ button:hover, .btn-random-inline:hover {
 }
 .home-center.hidden { opacity: 0; transform: translateX(30px); pointer-events: none; }
 .home-center > * { pointer-events: auto; }
-.braut-viewer {
-  position: absolute;
-  left: 56%;
-  top: 2%;
-  width: 28%;
-  height: 58%;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#braut-photo {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.55));
-}
-
 /* ---- Gros bouton JOUER dessiné au marqueur ---- */
 .home-play-main-wrap {
   position: absolute;
@@ -5422,31 +5405,38 @@ button:hover, .btn-random-inline:hover {
   display: flex;
   flex-direction: column;
   gap: 0.5em;
-  padding: 0.85em 1.05em 0.7em;
+  padding: 0.85em 1em 0.7em;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 30%),
-    repeating-linear-gradient(0deg, rgba(27, 34, 48, 0.025) 0 1px, transparent 1px 24px),
-    linear-gradient(180deg, #faf4e6 0%, #eee1c9 100%);
-  color: #1b2230;
-  border: 4px solid #141414;
-  border-top: 7px solid var(--role-color, #6a45e0);
-  border-radius: 6px;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+    radial-gradient(circle at 12% 0%, rgba(255, 210, 30, 0.16), transparent 42%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #121a27 0%, #090d14 100%);
+  color: #f2f5fb;
+  border: 4px solid #fff;
+  border-top: 7px solid var(--role-color, #8a55d6);
+  border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px;
+  box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.3), 0 16px 42px rgba(0, 0, 0, 0.62);
   font-family: "Permanent Marker", "Comic Sans MS", cursive;
-  font-size: var(--sheet-font, 13px);
+  font-size: var(--sheet-font, 14px);
 }
-.sheet-header { text-align: center; padding-bottom: 0.45em; border-bottom: 2px solid rgba(27, 34, 48, 0.22); }
-.sheet-num { font-size: 0.58em; letter-spacing: 0.14em; color: #8a6a2f; }
-.sheet-name { margin-top: 1px; font-size: 1.15em; font-weight: 700; letter-spacing: 0.04em; color: var(--role-color, #6a45e0); }
-.sheet-role { display: inline-block; margin-top: 0.2em; padding: 0.15em 0.85em; border-radius: 999px; background: var(--role-color, #6a45e0); color: #fff; font-size: 0.6em; letter-spacing: 0.08em; text-transform: uppercase; }
+.sheet-header {
+  text-align: center;
+  padding: 0.35em 0.4em 0.4em;
+  background: rgba(255, 210, 30, 0.09);
+  border: 2px solid rgba(255, 210, 30, 0.42);
+  border-radius: 10px 7px 12px 8px;
+}
+.sheet-num { font-size: 0.55em; letter-spacing: 0.14em; color: #ffd21e; }
+.sheet-name { margin-top: 0.1em; font-size: 1.12em; font-weight: 700; letter-spacing: 0.04em; color: #fff; text-shadow: 2px 2px 0 #000, 0 0 14px var(--role-color, #8a55d6); }
+.sheet-role { display: inline-block; margin-top: 0.2em; padding: 0.12em 0.85em; border-radius: 999px; background: var(--role-color, #8a55d6); color: #fff; font-size: 0.58em; letter-spacing: 0.08em; text-transform: uppercase; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
 .sheet-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35em; }
-.sheet-stat { background: rgba(27, 34, 48, 0.07); border: 2px solid rgba(27, 34, 48, 0.28); border-radius: 5px; padding: 0.3em 0.2em; text-align: center; }
-.sheet-stat b { display: block; font-size: 0.88em; color: #1b2230; }
-.sheet-stat span { font-size: 0.5em; text-transform: uppercase; color: #6a5a42; }
-.sheet-section h4 { margin: 0 0 0.15em; font-size: 0.6em; letter-spacing: 0.1em; text-transform: uppercase; color: #8a6a2f; border-bottom: 1px solid rgba(27, 34, 48, 0.18); padding-bottom: 0.15em; }
-.sheet-section strong { display: block; font-size: 0.75em; color: var(--role-color, #6a45e0); margin-bottom: 0.15em; }
-.sheet-section p { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 0.66em; line-height: 1.25; color: #2a303c; }
-.sheet-foot { margin-top: auto; text-align: center; font-size: 0.53em; letter-spacing: 0.12em; color: #8a6a2f; border-top: 1px solid rgba(27, 34, 48, 0.18); padding-top: 0.3em; }
+.sheet-stat { background: rgba(255, 255, 255, 0.075); border: 2px solid rgba(255, 255, 255, 0.32); border-radius: 6px; padding: 0.28em 0.18em; text-align: center; }
+.sheet-stat b { display: block; font-size: 0.86em; color: #ffd21e; }
+.sheet-stat span { font-size: 0.48em; text-transform: uppercase; color: #c6d0e0; }
+.sheet-section { background: rgba(0, 0, 0, 0.28); border-left: 3px solid var(--role-color, #8a55d6); border-radius: 5px; padding: 0.3em 0.45em; }
+.sheet-section h4 { margin: 0 0 0.12em; font-size: 0.57em; letter-spacing: 0.1em; text-transform: uppercase; color: #ffd21e; border-bottom: 1px solid rgba(255, 210, 30, 0.28); padding-bottom: 0.12em; }
+.sheet-section strong { display: block; font-size: 0.72em; color: #fff; text-shadow: 1px 1px 0 #000; margin-bottom: 0.12em; }
+.sheet-section p { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 0.64em; line-height: 1.25; color: #dce4f2; }
+.sheet-foot { margin-top: auto; text-align: center; font-size: 0.5em; letter-spacing: 0.12em; color: #ffd21e; border-top: 1px solid rgba(255, 210, 30, 0.35); padding-top: 0.25em; }
 
 /* ---- Menu Style de jeu (paramètres) ---- */
 .game-settings-screen {
@@ -5531,7 +5521,6 @@ button:hover, .btn-random-inline:hover {
 .home-layout.gaucher .home-mode-btn,
 .home-layout.gaucher .home-play-main { transform: rotate(1.6deg); }
 .home-layout.gaucher .home-stats-panel { left: auto; right: 18%; }
-.home-layout.gaucher .braut-viewer { left: auto; right: 16%; }
 .home-layout.gaucher .home-play-main-wrap { left: 12.4%; }
 .home-layout.gaucher .side-panel-left { left: auto; right: 52%; }
 .home-layout.gaucher .side-panel-right { left: auto; right: 52%; }
