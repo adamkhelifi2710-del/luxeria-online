@@ -8466,6 +8466,10 @@ function setHomeMenu(idx) {
   if (left) left.classList.toggle("active", next === 0);
   if (right) right.classList.toggle("active", next === 2);
   if (stats) stats.classList.toggle("hidden", next !== 1);
+  const prevBtn = document.getElementById("menu-prev");
+  const nextBtn = document.getElementById("menu-next");
+  if (prevBtn) prevBtn.classList.toggle("hidden", next === 0);
+  if (nextBtn) nextBtn.classList.toggle("hidden", next === 2);
   if (detailSpace && next === 1) {
     detailSpace.classList.remove("open");
     const tp = document.getElementById("terrain-preview");
@@ -8493,50 +8497,68 @@ function showTerrainPreview(key) {
 
   const board = document.createElement("div");
   board.className = "terrain-map-board";
-  board.style.gridTemplateColumns = "repeat(" + m.cols + ", 1fr)";
-  board.style.gridTemplateRows = "repeat(" + m.rows + ", 1fr)";
-  const edges = new Set(m.edgesWalls || []);
-  const has = (list, x, y) => (list || []).some((p) => p[0] === x && p[1] === y);
+  /* Rotation d'un quart de tour : la zone A (x faible) passe en bas, la B en haut. */
+  const viewCols = m.rows;
+  const viewRows = m.cols;
+  board.style.gridTemplateColumns = "repeat(" + viewCols + ", 1fr)";
+  board.style.gridTemplateRows = "repeat(" + viewRows + ", 1fr)";
+  const toView = (x, y) => [y, viewRows - 1 - x];
+  const viewEdges = new Set();
+  (m.edgesWalls || []).forEach((edge) => {
+    const ends = String(edge).split("-");
+    if (ends.length !== 2) return;
+    const a = ends[0].split(",").map(Number);
+    const b = ends[1].split(",").map(Number);
+    const va = toView(a[0], a[1]);
+    const vb = toView(b[0], b[1]);
+    viewEdges.add(va[0] + "," + va[1] + "-" + vb[0] + "," + vb[1]);
+  });
+  const hasView = (list, vx, vy) => (list || []).some((p) => {
+    const v = toView(p[0], p[1]);
+    return v[0] === vx && v[1] === vy;
+  });
   const walled = (x1, y1, x2, y2) =>
-    edges.has(x1 + "," + y1 + "-" + x2 + "," + y2) ||
-    edges.has(x2 + "," + y2 + "-" + x1 + "," + y1);
+    viewEdges.has(x1 + "," + y1 + "-" + x2 + "," + y2) ||
+    viewEdges.has(x2 + "," + y2 + "-" + x1 + "," + y1);
 
-  for (let y = 0; y < m.rows; y++) {
-    for (let x = 0; x < m.cols; x++) {
+  for (let vy = 0; vy < viewRows; vy++) {
+    for (let vx = 0; vx < viewCols; vx++) {
+      const x = viewRows - 1 - vy;
+      const y = vx;
       const c = document.createElement("div");
       c.className = "cell";
       const tile = m.tiles && m.tiles[y] ? m.tiles[y][x] : 0;
       if (tile === 1) {
         c.classList.add("wall");
       } else {
-        if (has((m.startZones || {}).A, x, y)) c.classList.add("spawn-a");
-        if (has((m.startZones || {}).B, x, y)) c.classList.add("spawn-b");
-        if (has(m.fireCells, x, y)) {
+        if (hasView((m.startZones || {}).A, vx, vy)) c.classList.add("spawn-a");
+        if (hasView((m.startZones || {}).B, vx, vy)) c.classList.add("spawn-b");
+        if (hasView(m.fireCells, vx, vy)) {
           const f = document.createElement("div");
           f.className = "fire";
           c.appendChild(f);
-        } else if (has(m.healCells, x, y)) {
+        } else if (hasView(m.healCells, vx, vy)) {
           const h = document.createElement("div");
           h.className = "special-heal";
           h.textContent = "✚";
           c.appendChild(h);
-        } else if (has(m.speedCells, x, y)) {
+        } else if (hasView(m.speedCells, vx, vy)) {
           const s = document.createElement("div");
           s.className = "special-speed";
           s.textContent = "⚡";
           c.appendChild(s);
-        } else if (has(m.voidCells, x, y)) {
+        } else if (hasView(m.voidCells, vx, vy)) {
           const v = document.createElement("div");
           v.className = "special-void";
           c.appendChild(v);
         }
       }
-      if (walled(x, y, x, y - 1)) {
+      if (walled(vx, vy, vx, vy - 1)) {
         const b = document.createElement("div");
         b.className = "ewall ewall-h";
         c.appendChild(b);
       }
-      if (walled(x, y, x - 1, y)) {
+      if (walled(vx, vy, vx - 1, vy)) {
         const b = document.createElement("div");
         b.className = "ewall ewall-v";
         c.appendChild(b);
@@ -8630,7 +8652,7 @@ function fitChampionSheet() {
   const sheet = document.getElementById("a4-sheet");
   if (!sheet || !sheet.offsetParent) return;
   sheet.style.setProperty("--sheet-font", "");
-  let size = 13;
+  let size = 14;
   let guard = 0;
   while (sheet.scrollHeight > sheet.clientHeight + 1 && guard++ < 32 && size > 6) {
     size -= 0.35;
