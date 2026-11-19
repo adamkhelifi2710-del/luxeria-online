@@ -5355,3 +5355,135 @@ button:hover, .btn-random-inline:hover {
 .home-layout.gaucher .home-main { flex-direction: row-reverse; }
 .home-layout.gaucher .menu-arrow-left { left: auto; right: 0; border-radius: 10px 0 0 10px; }
 .home-layout.gaucher .menu-arrow-right { right: auto; left: 0; border-radius: 0 10px 10px 0; }
+
+/* ---------- Fiche champion format A4 ---------- */
+.champion-grid-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+.champion-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+.champion-back {
+  background: rgba(12, 18, 28, 0.9);
+  border: 1px solid rgba(245, 197, 66, 0.6);
+  border-radius: 8px;
+  color: #f5c542;
+  font-family: "Cinzel", serif;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.champion-back:hover { background: rgba(106, 69, 224, 0.4); }
+.a4-sheet {
+  height: min(100%, 470px);
+  aspect-ratio: 1 / 1.414;
+  max-width: 94%;
+  overflow: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  background: linear-gradient(180deg, #f7f1e3 0%, #ece0c8 100%);
+  color: #1b2230;
+  border: 2px solid #b98d34;
+  border-radius: 6px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), inset 0 0 0 4px rgba(255, 255, 255, 0.35);
+  font-family: "Cinzel", serif;
+}
+.sheet-header {
+  text-align: center;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(27, 34, 48, 0.25);
+}
+.sheet-num {
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  color: #8a6a2f;
+}
+.sheet-name {
+  margin-top: 2px;
+  font-family: "Cinzel Decorative", "Cinzel", serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--role-color, #6a45e0);
+}
+.sheet-role {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--role-color, #6a45e0);
+  color: #fff;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sheet-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sheet-stat {
+  background: rgba(27, 34, 48, 0.07);
+  border: 1px solid rgba(27, 34, 48, 0.14);
+  border-radius: 5px;
+  padding: 6px 8px;
+  text-align: center;
+}
+.sheet-stat b {
+  display: block;
+  font-size: 1.05rem;
+  color: #1b2230;
+}
+.sheet-stat span {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a5a42;
+}
+.sheet-section h4 {
+  margin: 0 0 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8a6a2f;
+  border-bottom: 1px solid rgba(27, 34, 48, 0.18);
+  padding-bottom: 3px;
+}
+.sheet-section strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--role-color, #6a45e0);
+  margin-bottom: 3px;
+}
+.sheet-section p {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #2a303c;
+}
+.sheet-foot {
+  margin-top: auto;
+  text-align: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  color: #8a6a2f;
+  border-top: 1px solid rgba(27, 34, 48, 0.18);
+  padding-top: 6px;
+}
