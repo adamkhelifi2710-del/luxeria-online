@@ -8451,6 +8451,34 @@ function refreshGameSettings() {
   if (timerEl && !turnTimerInterval) timerEl.textContent = getTurnDuration() + "s";
 }
 
+/* Recharge la page pour appliquer un changement de version. */
+function reloadGame() {
+  try { location.reload(); } catch (e) { window.location.href = window.location.href; }
+}
+
+/* Mode de jeu affiché sur le menu 1 : local, IA ou en ligne. */
+var GAME_MODES = [
+  { id: "local", icon: "👥", label: "Local" },
+  { id: "ai", icon: "🤖", label: "IA" },
+  { id: "online", icon: "📶", label: "En ligne" }
+];
+var selectedGameMode = "local";
+function refreshGameMode() {
+  const mode = GAME_MODES.find((m) => m.id === selectedGameMode) || GAME_MODES[0];
+  const icon = document.getElementById("mode-select-icon");
+  const label = document.getElementById("mode-select-label");
+  if (icon) icon.textContent = mode.icon;
+  if (label) label.textContent = mode.label;
+  const btn = document.getElementById("home-mode-select");
+  if (btn) btn.title = "Mode de jeu : " + mode.label + " (cliquer pour changer)";
+}
+function cycleGameMode() {
+  const i = GAME_MODES.findIndex((m) => m.id === selectedGameMode);
+  selectedGameMode = GAME_MODES[(i + 1) % GAME_MODES.length].id;
+  try { localStorage.setItem("luxeriaGameMode", selectedGameMode); } catch (e) {}
+  refreshGameMode();
+}
+
 /* Navigation entre les 3 menus */
 var currentMenu = 1;
 function setHomeMenu(idx) {
@@ -8725,11 +8753,26 @@ function initHomeMenu() {
     if (settingsScreen) settingsScreen.classList.remove("open");
   });
 
+  /* Changer de version demande confirmation puis recharge le jeu. */
+  const versionConfirm = document.getElementById("version-confirm");
+  const versionCancel = document.getElementById("version-confirm-cancel");
+  const versionOk = document.getElementById("version-confirm-ok");
+  let pendingVersion = null;
   document.querySelectorAll("[data-version]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      try { localStorage.setItem("luxeriaVersion", btn.getAttribute("data-version")); } catch (e) {}
-      refreshGameSettings();
+      pendingVersion = btn.getAttribute("data-version");
+      if (versionConfirm) versionConfirm.style.display = "flex";
     });
+  });
+  if (versionCancel) versionCancel.addEventListener("click", () => {
+    pendingVersion = null;
+    if (versionConfirm) versionConfirm.style.display = "none";
+  });
+  if (versionOk) versionOk.addEventListener("click", () => {
+    if (!pendingVersion) return;
+    try { localStorage.setItem("luxeriaVersion", pendingVersion); } catch (e) {}
+    if (versionConfirm) versionConfirm.style.display = "none";
+    window.reloadGame();
   });
   document.querySelectorAll("[data-difficulty]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -8743,25 +8786,26 @@ function initHomeMenu() {
     if (detail && detail.style.display === "flex") fitChampionSheet();
   });
 
+  /* Sélecteur de mode intégré à la page (local / IA / en ligne). */
+  try {
+    const savedMode = localStorage.getItem("luxeriaGameMode");
+    if (GAME_MODES.some((m) => m.id === savedMode)) selectedGameMode = savedMode;
+  } catch (e) {}
+  refreshGameMode();
+  const modeSelect = document.getElementById("home-mode-select");
+  if (modeSelect) modeSelect.addEventListener("click", (e) => {
+    e.stopPropagation();
+    cycleGameMode();
+  });
+
+  /* JOUER ne configure plus que la composition et le terrain du mode choisi. */
   const playMain = document.getElementById("home-play-main");
-  const playMenu = document.getElementById("home-play-menu");
-  if (playMain && playMenu) {
-    playMain.addEventListener("click", (e) => {
-      e.stopPropagation();
-      playMenu.style.display = (playMenu.style.display === "none") ? "flex" : "none";
-    });
-    document.addEventListener("click", (e) => {
-      if (!playMenu.contains(e.target) && e.target !== playMain) playMenu.style.display = "none";
-    });
-  }
-  document.querySelectorAll(".home-play-option").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mode = btn.getAttribute("data-mode");
-      if (mode === "pvp") { hideHome(); openPlayMode(); }
-      else if (mode === "ai") { hideHome(); aiOpenMode(); }
-      else if (mode === "online") { hideHome(); openOnlineLobby(); }
-      if (playMenu) playMenu.style.display = "none";
-    });
+  if (playMain) playMain.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideHome();
+    if (selectedGameMode === "ai") aiOpenMode();
+    else if (selectedGameMode === "online") openOnlineLobby();
+    else openPlayMode();
   });
 }
 
