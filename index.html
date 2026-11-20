@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261120c">
+  <link rel="stylesheet" href="style.css?v=20261120d">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -96,13 +96,12 @@
 
       <!-- Bouton JOUER (menu 1) -->
       <div class="home-center" id="home-center">
+        <button id="home-mode-select" class="home-mode-select" title="Choisir le mode de jeu">
+          <span class="mode-select-icon" id="mode-select-icon">👥</span>
+          <span class="mode-select-label" id="mode-select-label">Local</span>
+        </button>
         <div class="home-play-main-wrap">
           <button id="home-play-main" class="home-play-main">JOUER</button>
-          <div id="home-play-menu" class="home-play-menu" style="display:none;">
-            <button class="home-play-option" data-mode="pvp">Lancer une partie</button>
-            <button class="home-play-option" data-mode="ai">Jouer contre l'IA</button>
-            <button class="home-play-option" data-mode="online">Jouer en ligne</button>
-          </div>
         </div>
       </div>
 
@@ -151,6 +150,18 @@
           <button class="setting-option" data-difficulty="debutant">Débutant · 30 s</button>
           <button class="setting-option active" data-difficulty="expert">Expert · 15 s</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation avant rechargement lors d'un changement de version -->
+  <div id="version-confirm" class="version-confirm" style="display:none;">
+    <div class="version-confirm-box">
+      <h3>CHANGER DE VERSION ?</h3>
+      <p>Le jeu va se recharger pour appliquer la nouvelle version. Es-tu sûr de ton choix ?</p>
+      <div class="version-confirm-actions">
+        <button id="version-confirm-cancel" class="setting-option">Annuler</button>
+        <button id="version-confirm-ok" class="setting-option active">Confirmer</button>
       </div>
     </div>
   </div>
@@ -333,7 +344,7 @@
 
   <script src="data.js?v=20261103"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261120c"></script>
+  <script src="app.js?v=20261120d"></script>
   <script src="game3d.js?v=101"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
