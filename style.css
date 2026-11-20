@@ -5018,9 +5018,9 @@ button:hover, .btn-random-inline:hover {
   inset: 0;
   z-index: 9990;
   overflow: hidden;
-  background: url("luxeria-map.png") center center / cover no-repeat;
+  background: url("home-bg.png") center center / cover no-repeat;
 }
-/* Aucun filtre sombre, aucun flou : la carte reste nette et colorée. */
+/* Fond d'accueil d'origine : net, sans filtre ni flou. */
 
 /* ---- Flèches blanches dessinées à la main ---- */
 .menu-arrow {
