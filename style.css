@@ -5285,34 +5285,34 @@ button:hover, .btn-random-inline:hover {
   box-shadow: 8px 9px 0 rgba(0, 0, 0, 0.3);
 }
 .home-play-main:active { transform: rotate(0deg) scale(0.98); box-shadow: 3px 4px 0 rgba(0, 0, 0, 0.3); }
-.home-play-menu {
+/* ---- Carré de sélection du mode de jeu, entre les stats et JOUER ---- */
+.home-mode-select {
   position: absolute;
-  top: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%) rotate(-1deg);
-  min-width: 260px;
+  left: 42%;
+  top: 44%;
+  width: 11%;
+  aspect-ratio: 1;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  z-index: 30;
-  background: #ffd21e;
-  border: 4px solid #141414;
-  border-radius: 16px 11px 18px 13px / 12px 17px 11px 15px;
-  box-shadow: 5px 6px 0 rgba(0, 0, 0, 0.3);
-}
-.home-play-option {
-  background: rgba(255, 255, 255, 0.6);
-  border: 3px solid #141414;
-  border-radius: 10px 7px 11px 8px;
-  color: #111;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(8, 12, 18, 0.82);
+  border: 4px solid #fff;
+  border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px;
+  box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.32), 0 10px 26px rgba(0, 0, 0, 0.5);
+  color: #ffd21e;
   font-family: "Permanent Marker", "Comic Sans MS", cursive;
-  font-size: clamp(0.9rem, 1.25vw, 1.25rem);
-  padding: 10px 14px;
   cursor: pointer;
-  text-align: center;
+  transform: rotate(-2deg);
+  transition: transform 0.18s ease, background 0.18s ease;
 }
-.home-play-option:hover { background: #fff; transform: rotate(-1deg); }
+.home-mode-select:hover { transform: rotate(0deg) scale(1.06); background: rgba(255, 210, 30, 0.18); }
+.home-mode-select:active { transform: rotate(0deg) scale(0.97); }
+.mode-select-icon { font-size: clamp(1.6rem, 4vw, 3.4rem); line-height: 1; }
+.mode-select-label { font-size: clamp(0.68rem, 1.15vw, 1.1rem); letter-spacing: 0.05em; text-transform: uppercase; }
 
 /* ---- Menus latéraux (terrains / champions) ---- */
 .side-panel {
@@ -5515,6 +5515,44 @@ button:hover, .btn-random-inline:hover {
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
 }
 
+/* ---- Confirmation de changement de version ---- */
+.version-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 9996;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 12, 0.78);
+  backdrop-filter: blur(3px);
+}
+.version-confirm-box {
+  width: min(520px, 88vw);
+  box-sizing: border-box;
+  padding: 26px 30px 24px;
+  text-align: center;
+  background: rgba(8, 12, 18, 0.95);
+  border: 5px solid #fff;
+  border-radius: 18px 26px 16px 24px / 24px 16px 26px 18px;
+  box-shadow: 5px 5px 0 rgba(255, 255, 255, 0.32), 0 16px 44px rgba(0, 0, 0, 0.6);
+}
+.version-confirm-box h3 {
+  margin: 0 0 12px;
+  color: #ffd21e;
+  font-family: "Permanent Marker", "Comic Sans MS", cursive;
+  font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+  letter-spacing: 0.04em;
+}
+.version-confirm-box p {
+  margin: 0 0 20px;
+  color: #e4ebf6;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: clamp(0.85rem, 1.2vw, 1rem);
+  line-height: 1.45;
+}
+.version-confirm-actions { display: flex; gap: 12px; justify-content: center; }
+.version-confirm-actions .setting-option { min-width: 140px; flex: 0 1 160px; }
+
 /* ---- Mode gaucher : inversion complète ---- */
 .home-layout.gaucher .home-mode-wrap { right: auto; left: 3%; }
 .home-layout.gaucher .home-mode-menu { right: auto; left: 0; }
@@ -5522,6 +5560,7 @@ button:hover, .btn-random-inline:hover {
 .home-layout.gaucher .home-play-main { transform: rotate(1.6deg); }
 .home-layout.gaucher .home-stats-panel { left: auto; right: 18%; }
 .home-layout.gaucher .home-play-main-wrap { left: 12.4%; }
+.home-layout.gaucher .home-mode-select { left: auto; right: 42%; }
 .home-layout.gaucher .side-panel-left { left: auto; right: 52%; }
 .home-layout.gaucher .side-panel-right { left: auto; right: 52%; }
 .home-layout.gaucher #menu-prev { left: auto; right: 0.5%; }
