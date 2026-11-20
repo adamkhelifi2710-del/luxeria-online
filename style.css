@@ -5289,7 +5289,7 @@ button:hover, .btn-random-inline:hover {
 .home-mode-select {
   position: absolute;
   left: 42%;
-  top: 44%;
+  top: 73.65%;
   width: 11%;
   aspect-ratio: 1;
   box-sizing: border-box;
@@ -5306,11 +5306,11 @@ button:hover, .btn-random-inline:hover {
   color: #ffd21e;
   font-family: "Permanent Marker", "Comic Sans MS", cursive;
   cursor: pointer;
-  transform: rotate(-2deg);
+  transform: translateY(-50%) rotate(-2deg);
   transition: transform 0.18s ease, background 0.18s ease;
 }
-.home-mode-select:hover { transform: rotate(0deg) scale(1.06); background: rgba(255, 210, 30, 0.18); }
-.home-mode-select:active { transform: rotate(0deg) scale(0.97); }
+.home-mode-select:hover { transform: translateY(-50%) rotate(0deg) scale(1.06); background: rgba(255, 210, 30, 0.18); }
+.home-mode-select:active { transform: translateY(-50%) rotate(0deg) scale(0.97); }
 .mode-select-icon { font-size: clamp(1.6rem, 4vw, 3.4rem); line-height: 1; }
 .mode-select-label { font-size: clamp(0.68rem, 1.15vw, 1.1rem); letter-spacing: 0.05em; text-transform: uppercase; }
 
