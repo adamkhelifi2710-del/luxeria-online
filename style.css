@@ -5353,7 +5353,21 @@ button:hover, .btn-random-inline:hover {
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 .terrain-cards { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px; }
-.champion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+/* Une classe par ligne : titre de classe + cartes alignées sur une seule ligne. */
+.champion-grid { display: flex; flex-direction: column; gap: 10px; }
+.champion-class { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.champion-class-title {
+  color: #ffd21e;
+  font-family: "Cinzel Decorative", "Cinzel", serif;
+  font-size: clamp(0.7rem, 1vw, 0.95rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+  padding-bottom: 2px;
+}
+.champion-class-cards { display: flex; flex-direction: row; gap: 6px; min-width: 0; }
+.champion-class-cards .champion-card { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: 0.72rem; }
+.champion-class-cards .champion-card small { font-size: 0.58rem; margin-top: 2px; }
 .terrain-card, .champion-card {
   background: rgba(255, 210, 30, 0.9);
   border: 3px solid #141414;
@@ -5563,6 +5577,18 @@ button:hover, .btn-random-inline:hover {
 .home-layout.gaucher .home-mode-select { left: auto; right: 42%; }
 .home-layout.gaucher .side-panel-left { left: auto; right: 52%; }
 .home-layout.gaucher .side-panel-right { left: auto; right: 52%; }
-.home-layout.gaucher #menu-prev { left: auto; right: 0.5%; }
-.home-layout.gaucher #menu-next { right: auto; left: 0.5%; }
+/* En mode gaucher les boutons changent de bord : on mirrore aussi la flèche
+   pour qu'elle pointe toujours vers l'extérieur, comme en mode droitier. */
+.home-layout.gaucher #menu-prev {
+  left: auto;
+  right: 0.5%;
+  transform: translateY(-50%) scaleX(-1) rotate(2deg);
+}
+.home-layout.gaucher #menu-prev:hover { transform: translateY(-50%) scaleX(-1) scale(1.08) rotate(0deg); }
+.home-layout.gaucher #menu-next {
+  right: auto;
+  left: 0.5%;
+  transform: translateY(-50%) rotate(-2deg);
+}
+.home-layout.gaucher #menu-next:hover { transform: translateY(-50%) rotate(0deg) scale(1.08); }
 
