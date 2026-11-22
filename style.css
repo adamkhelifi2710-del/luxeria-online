@@ -5628,3 +5628,90 @@ button:hover, .btn-random-inline:hover {
 }
 .home-layout.gaucher #menu-next:hover { transform: translateY(-50%) rotate(0deg) scale(1.08); }
 
+/* ---------- Mode 4 joueurs (A/B/C/D) ---------- */
+:root {
+  --team-c: #43d9a3;
+  --team-d: #ffc857;
+}
+
+#board.board-square { aspect-ratio: 1 / 1; }
+body.bigscreen #board.board-square { aspect-ratio: auto; }
+
+#turn-label.player-c { border-color: var(--team-c); color: var(--team-c); }
+#turn-label.player-d { border-color: var(--team-d); color: var(--team-d); }
+#placement-banner.player-c { border-color: var(--team-c); color: var(--team-c); }
+#placement-banner.player-d { border-color: var(--team-d); color: var(--team-d); }
+
+.cell.spawn-c { box-shadow: inset 0 0 0 2px rgba(67, 217, 163, 0.4); }
+.cell.spawn-d { box-shadow: inset 0 0 0 2px rgba(255, 200, 87, 0.4); }
+.cell.zone-marked { outline: 2px dashed #f6c24b; outline-offset: -3px; }
+
+.cell.guard-c { box-shadow: inset 0 0 0 2px rgba(67, 217, 163, 0.45); }
+.cell.guard-d { box-shadow: inset 0 0 0 2px rgba(255, 200, 87, 0.45); }
+
+.objective-c { color: var(--team-c); text-shadow: 0 0 8px rgba(67, 217, 163, 0.8); }
+.objective-d { color: var(--team-d); text-shadow: 0 0 8px rgba(255, 200, 87, 0.8); }
+.player-c-txt { color: var(--team-c); font-weight: 700; }
+.player-d-txt { color: var(--team-d); font-weight: 700; }
+
+.token.player-c { background: var(--team-c); }
+.token.player-d { background: var(--team-d); }
+.token.player-c { background: rgba(8, 48, 38, 0.92); border-color: var(--team-c); color: #d9fff2; }
+.token.player-d { background: rgba(52, 38, 8, 0.92); border-color: var(--team-d); color: #fff2d2; }
+
+.build-banner .build-title.player-c { color: var(--team-c); }
+.build-banner .build-title.player-d { color: var(--team-d); }
+.roster.player-c { border-left: 4px solid var(--team-c); }
+.roster.player-d { border-left: 4px solid var(--team-d); }
+.roster-row.field.dead { opacity: 0.45; text-decoration: line-through; }
+
+#rosters.rosters-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) {
+  #rosters.rosters-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.win-overlay.team-c .win-box { border-color: var(--team-c); }
+.win-overlay.team-d .win-box { border-color: var(--team-d); }
+.win-overlay.team-c .win-box h2 { color: var(--team-c); }
+.win-overlay.team-d .win-box h2 { color: var(--team-d); }
+
+.turn-toast.player-c { border-color: var(--team-c, #43d9a3); color: var(--team-c, #43d9a3); }
+.turn-toast.player-d { border-color: var(--team-d, #ffc857); color: var(--team-d, #ffc857); }
+
+.b3d-turn.team-c { color: var(--team-c); border-color: var(--team-c); }
+.b3d-turn.team-d { color: var(--team-d); border-color: var(--team-d); }
+.b3d-reserve-team.team-c { border-color: var(--team-c); }
+.b3d-reserve-team.team-d { border-color: var(--team-d); }
+
+/* Éditeur de zones de départ */
+.zone-editor {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+.zone-editor.active { display: inline-flex; }
+.zone-editor select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+.zone-editor button {
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+.board-toolbar .zone-editor button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Aperçus de terrain dans la galerie */
+.map-preview .mp-cell.zone-a { box-shadow: inset 0 0 0 1px rgba(79, 140, 255, 0.7); }
+.map-preview .mp-cell.zone-b { box-shadow: inset 0 0 0 1px rgba(255, 107, 107, 0.7); }
+.map-preview .mp-cell.zone-c { box-shadow: inset 0 0 0 1px rgba(67, 217, 163, 0.7); }
+.map-preview .mp-cell.zone-d { box-shadow: inset 0 0 0 1px rgba(255, 200, 87, 0.7); }
+
