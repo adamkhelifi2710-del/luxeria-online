@@ -8950,7 +8950,6 @@ function renderHomeCards() {
       const m = GAME.maps[key];
       const b = document.createElement("button");
       b.className = "terrain-card";
-      if (m.cols === m.rows) b.classList.add("terrain-card-square");
       b.innerHTML = "<strong>" + (m.name || key) + "</strong><small>" + (m.cols || "?") + "x" + (m.rows || "?") + "</small>";
       b.addEventListener("click", () => showTerrainPreview(key));
       tc.appendChild(b);
