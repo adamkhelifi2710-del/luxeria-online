@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261122d">
+  <link rel="stylesheet" href="style.css?v=20261122e">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -213,7 +213,7 @@
             <option value="add">+ Ajouter</option>
             <option value="remove">− Retirer</option>
           </select>
-          <button id="zone-reset" title="Restaurer les 4 zones de 5×3 aux coins">Zones 5×3</button>
+          <button id="zone-reset" title="Restaurer les 4 zones de 5×3 au centre de chaque côté">Zones 5×3</button>
         </div>
         <button id="save-map" title="Enregistrer le contenu actuel de ce terrain comme contenu par défaut et lui donner un nom">Enregistrer ce terrain</button>
         <span id="objective-hp"></span>
@@ -355,10 +355,10 @@
     <button id="dialog-close">Fermer</button>
   </dialog>
 
-  <script src="data.js?v=20261122b"></script>
+  <script src="data.js?v=20261122c"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261122d"></script>
-  <script src="game3d.js?v=102"></script>
+  <script src="app.js?v=20261122e"></script>
+  <script src="game3d.js?v=103"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js';
