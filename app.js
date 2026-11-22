@@ -1,6 +1,37 @@
 const STORAGE_KEY = "boardgame_tracker_v2";
 
+/* ---- Versions du jeu : la liste de champions dépend de la version ---- */
+const VERSION_CHAMPION_LIMITS = { "v0.1": 10, "v1": 15, "v1x": Infinity };
+function getGameVersion() {
+  try { return localStorage.getItem("luxeriaVersion") || "v1x"; } catch (e) { return "v1x"; }
+}
+function applyVersionRoster() {
+  const all = GAME.allCharacters || GAME.characters.slice();
+  GAME.allCharacters = all;
+  const limit = VERSION_CHAMPION_LIMITS[getGameVersion()];
+  GAME.characters = (limit === undefined || limit === Infinity)
+    ? all.slice()
+    : all.filter((c) => typeof c.number !== "number" || c.number <= limit);
+  return GAME.characters;
+}
+applyVersionRoster();
+
 let state = load();
+/* Une partie sauvegardée avec une autre version ne doit pas réintroduire
+   des champions absents de la version courante. */
+(function sanitizeStateForVersion() {
+  const allowed = new Set(GAME.characters.map((c) => c.id));
+  const used = [].concat(
+    Object.keys(state.decks || {}).reduce((a, k) => a.concat(state.decks[k] || []), []),
+    Object.keys(state.starters || {}).reduce((a, k) => a.concat(state.starters[k] || []), []),
+    (state.tokens || []).map((t) => t.charId),
+    Object.keys(state.reserve || {}).reduce((a, k) => a.concat((state.reserve[k] || []).map((r) => r.charId)), [])
+  );
+  if (used.some((id) => id && !allowed.has(id))) state = defaultState();
+})();
+
+/* Une seule finalisation par partie, quel que soit le chemin de victoire. */
+let gameStatsFinalized = false;
 let selectedTokenId = null;
 let reachable = [];
 let attackCells = [];
@@ -1569,6 +1600,7 @@ function updateStarterConfirm() {
 /* ---------- Partie / Plateau ---------- */
 
 function startGame() {
+  resetGameStats();
   state.tokens = [];
   state.walls = [];
   state.arkWalls = [];
@@ -2436,6 +2468,7 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
   win.classList.toggle("team-a", state.winner === "A");
   win.classList.toggle("team-b", state.winner === "B");
   if (state.winner) {
+    finalizeGameStats();
     const winTitle = win.querySelector("h2");
     const winText = win.querySelector(".win-text");
     if (state.winner === "draw") {
@@ -5428,6 +5461,7 @@ function randomMapFor() {
 function showHome() {
   document.getElementById("nav-home").classList.add("active");
   document.getElementById("home-screen").classList.add("open");
+  renderHomeStats();
 }
 
 function hideHome() {
@@ -8348,15 +8382,50 @@ if (document.readyState !== "loading") {
 /* ---------- Menu d'accueil (mockup) ---------- */
 
 /* Statistiques de la dernière partie */
+function emptyGameStats() {
+  return { attacks: 0, heals: 0, abilities: 0, championCounts: {}, turns: 0, lastWinner: null, lastGame: null };
+}
 function loadGameStats() {
   try {
     const raw = localStorage.getItem("luxeriaStats");
-    if (raw) return JSON.parse(raw);
+    if (raw) return Object.assign(emptyGameStats(), JSON.parse(raw));
   } catch (e) {}
-  return { attacks: 0, heals: 0, abilities: 0, championCounts: {}, turns: 0, lastWinner: null };
+  return emptyGameStats();
 }
 function saveGameStats(s) {
-  try { localStorage.setItem("luxeriaStats", JSON.parse(JSON.stringify(s))); } catch (e) {}
+  try { localStorage.setItem("luxeriaStats", JSON.stringify(s)); } catch (e) {}
+}
+/* Remet les compteurs à zéro au début de chaque partie, mais conserve le
+   résumé de la partie précédente pour le panneau d'accueil. */
+function resetGameStats() {
+  const s = loadGameStats();
+  saveGameStats(Object.assign(emptyGameStats(), {
+    lastWinner: s.lastWinner || null,
+    lastGame: s.lastGame || null
+  }));
+  gameStatsFinalized = false;
+  renderHomeStats();
+}
+/* Fige le résumé dès que la partie se termine (objectif, feu, élimination,
+   match nul), quelle que soit la fonction qui a posé state.winner. */
+function finalizeGameStats() {
+  if (gameStatsFinalized || !state.winner) return;
+  gameStatsFinalized = true;
+  const s = loadGameStats();
+  s.lastWinner = state.winner;
+  s.lastGame = {
+    winner: state.winner,
+    attacks: s.attacks || 0,
+    heals: s.heals || 0,
+    abilities: s.abilities || 0,
+    championCounts: Object.assign({}, s.championCounts || {}),
+    turns: s.turns || 0,
+    mode: state.mode || "classic",
+    version: getGameVersion(),
+    finishedAt: Date.now()
+  };
+  saveGameStats(s);
+  renderHomeStats();
 }
 function trackAttack(charId) {
   const s = loadGameStats();
@@ -8386,21 +8455,22 @@ function trackWin(winner) {
   const s = loadGameStats();
   s.lastWinner = winner || null;
   saveGameStats(s);
-  renderHomeStats();
+  finalizeGameStats();
 }
 function renderHomeStats() {
   const s = loadGameStats();
+  const g = s.lastGame || s;
   const el = (id) => document.getElementById(id);
-  if (el("stat-attacks")) el("stat-attacks").textContent = s.attacks || 0;
-  if (el("stat-heals")) el("stat-heals").textContent = s.heals || 0;
-  if (el("stat-abilities")) el("stat-abilities").textContent = s.abilities || 0;
-  if (el("stat-turns")) el("stat-turns").textContent = s.turns || 0;
+  if (el("stat-attacks")) el("stat-attacks").textContent = g.attacks || 0;
+  if (el("stat-heals")) el("stat-heals").textContent = g.heals || 0;
+  if (el("stat-abilities")) el("stat-abilities").textContent = g.abilities || 0;
+  if (el("stat-turns")) el("stat-turns").textContent = g.turns || 0;
   if (el("stat-winner")) {
-    const w = s.lastWinner;
-    el("stat-winner").textContent = w === "A" ? "Équipe A" : w === "B" ? "Équipe B" : "-";
+    const w = s.lastWinner || g.winner;
+    el("stat-winner").textContent = w === "A" ? "Équipe A" : w === "B" ? "Équipe B" : w === "draw" ? "Match nul" : "-";
   }
   if (el("stat-most")) {
-    const counts = s.championCounts || {};
+    const counts = g.championCounts || {};
     let best = null, bestN = 0;
     for (const id in counts) {
       if (counts[id] > bestN) { bestN = counts[id]; best = id; }
@@ -8802,7 +8872,10 @@ function initHomeMenu() {
   });
   if (versionOk) versionOk.addEventListener("click", () => {
     if (!pendingVersion) return;
-    try { localStorage.setItem("luxeriaVersion", pendingVersion); } catch (e) {}
+    try {
+      localStorage.setItem("luxeriaVersion", pendingVersion);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
     if (versionConfirm) versionConfirm.style.display = "none";
     window.reloadGame();
   });
