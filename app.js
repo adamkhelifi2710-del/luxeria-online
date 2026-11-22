@@ -7744,6 +7744,10 @@ function aiGeneratePlans(s, me, cfg) {
   const out = [];
   const my = (s.tokens || []).filter((t) => !t.dead && t.player === me);
   for (const tk of my) {
+    /* Un champion déjà activé ce tour-ci ne peut plus générer de nouvelle
+       action : en 4J l'IA doit activer un deuxième champion, pas rejouer le
+       même indéfiniment (actionsLeft ne baisserait pas). */
+    if ((s.activatedTokenIds || []).indexOf(tk.id) >= 0) continue;
     if ((tk.stunned || 0) > 0) continue;
     if ((s.guardZones || []).some((z) => Math.abs(z.x - tk.x) <= 1 && Math.abs(z.y - tk.y) <= 1)) continue;
     const canMove = !tk.abilityUsed;
@@ -8016,10 +8020,21 @@ async function aiTurnLoop() {
     await aiWaitIdle();
     if (state.winner) { aiStatus(null); return; }
 
-    const plan = aiChoosePlan(me, aiDifficulty);
-    if (plan) {
+    /* Mode 4J : l'IA dispose de 2 actions par tour. On enchaîne les plans
+       jusqu'à épuisement des actions ou absence de plan jouable. La boucle
+       s'arrête aussi si aucune action nouvelle n'a été consommée (sécurité). */
+    const maxActions = maxActionsPerTurn();
+    let acted = 0;
+    while (acted < maxActions && state.turn === me && !state.winner &&
+           state.phase === "playing" && currentActionsLeft() > 0) {
+      const before = currentActionsLeft();
+      const plan = aiChoosePlan(me, aiDifficulty);
+      if (!plan) break;
       await aiExecutePlan(plan);
       await aiWaitIdle();
+      if (state.winner) { aiStatus(null); return; }
+      acted++;
+      if (currentActionsLeft() >= before) break;
     }
     if (state.winner) { aiStatus(null); return; }
 
