@@ -5102,7 +5102,9 @@ button:hover, .btn-random-inline:hover {
   position: absolute;
   right: 3%;
   top: 3%;
-  z-index: 6;
+  /* Au-dessus des flèches (8), des panneaux latéraux et des aperçus (6) :
+     le bouton d'accès aux paramètres reste toujours cliquable. */
+  z-index: 20;
 }
 .home-mode-btn {
   width: clamp(52px, 4.2vw, 72px);
