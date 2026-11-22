@@ -80,7 +80,7 @@ const GAME = {
       range: 3,
       ability: {
         name: "Permutation",
-        desc: "Cd 6 — Échange sa position avec n'importe quel champion adverse sur le terrain : l'adversaire subit 2 dégâts. Cette capacité ignore les murs."
+        desc: "Cd 6 — Coût : 2 PV. Échange sa position avec n'importe quel champion adverse sur le terrain : l'adversaire subit 2 dégâts. Cette capacité ignore les murs."
       },
       passive: { name: "", desc: "" }
     },
