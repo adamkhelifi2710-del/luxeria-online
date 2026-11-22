@@ -1,5 +1,19 @@
 const STORAGE_KEY = "boardgame_tracker_v2";
 
+/* Équipes du mode 4 joueurs. Les autres modes n'utilisent que A et B. */
+const TEAMS = ["A", "B", "C", "D"];
+const TEAM_COLORS = {
+  A: "#4f8cff",
+  B: "#ff6b6b",
+  C: "#43d9a3",
+  D: "#ffc857"
+};
+function teamMap(value) {
+  const out = {};
+  TEAMS.forEach((p) => { out[p] = typeof value === "function" ? value(p) : value; });
+  return out;
+}
+
 /* ---- Versions du jeu : chaque champion appartient explicitement à sa version ----
    V0.1 : les 10 premiers, V1 : +5 champions, V1.X : +5 champions. */
 const VERSION_V01_CHAMPIONS = ["braut", "vini", "abyss", "xixz", "jay", "ad", "cazou", "prince", "scrab", "koga"];
@@ -50,6 +64,9 @@ let pendingSpawn = null;
 let pendingReplaceChoice = null;
 let pathPreview = [];
 let editMode = false;
+/* Éditeur de zones de départ : équipe ciblée et action (ajout/retrait). */
+let zoneEditPlayer = "A";
+let zoneEditMode = "add";
 let suppressReplacePrompt = false;
 let busy = false;
 let undoStack = [];
@@ -181,9 +198,12 @@ function applyFixedMaps() {
     if (Array.isArray(fixed.speed)) m.speedCells = fixed.speed.map((p) => p.slice());
     if (Array.isArray(fixed.void)) m.voidCells = fixed.void.map((p) => p.slice());
     if (fixed.name) m.name = fixed.name;
+    if (fixed.startZones) m.startZones = Object.assign({}, m.startZones, fixed.startZones);
     if (GAME.activeMap === mapId) {
       GAME.edgeSet = new Set(m.edgesWalls);
       GAME.fireCells = m.fireCells;
+      GAME.startZones = m.startZones;
+      GAME.objectives = m.objectives;
     }
   });
 }
@@ -198,7 +218,8 @@ function saveFixedMapFor(mapId, name) {
     fire: m.fireCells.map((p) => p.slice()),
     heal: (m.healCells || []).map((p) => p.slice()),
     speed: (m.speedCells || []).map((p) => p.slice()),
-    void: (m.voidCells || []).map((p) => p.slice())
+    void: (m.voidCells || []).map((p) => p.slice()),
+    startZones: m.startZones
   };
   localStorage.setItem(FIXED_MAPS_KEY, JSON.stringify(all));
 }
@@ -221,10 +242,13 @@ function applyCustomMapFor(name) {
     m.healCells = (custom.heal || []).map((p) => p.slice());
     m.speedCells = (custom.speed || []).map((p) => p.slice());
     m.voidCells = (custom.void || []).map((p) => p.slice());
+    if (custom.startZones) m.startZones = Object.assign({}, m.startZones, custom.startZones);
   }
   if (GAME.activeMap === name) {
     GAME.edgeSet = new Set(m.edgesWalls);
     GAME.fireCells = m.fireCells;
+    GAME.startZones = m.startZones;
+    GAME.objectives = m.objectives;
   }
 }
 
@@ -237,7 +261,8 @@ function saveCustomMapFor(name) {
     fire: m.fireCells.map((p) => p.slice()),
     heal: (m.healCells || []).map((p) => p.slice()),
     speed: (m.speedCells || []).map((p) => p.slice()),
-    void: (m.voidCells || []).map((p) => p.slice())
+    void: (m.voidCells || []).map((p) => p.slice()),
+    startZones: m.startZones
   };
   localStorage.setItem(CUSTOM_MAP_KEY, JSON.stringify(all));
 }
@@ -337,23 +362,20 @@ loadUserMapsIntoGame();
 function defaultState() {
   return {
     mapName: GAME.activeMap,
-    decks: { A: [], B: [] },
-    starters: { A: [], B: [] },
-    reserve: { A: [], B: [] },
+    decks: teamMap([]),
+    starters: teamMap([]),
+    reserve: teamMap([]),
     tokens: [],
     walls: [],
     arkWalls: [],
     guardZones: [],
-    objectives: {
-      A: GAME.objectives.A.hp,
-      B: GAME.objectives.B.hp
-    },
-    objectivePos: { A: null, B: null },
+    objectives: teamMap((p) => GAME.objectives[p] ? GAME.objectives[p].hp : 20),
+    objectivePos: teamMap(null),
     phase: "placement",
-    placement: { A: false, B: false },
+    placement: teamMap(false),
     placingPlayer: "A",
     placingStage: "objective",
-    placingQueue: { A: [], B: [] },
+    placingQueue: teamMap([]),
     turn: "A",
     turnCount: 1,
     shrinkStep: 0,
@@ -363,8 +385,10 @@ function defaultState() {
     bettaCharges: 2,
     scrabTriggered: {},
     specialCells: [],
-    swapCd: { A: 0, B: 0 },
+    swapCd: teamMap(0),
     activatedTokenId: null,
+    activatedTokenIds: [],
+    actionsLeft: 1,
     mode: "classic",
     winner: null
   };
@@ -375,6 +399,35 @@ function defaultState() {
    alliés du champion tombé remontent à 75 % de leurs PV (arrondi au supérieur). */
 function isRampage() {
   return state.mode === "rampage";
+}
+
+/* Mode 4 joueurs : 4 équipes (A, B, C, D) de 4 champions, 2 actions par tour,
+   sans réserve ni objectif. Local uniquement (hot-seat). */
+function isQuad() {
+  return state.mode === "quad";
+}
+function activeTeams() {
+  return isQuad() ? TEAMS : ["A", "B"];
+}
+function noReserveMode() {
+  return isRampage() || isQuad();
+}
+function maxActionsPerTurn() {
+  return isQuad() ? 2 : 1;
+}
+function currentActionsLeft() {
+  if (!isQuad()) return 1;
+  if (typeof state.actionsLeft === "number") return state.actionsLeft;
+  return Math.max(0, maxActionsPerTurn() - (state.activatedTokenIds || []).length);
+}
+function nextTeam(player) {
+  const teams = activeTeams();
+  const i = teams.indexOf(player);
+  return teams[(i + 1) % teams.length];
+}
+function mapHasFourZones() {
+  const z = GAME.startZones || {};
+  return !!(z.C && z.D);
 }
 
 function rampageFloor(hp) {
@@ -417,10 +470,7 @@ function undoLast() {
     const last = window._starterPickHistory.pop();
     if (last && last.classList.contains("picked")) last.classList.remove("picked");
     const confirmBtn = document.getElementById("starter-confirm");
-    if (confirmBtn) {
-      const n = document.querySelectorAll(".starter-chip.picked").length;
-      confirmBtn.disabled = n !== 3;
-    }
+    if (confirmBtn && typeof updateStarterConfirm === "function") updateStarterConfirm();
     return;
   }
   /* Annulation pendant la construction (non-draft) : retire le dernier champion ajouté. */
@@ -465,28 +515,34 @@ function load() {
         parsed.walls = parsed.walls || [];
         parsed.arkWalls = (parsed.arkWalls || []).map((w) => (typeof w === "string" ? { key: w, hp: 1 } : w));
         parsed.guardZones = parsed.guardZones || [];
-        parsed.objectives = parsed.objectives || {
-          A: GAME.objectives.A.hp,
-          B: GAME.objectives.B.hp
-        };
-        parsed.objectivePos = parsed.objectivePos || { A: null, B: null };
+        parsed.decks = Object.assign(teamMap([]), parsed.decks || {});
+        parsed.starters = Object.assign(teamMap([]), parsed.starters || {});
+        parsed.reserve = Object.assign(teamMap([]), parsed.reserve || {});
+        parsed.objectives = Object.assign(teamMap((p) => GAME.objectives[p] ? GAME.objectives[p].hp : 20), parsed.objectives || {});
+        parsed.objectivePos = Object.assign(teamMap(null), parsed.objectivePos || {});
         parsed.phase = parsed.phase || (parsed.tokens && parsed.tokens.length ? "playing" : "placement");
-        parsed.placement = parsed.placement || { A: false, B: false };
+        parsed.placement = Object.assign(teamMap(false), parsed.placement || {});
         parsed.placingPlayer = parsed.placingPlayer || "A";
         parsed.placingStage = parsed.placingStage || "objective";
-        parsed.placingQueue = parsed.placingQueue || { A: [], B: [] };
+        parsed.placingQueue = Object.assign(teamMap([]), parsed.placingQueue || {});
         parsed.turnCount = parsed.turnCount || 1;
         parsed.shrinkStep = parsed.shrinkStep || 0;
-        if ((parsed.tokens || []).some((t) => t.player === "A")) parsed.placement.A = true;
-        if ((parsed.tokens || []).some((t) => t.player === "B")) parsed.placement.B = true;
+        TEAMS.forEach((p) => {
+          if ((parsed.tokens || []).some((t) => t.player === p)) parsed.placement[p] = true;
+        });
         parsed.rapidoBuff = parsed.rapidoBuff || null;
         parsed.bettaCharges = typeof parsed.bettaCharges === "number"
           ? parsed.bettaCharges
           : Math.max(0, 2 - (parsed.bettaTagUses || 0));
         parsed.scrabTriggered = parsed.scrabTriggered || {};
         parsed.specialCells = parsed.specialCells || [];
-        parsed.swapCd = parsed.swapCd || { A: 0, B: 0 };
-        parsed.mode = parsed.mode === "rampage" ? "rampage" : "classic";
+        parsed.swapCd = Object.assign(teamMap(0), parsed.swapCd || {});
+        parsed.mode = (parsed.mode === "rampage" || parsed.mode === "quad") ? parsed.mode : "classic";
+        parsed.activatedTokenIds = parsed.activatedTokenIds ||
+          (parsed.activatedTokenId ? [parsed.activatedTokenId] : []);
+        parsed.actionsLeft = typeof parsed.actionsLeft === "number"
+          ? parsed.actionsLeft
+          : Math.max(0, (parsed.mode === "quad" ? 2 : 1) - parsed.activatedTokenIds.length);
         parsed.winner = parsed.winner || null;
         parsed.tokens.forEach((t) => {
           t.cd = t.cd || 0;
@@ -545,13 +601,18 @@ function teamHasRole(player, role) {
 /* Taille d'équipe : 3 champions (3 classes distinctes) en Rampage, sinon
    une équipe de 5 (une championne par classe). */
 function teamSizeTarget() {
+  if (isQuad()) return 4;
   return isRampage() ? 3 : CLASS_ORDER.length;
+}
+
+function allTeamsComplete() {
+  return activeTeams().every((p) => teamComplete(p));
 }
 
 function teamComplete(player) {
   const deck = state.decks[player] || [];
   if (deck.length < teamSizeTarget()) return false;
-  if (isRampage()) {
+  if (noReserveMode()) {
     const roles = new Set(deck.map((id) => charRole(id)));
     return roles.size === deck.length;
   }
@@ -583,6 +644,31 @@ function randomFullTeam(exclude) {
   return randomTeam(CLASS_ORDER.length, exclude);
 }
 
+/* En 4 joueurs il faut 16 champions. Selon la version, le vivier peut être plus
+   petit : on autorise alors les doublons entre équipes, mais jamais à l'intérieur
+   d'une même équipe et toujours avec 4 classes distinctes. */
+function randomQuadTeam(exclude) {
+  const team = randomTeam(teamSizeTarget(), exclude) || [];
+  const inTeam = new Set(team);
+  const roles = CLASS_ORDER.slice();
+  for (let i = roles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [roles[i], roles[j]] = [roles[j], roles[i]];
+  }
+  roles.forEach((role) => {
+    if (team.length >= teamSizeTarget()) return;
+    if (team.some((id) => charRole(id) === role)) return;
+    let pool = GAME.characters.filter((c) => c.role === role && !exclude.has(c.id) && !inTeam.has(c.id));
+    if (!pool.length) pool = GAME.characters.filter((c) => c.role === role && !inTeam.has(c.id));
+    if (!pool.length) return;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    team.push(pick.id);
+    inTeam.add(pick.id);
+    exclude.add(pick.id);
+  });
+  return team;
+}
+
 function randomStarters(team) {
   const pool = team.slice();
   for (let i = pool.length - 1; i > 0; i--) {
@@ -598,11 +684,12 @@ function openPlayMode() {
     icon: "🎮",
     title: "Nouvelle partie",
     text: "Choisissez le mode de jeu.",
-    hint: "Objectif : 5 champions par équipe, détruisez l'objectif adverse. Rampage : 3 contre 3, éliminez toute l'équipe adverse.",
+    hint: "Objectif : 5 champions par équipe. Rampage : 3c3. 4 Joueurs : 4 équipes de 4, 2 actions par tour, sur l'arène 15×15.",
     cancel: "Annuler",
     options: [
       { label: "🎯 Mode Objectif", value: "classic" },
-      { label: "💥 Mode Rampage (3c3)", value: "rampage" }
+      { label: "💥 Mode Rampage (3c3)", value: "rampage" },
+      { label: "⚔️ Mode 4 Joueurs (4c4c4c4)", value: "quad" }
     ]
   }).then((mode) => {
     if (!mode) { showHome(); return; }
@@ -615,9 +702,11 @@ function askSelectionMethod(mode) {
   askChoicePrompt({
     icon: "🧩",
     title: "Sélection des champions",
-    text: mode === "rampage"
-      ? "Rampage : 3 champions (3 classes différentes)."
-      : "Objectif : 5 champions (1 par classe).",
+    text: mode === "quad"
+      ? "4 Joueurs : 4 champions par équipe (4 classes différentes), sur l'arène 15×15."
+      : mode === "rampage"
+        ? "Rampage : 3 champions (3 classes différentes)."
+        : "Objectif : 5 champions (1 par classe).",
     hint: "Aléatoire : équipes tirées au sort. Normal : composez librement. Draft : chacun choisit à son tour.",
     cancel: "Annuler",
     options: [
@@ -632,8 +721,16 @@ function askSelectionMethod(mode) {
   });
 }
 
+function mapDefHasFourZones(m) {
+  return !!(m && m.startZones && m.startZones.C && m.startZones.D);
+}
+
 function openTerrainPicker(mode, method) {
-  const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  let ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  if (mode === "quad") {
+    const quadIds = ids.filter((id) => mapDefHasFourZones(GAME.maps[id]));
+    if (quadIds.length) ids = quadIds;
+  }
   if (!ids.length) {
     alert("Aucun terrain disponible.");
     showHome();
@@ -643,8 +740,10 @@ function openTerrainPicker(mode, method) {
   options.push({ label: "🎲 Au hasard", value: "__random__" });
   askChoicePrompt({
     icon: "🗺️",
-    title: mode === "rampage" ? "Rampage — choisir le terrain" : "Choisir le terrain",
-    text: "Sur quel terrain voulez-vous jouer ?",
+    title: mode === "quad" ? "4 Joueurs — choisir l'arène" : mode === "rampage" ? "Rampage — choisir le terrain" : "Choisir le terrain",
+    text: mode === "quad"
+      ? "L'arène 15×15 possède 4 zones de départ de 5×3 cases. Vous pouvez la modifier depuis l'onglet Terrains."
+      : "Sur quel terrain voulez-vous jouer ?",
     cancel: "Annuler",
     options
   }).then((val) => {
@@ -657,8 +756,18 @@ function openTerrainPicker(mode, method) {
 
 function startConfiguredGame(mapId, mode, method) {
   setActiveMap(mapId);
+  if (mode === "quad" && !mapHasFourZones()) {
+    const m = GAME.maps[mapId];
+    m.startZones = {
+      A: rectZone(0, 0, 5, 3),
+      B: rectZone(m.cols - 5, 0, 5, 3),
+      C: rectZone(0, m.rows - 3, 5, 3),
+      D: rectZone(m.cols - 5, m.rows - 3, 5, 3)
+    };
+    GAME.startZones = m.startZones;
+  }
   state = defaultState();
-  state.mode = mode === "rampage" ? "rampage" : "classic";
+  state.mode = (mode === "rampage" || mode === "quad") ? mode : "classic";
   undoStack = [];
   selectedTokenId = null;
   reachable = [];
@@ -675,11 +784,17 @@ function startConfiguredGame(mapId, mode, method) {
 }
 
 function randomSelectTeams() {
-  state.decks = { A: randomTeam(teamSizeTarget(), null) };
-  state.decks.B = randomTeam(teamSizeTarget(), state.decks.A);
-  state.starters = isRampage()
-    ? { A: state.decks.A.slice(), B: state.decks.B.slice() }
-    : { A: randomStarters(state.decks.A), B: randomStarters(state.decks.B) };
+  const used = new Set();
+  activeTeams().forEach((p) => {
+    state.decks[p] = isQuad() ? randomQuadTeam(used) : randomTeam(teamSizeTarget(), used);
+    state.decks[p].forEach((id) => used.add(id));
+  });
+  state.starters = teamMap([]);
+  activeTeams().forEach((p) => {
+    state.starters[p] = noReserveMode()
+      ? state.decks[p].slice()
+      : randomStarters(state.decks[p]);
+  });
   buildMode = null;
   renderBuildBanner();
   save();
@@ -688,8 +803,8 @@ function randomSelectTeams() {
 }
 
 function beginTeamBuild() {
-  buildMode = { player: "A" };
-  state.decks = { A: [], B: [] };
+  buildMode = { player: activeTeams()[0] };
+  state.decks = teamMap([]);
   save();
   renderDecks();
   hideHome();
@@ -711,20 +826,19 @@ function renderBuildBanner() {
   const target = teamSizeTarget();
   const filled = state.decks[cur].length;
   const remaining = CLASS_ORDER.filter((r) => !teamHasRole(cur, r)).map(roleLabel);
-  const doneA = teamComplete("A");
-  const doneB = teamComplete("B");
+  const done = {};
+  activeTeams().forEach((p) => { done[p] = teamComplete(p); });
   banner.style.display = "flex";
   const teamsHtml = onlineMode
     ? `<span class="build-teams"><span class="build-team-btn active">Équipe ${cur}</span></span>`
     : draft
       ? `<span class="build-teams"><button class="build-cancel">Annuler</button></span>`
       : `<span class="build-teams">
-      <button class="build-team-btn ${cur === "A" ? "active" : ""} ${doneA ? "done" : ""}" data-team="A">A${doneA ? " ✓" : ""}</button>
-      <button class="build-team-btn ${cur === "B" ? "active" : ""} ${doneB ? "done" : ""}" data-team="B">B${doneB ? " ✓" : ""}</button>
+      ${activeTeams().map((p) => `<button class="build-team-btn ${cur === p ? "active" : ""} ${done[p] ? "done" : ""}" data-team="${p}">${p}${done[p] ? " ✓" : ""}</button>`).join("")}
       <button class="build-cancel">Annuler</button>
     </span>`;
-  const progressText = isRampage()
-    ? `${filled}/${target} champions · 3 classes différentes`
+  const progressText = noReserveMode()
+    ? `${filled}/${target} champions · ${target} classes différentes`
     : (remaining.length ? `Classes restantes : <strong>${remaining.join(", ")}</strong>` : "Équipe complète !");
   banner.innerHTML = `
     <span class="build-title player-${cur.toLowerCase()}">${draft ? "Draft — " : ""}Équipe ${cur} — ${filled}/${target}</span>
@@ -749,14 +863,13 @@ function pickForBuild(charId) {
   if (!buildMode) return;
   if (buildMode.draft) return draftPick(charId);
   const cur = buildMode.player;
-  const other = cur === "A" ? "B" : "A";
   const deck = state.decks[cur];
   const idx = deck.indexOf(charId);
   if (idx >= 0) {
     deck.splice(idx, 1);
   } else {
-    if (state.decks[other].includes(charId)) {
-      alert("Ce Champion est déjà dans l'autre équipe.");
+    if (activeTeams().some((p) => p !== cur && (state.decks[p] || []).includes(charId))) {
+      alert("Ce Champion est déjà dans une autre équipe.");
       return;
     }
     const c = charById(charId);
@@ -778,17 +891,18 @@ function pickForBuild(charId) {
     if (teamComplete(cur)) onlineLocalBuildDone();
     return;
   }
-  if (teamComplete(cur) && cur === "A") {
+  if (teamComplete(cur)) {
     /* Mode IA : l'ordinateur compose toute seul son équipe dès que la vôtre est
        prête, puis on part directement au choix des titulaires. */
-    if (aiMode) {
+    if (aiMode && cur === "A") {
       aiBuildTeamB();
       return;
     }
-    buildMode.player = "B";
+    const next = activeTeams().find((p) => !teamComplete(p));
+    if (next) buildMode.player = next;
   }
   renderLibrary();
-  if (teamComplete("A") && teamComplete("B")) finishBuild();
+  if (allTeamsComplete()) finishBuild();
 }
 
 /* ---------- Draft (sélection tour par tour) ---------- */
@@ -796,14 +910,20 @@ function pickForBuild(charId) {
 /* Ordre de choix des joueurs : cycle A, B, B, A répété (A puis B puis B puis A
    puis A puis B…). L'équipe A ouvre toujours le draft. */
 const DRAFT_ORDER_CYCLE = ["A", "B", "B", "A"];
+const DRAFT_ORDER_CYCLE_QUAD = ["A", "B", "C", "D", "D", "C", "B", "A"];
+
+function draftOrderCycle() {
+  return isQuad() ? DRAFT_ORDER_CYCLE_QUAD : DRAFT_ORDER_CYCLE;
+}
 
 /* Renvoie le joueur du prochain choix en suivant le cycle et en sautant les
    équipes déjà complètes. buildMode.pickCount = index du prochain cran du cycle. */
 function nextDraftPlayer() {
   if (!buildMode) return null;
   const idx = buildMode.pickCount || 0;
-  for (let i = 0; i < 16; i++) {
-    const p = DRAFT_ORDER_CYCLE[(idx + i) % DRAFT_ORDER_CYCLE.length];
+  const cycle = draftOrderCycle();
+  for (let i = 0; i < cycle.length * 2; i++) {
+    const p = cycle[(idx + i) % cycle.length];
     if (!teamComplete(p)) {
       buildMode.pickCount = idx + i + 1;
       return p;
@@ -813,8 +933,8 @@ function nextDraftPlayer() {
 }
 
 function beginDraft() {
-  state.decks = { A: [], B: [] };
-  state.starters = { A: [], B: [] };
+  state.decks = teamMap([]);
+  state.starters = teamMap([]);
   buildMode = { player: "A", draft: true, pickCount: 1 };
   save();
   renderDecks();
@@ -826,12 +946,11 @@ function beginDraft() {
 
 /* Valide un choix de draft : champion libre, classe non déjà possédée. */
 function draftCanPick(player, charId) {
-  const other = player === "A" ? "B" : "A";
   const c = charById(charId);
   if (!c) return false;
   const deck = state.decks[player] || [];
   if (deck.includes(charId)) return false;
-  if ((state.decks[other] || []).includes(charId)) return false;
+  if (activeTeams().some((p) => p !== player && (state.decks[p] || []).includes(charId))) return false;
   if (teamHasRole(player, c.role)) return false;
   if (deck.length >= teamSizeTarget()) return false;
   return true;
@@ -841,10 +960,9 @@ function draftPick(charId) {
   if (!buildMode || !buildMode.draft) return;
   const cur = buildMode.player;
   if (onlineMode && cur !== lanLocalTeam()) return;
-  const other = cur === "A" ? "B" : "A";
   if (state.decks[cur].includes(charId)) return;
-  if (state.decks[other].includes(charId)) {
-    alert("Ce Champion est déjà pris par l'adversaire.");
+  if (activeTeams().some((p) => p !== cur && (state.decks[p] || []).includes(charId))) {
+    alert("Ce Champion est déjà pris par une autre équipe.");
     return;
   }
   const c = charById(charId);
@@ -868,7 +986,7 @@ function draftPick(charId) {
 
 /* En local, on suit le cycle de draft (A, B, B, A, A, B…). */
 function afterDraftPickLocal() {
-  if (teamComplete("A") && teamComplete("B")) { finishDraft(); return; }
+  if (allTeamsComplete()) { finishDraft(); return; }
   const next = nextDraftPlayer();
   if (next) buildMode.player = next;
   renderLibrary();
@@ -877,8 +995,8 @@ function afterDraftPickLocal() {
 function finishDraft() {
   buildMode = null;
   renderBuildBanner();
-  if (isRampage()) {
-    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+  if (noReserveMode()) {
+    state.starters = teamMap((p) => (state.decks[p] || []).slice());
     save();
     startGame();
   } else {
@@ -894,13 +1012,13 @@ function cancelBuild() {
 }
 
 function finishBuild() {
-  if (!teamComplete("A") || !teamComplete("B")) return;
+  if (!allTeamsComplete()) return;
   buildMode = null;
   renderBuildBanner();
   renderDecks();
   save();
-  if (isRampage()) {
-    state.starters = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+  if (noReserveMode()) {
+    state.starters = teamMap((p) => (state.decks[p] || []).slice());
     save();
     startGame();
   } else {
@@ -909,7 +1027,11 @@ function finishBuild() {
 }
 
 function startRandomGame(mode) {
-  const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  let ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
+  if (mode === "quad") {
+    const quadIds = ids.filter((id) => mapDefHasFourZones(GAME.maps[id]));
+    if (quadIds.length) ids = quadIds;
+  }
   if (!ids.length) {
     alert("Aucun terrain disponible.");
     showHome();
@@ -918,14 +1040,20 @@ function startRandomGame(mode) {
   const id = ids[Math.floor(Math.random() * ids.length)];
   setActiveMap(id);
   state = defaultState();
-  state.mode = mode === "rampage" ? "rampage" : "classic";
+  state.mode = (mode === "rampage" || mode === "quad") ? mode : "classic";
   buildMode = null;
   renderBuildBanner();
-  state.decks = { A: randomTeam(teamSizeTarget(), null) };
-  state.decks.B = randomTeam(teamSizeTarget(), state.decks.A);
-  state.starters = isRampage()
-    ? { A: state.decks.A.slice(), B: state.decks.B.slice() }
-    : { A: randomStarters(state.decks.A), B: randomStarters(state.decks.B) };
+  const used = new Set();
+  activeTeams().forEach((p) => {
+    state.decks[p] = isQuad() ? randomQuadTeam(used) : randomTeam(teamSizeTarget(), used);
+    state.decks[p].forEach((id) => used.add(id));
+  });
+  state.starters = teamMap([]);
+  activeTeams().forEach((p) => {
+    state.starters[p] = noReserveMode()
+      ? state.decks[p].slice()
+      : randomStarters(state.decks[p]);
+  });
   undoStack = [];
   selectedTokenId = null;
   reachable = [];
@@ -1272,9 +1400,8 @@ function renderLibrary() {
     let btnDisabled = false;
     if (buildMode) {
       const cur = buildMode.player;
-      const other = cur === "A" ? "B" : "A";
-      const inCurrent = state.decks[cur].includes(c.id);
-      const inOther = state.decks[other].includes(c.id);
+      const inCurrent = (state.decks[cur] || []).includes(c.id);
+      const inOther = activeTeams().some((p) => p !== cur && (state.decks[p] || []).includes(c.id));
       const roleFull = teamHasRole(cur, c.role);
       const notMyTurn = buildMode.draft && onlineMode && cur !== lanLocalTeam();
       if (notMyTurn) {
@@ -1532,10 +1659,11 @@ function openStarterDialog(opts) {
   const askMap = !opts || opts.askMap !== false;
   const content = document.getElementById("starter-content");
   content.innerHTML = "";
-  ["A", "B"].forEach((player) => {
+  activeTeams().forEach((player) => {
     const col = document.createElement("div");
     col.className = "starter-col";
-    col.innerHTML = `<h3>Équipe ${player} — choisissez 3 titulaires</h3>`;
+    const pickCount = Math.min(3, (state.decks[player] || []).length);
+    col.innerHTML = `<h3>Équipe ${player} — choisissez ${pickCount} titulaires</h3>`;
     state.decks[player].forEach((id) => {
       const c = charById(id);
       if (!c) return;
@@ -1555,12 +1683,12 @@ function openStarterDialog(opts) {
   const confirmBtn = document.getElementById("starter-confirm");
   confirmBtn.disabled = true;
   confirmBtn.onclick = async () => {
-    const picks = { A: [], B: [] };
+    const picks = teamMap([]);
     document.querySelectorAll(".starter-chip.picked").forEach((chip) => {
-      picks[chip.dataset.player].push(chip.textContent.split(" (")[0]);
+      if (picks[chip.dataset.player]) picks[chip.dataset.player].push(chip.textContent.split(" (")[0]);
     });
     const byId = (name) => GAME.characters.find((c) => c.name === name).id;
-    const starters = { A: picks.A.map(byId), B: picks.B.map(byId) };
+    const starters = teamMap((p) => picks[p].map(byId));
 
     const mapIds = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
     let wantRandom = false;
@@ -1575,7 +1703,7 @@ function openStarterDialog(opts) {
       });
     }
 
-    const keepDecks = { A: state.decks.A.slice(), B: state.decks.B.slice() };
+    const keepDecks = teamMap((p) => (state.decks[p] || []).slice());
     if (wantRandom) {
       randomMapFor();
       state.decks = keepDecks;
@@ -1594,14 +1722,14 @@ function openStarterDialog(opts) {
 }
 
 function updateStarterConfirm() {
-  const picked = { A: 0, B: 0 };
-  document.querySelectorAll(".starter-chip.picked").forEach((chip) => picked[chip.dataset.player]++);
+  const picked = teamMap(0);
+  document.querySelectorAll(".starter-chip.picked").forEach((chip) => {
+    if (picked[chip.dataset.player] != null) picked[chip.dataset.player]++;
+  });
   const confirmBtn = document.getElementById("starter-confirm");
-  const decks = { A: state.decks.A.length, B: state.decks.B.length };
-  const okA = picked.A === Math.min(3, decks.A);
-  const okB = picked.B === Math.min(3, decks.B);
-  confirmBtn.disabled = !(okA && okB);
-  if (okA && okB) confirmBtn.textContent = "Déployer les équipes";
+  const ok = activeTeams().every((p) => picked[p] === Math.min(3, (state.decks[p] || []).length));
+  confirmBtn.disabled = !ok;
+  if (ok) confirmBtn.textContent = "Déployer les équipes";
 }
 
 /* ---------- Partie / Plateau ---------- */
@@ -1612,35 +1740,31 @@ function startGame() {
   state.walls = [];
   state.arkWalls = [];
   state.guardZones = [];
-  state.reserve = { A: [], B: [] };
+  state.reserve = teamMap([]);
   state.turn = "A";
   state.turnCount = 1;
   state.shrinkStep = 0;
   state.log = [];
   state.healingBlocked = false;
-  state.objectives = {
-    A: GAME.objectives.A.hp,
-    B: GAME.objectives.B.hp
-  };
-  state.objectivePos = { A: null, B: null };
+  state.objectives = teamMap((p) => GAME.objectives[p] ? GAME.objectives[p].hp : 20);
+  state.objectivePos = teamMap(null);
   state.phase = "placement";
-  state.placement = { A: false, B: false };
+  state.placement = teamMap(false);
   state.placingPlayer = "A";
-  state.placingStage = isRampage() ? "champion" : "objective";
-  state.placingQueue = {
-    A: state.starters.A.slice(),
-    B: state.starters.B.slice()
-  };
+  state.placingStage = noReserveMode() ? "champion" : "objective";
+  state.placingQueue = teamMap((p) => (state.starters[p] || []).slice());
   state.rapidoBuff = null;
   state.bettaCharges = 2;
   state.scrabTriggered = {};
   state.specialCells = [];
-  state.swapCd = { A: 0, B: 0 };
+  state.swapCd = teamMap(0);
   state.activatedTokenId = null;
+  state.activatedTokenIds = [];
+  state.actionsLeft = maxActionsPerTurn();
   state.winner = null;
-  if (!isRampage()) {
-    ["A", "B"].forEach((player) => {
-      const inReserve = state.decks[player].filter((id) => !state.starters[player].includes(id));
+  if (!noReserveMode()) {
+    activeTeams().forEach((player) => {
+      const inReserve = state.decks[player].filter((id) => !(state.starters[player] || []).includes(id));
       inReserve.forEach((charId) => {
         const c = charById(charId);
         if (!c) return;
@@ -1648,6 +1772,8 @@ function startGame() {
       });
     });
     log("Phase de placement : chaque équipe doit placer son objectif puis ses 3 titulaires dans sa zone.");
+  } else if (isQuad()) {
+    log("4 joueurs (4c4c4c4) : 4 champions par équipe, 2 actions par tour, pas de réserve ni d'objectif. Dernière équipe en vie gagne.");
   } else {
     log("Rampage (3c3) : pas d'objectif ni de réserve. Placez vos 3 champions, éliminez toute l'équipe adverse.");
   }
@@ -1665,16 +1791,16 @@ function startGame() {
 }
 
 function objectiveDef(player) {
-  const o = GAME.objectives[player];
+  const o = (GAME.objectives || {})[player];
   const pos = state.objectivePos ? state.objectivePos[player] : null;
-  /* Sans objectif posé (notamment en Rampage) on renvoie une case impossible,
+  /* Sans objectif posé (Rampage, 4 joueurs) on renvoie une case impossible,
      pour qu'aucune attaque ne puisse viser un objectif fantôme. */
-  if (!pos) return { x: -1, y: -1, hp: o.hp };
+  if (!o || !pos) return { x: -1, y: -1, hp: o ? o.hp : 0 };
   return { x: pos.x, y: pos.y, hp: o.hp };
 }
 
 function checkWinnerFromObjective(attackerPlayer) {
-  if (isRampage()) return;
+  if (noReserveMode()) return;
   const defeated = turnOfOther(attackerPlayer);
   if (state.objectives[defeated] <= 0) {
     state.winner = attackerPlayer;
@@ -1761,6 +1887,8 @@ function renderBoard() {
   pathPreview = [];
   board.style.gridTemplateColumns = `repeat(${GAME.map.cols}, 1fr)`;
   board.style.gridTemplateRows = `repeat(${GAME.map.rows}, 1fr)`;
+  board.classList.toggle("board-square", GAME.map.cols === GAME.map.rows);
+  board.dataset.mapId = GAME.activeMap;
 
   const occupied = {};
   state.tokens.filter((t) => !t.dead).forEach((t) => {
@@ -1853,16 +1981,19 @@ function renderBoard() {
       cell.dataset.x = x;
       cell.dataset.y = y;
 
-      const inGuardA = state.guardZones.some((gz) => gz.player === "A" && Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1);
-      const inGuardB = state.guardZones.some((gz) => gz.player === "B" && Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1);
-      if (inGuardA) cell.classList.add("guard-zone", "guard-a");
-      if (inGuardB) cell.classList.add("guard-zone", "guard-b");
+      activeTeams().forEach((p) => {
+        const inGuard = state.guardZones.some((gz) => gz.player === p && Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1);
+        if (inGuard) cell.classList.add("guard-zone", "guard-" + p.toLowerCase());
+        if (GAME.startZones[p] && GAME.startZones[p].some(([zx, zy]) => zx === x && zy === y)) {
+          cell.classList.add("spawn-" + p.toLowerCase());
+        }
+        if (zoneEditPlayer === p && GAME.startZones[p] && GAME.startZones[p].some(([zx, zy]) => zx === x && zy === y)) {
+          cell.classList.add("zone-marked");
+        }
+      });
 
       if (GAME.map.tiles[y][x] === 1) {
         cell.classList.add("wall");
-      } else {
-        if (GAME.startZones.A.some(([zx, zy]) => zx === x && zy === y)) cell.classList.add("spawn-a");
-        if (GAME.startZones.B.some(([zx, zy]) => zx === x && zy === y)) cell.classList.add("spawn-b");
       }
 
       if (state.phase === "placement") {
@@ -1991,10 +2122,11 @@ function renderBoard() {
         cell.appendChild(vb);
       }
 
-      ["A", "B"].forEach((player) => {
+      activeTeams().forEach((player) => {
         const o = objectiveDef(player);
+        if (o.x < 0 || o.y < 0) return;
         if (state.phase === "placement" && !state.objectivePos[player]) return;
-if (x === o.x && y === o.y) {
+        if (x === o.x && y === o.y) {
           const ratio = Math.max(0, Math.min(1, state.objectives[player] / o.hp));
           const obj = document.createElement("div");
           obj.className = "objective objective-" + player.toLowerCase();
@@ -2453,14 +2585,17 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
   } else {
     const shrinkNext = nextShrinkInfo();
     const shrinkHint = shrinkNext ? ` · Feu au tour ${shrinkNext.round}` : "";
+    const actionHint = isQuad()
+      ? ` · ${currentActionsLeft()} action(s) restante(s)`
+      : "";
     turnLabel.textContent = state.winner
       ? (state.winner === "draw" ? "Match nul !" : `Victoire de l'équipe ${state.winner} !`)
-      : `Tour ${state.turnCount} — Équipe ${state.turn}${shrinkHint}`;
+      : `Tour ${state.turnCount} — Équipe ${state.turn}${actionHint}${shrinkHint}`;
     turnLabel.className = "player-" + state.turn.toLowerCase();
   }
 
   const objEl = document.getElementById("objective-hp");
-  if (isRampage()) {
+  if (noReserveMode()) {
     objEl.style.display = "none";
   } else {
     objEl.style.display = "";
@@ -2472,19 +2607,20 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
   }
   const win = document.getElementById("win-overlay");
   win.classList.toggle("show", !!state.winner);
-  win.classList.toggle("team-a", state.winner === "A");
-  win.classList.toggle("team-b", state.winner === "B");
+  TEAMS.forEach((p) => win.classList.toggle("team-" + p.toLowerCase(), state.winner === p));
   if (state.winner) {
     finalizeGameStats();
     const winTitle = win.querySelector("h2");
     const winText = win.querySelector(".win-text");
     if (state.winner === "draw") {
       winTitle.textContent = "Match nul !";
-      winText.textContent = "Les deux objectifs ont été détruits par le feu au même moment.";
+      winText.textContent = noReserveMode()
+        ? "Plus aucune équipe n'a de champion en jeu."
+        : "Les deux objectifs ont été détruits par le feu au même moment.";
     } else {
       winTitle.textContent = `Victoire de l'équipe ${state.winner} !`;
-      winText.textContent = isRampage()
-        ? `L'équipe ${state.winner} élimine tous les champions adverses et remporte la partie !`
+      winText.textContent = noReserveMode()
+        ? `L'équipe ${state.winner} élimine toutes les autres équipes et remporte la partie !`
         : `L'équipe ${state.winner} détruit l'objectif adverse et remporte la partie !`;
     }
   }
@@ -2559,11 +2695,12 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
 }
 
 function inSpawnZone(player, x, y) {
-  return GAME.startZones[player].some(([sx, sy]) => sx === x && sy === y);
+  const zone = GAME.startZones && GAME.startZones[player];
+  return !!zone && zone.some(([sx, sy]) => sx === x && sy === y);
 }
 
 function objectiveCellAt(x, y) {
-  return ["A", "B"].some((p) => {
+  return activeTeams().some((p) => {
     const pos = state.objectivePos ? state.objectivePos[p] : null;
     return pos && pos.x === x && pos.y === y;
   });
@@ -2573,9 +2710,9 @@ function cellPlaceable(x, y) {
   if (state.phase !== "placement") return false;
   let player;
   if (lanMode) {
-    if (GAME.startZones.A.some(([sx, sy]) => sx === x && sy === y)) player = "A";
-    else if (GAME.startZones.B.some(([sx, sy]) => sx === x && sy === y)) player = "B";
-    else return false;
+    const zonePlayer = activeTeams().find((p) => inSpawnZone(p, x, y));
+    if (!zonePlayer) return false;
+    player = zonePlayer;
   } else {
     player = state.placingPlayer;
   }
@@ -2589,12 +2726,12 @@ function cellPlaceable(x, y) {
 function placeAt(x, y) {
   let player;
   if (lanMode && state.phase === "placement") {
-    if (GAME.startZones.A.some(([sx, sy]) => sx === x && sy === y)) player = "A";
-    else if (GAME.startZones.B.some(([sx, sy]) => sx === x && sy === y)) player = "B";
-    else {
+    const zonePlayer = activeTeams().find((p) => inSpawnZone(p, x, y));
+    if (!zonePlayer) {
       alert("Choisissez une case dans votre zone de départ.");
       return;
     }
+    player = zonePlayer;
   } else {
     player = state.placingPlayer;
   }
@@ -2670,26 +2807,39 @@ function placeAt(x, y) {
     if (!queue.length) {
       state.placement[player] = true;
       if (lanMode) {
-        if (state.placement.A && state.placement.B) {
+        if (activeTeams().every((p) => state.placement[p])) {
           state.phase = "playing";
           state.placingPlayer = "A";
           state.turn = "A";
           state.turnCount = 1;
-          log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
+          state.activatedTokenIds = [];
+          state.actionsLeft = maxActionsPerTurn();
+          log(noReserveMode() ? "Placement terminé. La partie commence !" : "Placement terminé. La partie commence !");
         } else {
           log(`Équipe ${player} a terminé son placement. En attente de l'autre équipe…`);
         }
       } else {
-        if (player === "A") {
-          state.placingPlayer = "B";
-          state.placingStage = isRampage() ? "champion" : "objective";
-          log(isRampage()
-            ? "Équipe A terminée. Équipe B : placez vos 3 champions."
-            : "Équipe A terminée. Équipe B : placez votre objectif puis vos titulaires.");
+        const next = activeTeams().find((p) => !state.placement[p]);
+        if (next) {
+          state.placingPlayer = next;
+          state.placingStage = noReserveMode() ? "champion" : "objective";
+          log(isQuad()
+            ? `Équipe ${player} terminée. Équipe ${next} : placez vos ${teamSizeTarget()} champions.`
+            : isRampage()
+              ? `Équipe ${player} terminée. Équipe ${next} : placez vos 3 champions.`
+              : `Équipe ${player} terminée. Équipe ${next} : placez votre objectif puis vos titulaires.`);
         } else {
           state.phase = "playing";
-          state.placingPlayer = "A";
-          log(isRampage() ? "Placement terminé. La partie Rampage commence !" : "Placement terminé. La partie commence !");
+          state.placingPlayer = activeTeams()[0];
+          state.turn = activeTeams()[0];
+          state.turnCount = 1;
+          state.activatedTokenIds = [];
+          state.actionsLeft = maxActionsPerTurn();
+          log(isQuad()
+            ? "Placement terminé. La partie 4 joueurs commence !"
+            : isRampage()
+              ? "Placement terminé. La partie Rampage commence !"
+              : "Placement terminé. La partie commence !");
         }
       }
     }
@@ -2716,6 +2866,37 @@ function updatePlacementBanner() {
   } else {
     banner.textContent = `Placement — Équipe ${player} : placez ${queue.length} champion(s) restant(s) : ${queue.map((id) => charById(id).name).join(", ")}`;
   }
+  if (isQuad()) banner.textContent += ` · ${TEAMS.join(" → ")}`;
+}
+
+/* Ajoute ou retire une case de la zone de départ d'une équipe (éditeur). */
+function toggleStartZoneCell(player, x, y, add) {
+  if (!TEAMS.includes(player)) return;
+  if (x < 0 || y < 0 || x >= GAME.map.cols || y >= GAME.map.rows) return;
+  const zones = (GAME.map.startZones = GAME.startZones || GAME.map.startZones || {});
+  const zone = (zones[player] = zones[player] || []);
+  const idx = zone.findIndex(([zx, zy]) => zx === x && zy === y);
+  if (add && idx < 0) zone.push([x, y]);
+  if (!add && idx >= 0) zone.splice(idx, 1);
+  GAME.startZones = zones;
+  persistActiveMapEdits();
+  renderBoard();
+}
+
+/* Restaure les 4 zones de départ 5×3 dans les coins de l'arène. */
+function resetStartZonesDefault() {
+  const m = GAME.map;
+  const w = Math.min(5, m.cols);
+  const h = Math.min(3, m.rows);
+  m.startZones = {
+    A: rectZone(0, 0, w, h),
+    B: rectZone(m.cols - w, 0, w, h),
+    C: rectZone(0, m.rows - h, w, h),
+    D: rectZone(m.cols - w, m.rows - h, w, h)
+  };
+  GAME.startZones = m.startZones;
+  persistActiveMapEdits();
+  renderBoard();
 }
 
 function toggleEditWall(x1, y1, x2, y2) {
@@ -2787,7 +2968,10 @@ function handleTokenClick(t) {
 function cellClick(x, y) {
   if (busy) return;
   if (aiBlocksInput()) return;
-  if (editMode) return;
+  if (editMode) {
+    if (zoneEditPlayer) toggleStartZoneCell(zoneEditPlayer, x, y, zoneEditMode === "add");
+    return;
+  }
   if (pendingSpawn) {
     commitSpawnPlacement(x, y);
     return;
@@ -2824,15 +3008,32 @@ function cellClick(x, y) {
   else if (selectedTokenId) deselect();
 }
 
-/* Un seul champion par tour : dès qu'un champion effectue une action (déplacement,
-   attaque ou capacité), il devient le champion « activé » du tour ; aucun autre
-   champion de la même équipe ne peut plus agir avant le tour suivant. */
+/* Un champion « activé » peut enchaîner déplacement + attaque + capacité.
+   En mode 4 joueurs, une équipe peut activer 2 champions par tour (1 dans les
+   autres modes) ; les champions déjà activés restent utilisables. */
 function markActivated(tok) {
-  if (tok && !state.activatedTokenId) state.activatedTokenId = tok.id;
+  if (!tok) return;
+  state.activatedTokenIds = state.activatedTokenIds ||
+    (state.activatedTokenId ? [state.activatedTokenId] : []);
+  if (state.activatedTokenIds.includes(tok.id)) return;
+  if (state.activatedTokenIds.length >= maxActionsPerTurn()) return;
+  state.activatedTokenIds.push(tok.id);
+  state.activatedTokenId = tok.id;
+  state.actionsLeft = Math.max(0, maxActionsPerTurn() - state.activatedTokenIds.length);
 }
 
 function championAlreadyActed(tok) {
-  return !!tok && !!state.activatedTokenId && state.activatedTokenId !== tok.id;
+  if (!tok) return false;
+  state.activatedTokenIds = state.activatedTokenIds ||
+    (state.activatedTokenId ? [state.activatedTokenId] : []);
+  if (state.activatedTokenIds.includes(tok.id)) return false;
+  return state.activatedTokenIds.length >= maxActionsPerTurn();
+}
+
+function activationLimitMessage() {
+  return isQuad()
+    ? "Deux champions maximum peuvent agir par tour : passez au tour suivant."
+    : "Un seul champion peut agir par tour : passez au tour suivant.";
 }
 
 function selectToken(id) {
@@ -2918,6 +3119,7 @@ function rampageShrinkSchedule() {
 }
 
 function activeShrinkSchedule() {
+  if (isQuad()) return [];
   return isRampage() ? rampageShrinkSchedule() : SHRINK_SCHEDULE;
 }
 
@@ -3270,7 +3472,7 @@ function moveToken(id, x, y) {
     return;
   }
   if (championAlreadyActed(tok)) {
-    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    alert(activationLimitMessage());
     renderBoard();
     return;
   }
@@ -3474,6 +3676,16 @@ function spawnChoiceAt(x, y) {
    et reprise dès qu'un remplacement en zone de départ est abandonné. */
 function checkTeamWipe() {
   if (state.winner || state.phase !== "playing") return;
+  if (isQuad()) {
+    const alive = activeTeams().filter((p) => !allDead(p));
+    if (alive.length > 1) return;
+    state.winner = alive.length === 1 ? alive[0] : "draw";
+    if (typeof trackWin === "function") trackWin(state.winner);
+    log(alive.length === 1
+      ? `Dernière équipe en vie : ${alive[0]}. Victoire de l'équipe ${alive[0]} !`
+      : "Plus aucune équipe n'a de champion en jeu : match nul !");
+    return;
+  }
   ["A", "B"].forEach((p) => {
     /* Un remplacement de mort en attente signifie que l'équipe n'est pas
        réellement vaincue : son remplaçant n'est simplement pas encore posé. */
@@ -3487,6 +3699,7 @@ function checkTeamWipe() {
 }
 
 async function handleReserveReplacementOnDeath(deadToken) {
+  if (noReserveMode()) return;
   if (suppressReplacePrompt) return;
   /* IA : l'ordinateur remplace lui-même, sans fenêtre, en choisissant le meilleur
      remplaçant et une case libre. */
@@ -3643,7 +3856,7 @@ function attackAt(x, y) {
     return;
   }
   if (championAlreadyActed(tok)) {
-    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    alert(activationLimitMessage());
     renderBoard();
     return;
   }
@@ -3875,7 +4088,7 @@ async function useAbility(tokenId) {
     return;
   }
   if (championAlreadyActed(tok)) {
-    alert("Un seul champion peut agir par tour. Passez au tour suivant.");
+    alert(activationLimitMessage());
     renderBoard();
     return;
   }
@@ -4762,8 +4975,8 @@ function endPlayerTurn() {
     }
   });
 
-  state.turn = current === "A" ? "B" : "A";
-  if (state.turn === "A") {
+  state.turn = nextTeam(current);
+  if (state.turn === activeTeams()[0]) {
     const completedRound = state.turnCount;
     state.turnCount++;
     applyShrinkRound(completedRound);
@@ -4795,6 +5008,8 @@ function endPlayerTurn() {
     pendingSpawn = null;
   }
   state.activatedTokenId = null;
+  state.activatedTokenIds = [];
+  state.actionsLeft = maxActionsPerTurn();
   checkTeamWipe();
 
   const side = state.turn;
@@ -4810,7 +5025,7 @@ function endPlayerTurn() {
     t.movLeft = null;
   });
 
-  if (!allDead(turnOfOther(side))) {
+  if (activeTeams().some((p) => p !== side && !allDead(p))) {
     state.tokens.filter((t) => t.player === side && !t.dead).forEach((t) => {
       if (t.charId === "jay" && t.jayAura) {
         fxCell(t.x, t.y, "aura");
@@ -4917,8 +5132,8 @@ document.getElementById("reset-board").addEventListener("click", () => {
   aiMode = false;
   const keep = confirm("Conserver les decks actuels ? (Non = tout vider)");
   if (keep) {
-    state.starters = { A: [], B: [] };
-    state.reserve = { A: [], B: [] };
+    state.starters = teamMap([]);
+    state.reserve = teamMap([]);
     state.tokens = [];
     state.walls = [];
     state.arkWalls = [];
@@ -4928,10 +5143,7 @@ document.getElementById("reset-board").addEventListener("click", () => {
     state.shrinkStep = 0;
     state.log = [];
     state.healingBlocked = false;
-    state.objectives = {
-      A: GAME.objectives.A.hp,
-      B: GAME.objectives.B.hp
-    };
+    state.objectives = teamMap((p) => GAME.objectives[p] ? GAME.objectives[p].hp : 20);
     state.rapidoBuff = null;
     state.bettaCharges = 2;
     state.scrabTriggered = {};
@@ -5050,38 +5262,64 @@ document.getElementById("win-close").addEventListener("click", () => {
 function renderRosters() {
   const rosters = document.getElementById("rosters");
   rosters.innerHTML = "";
-  ["A", "B"].forEach((player) => {
+  rosters.classList.toggle("rosters-four", isQuad());
+  activeTeams().forEach((player) => {
     const box = document.createElement("div");
     box.className = `roster player-${player.toLowerCase()}`;
     box.innerHTML = `<h3>Équipe ${player}</h3>`;
 
-    const swapCdBadge = document.createElement("div");
-    swapCdBadge.className = "roster-cd";
-    const scd = swapCooldown(player);
-    swapCdBadge.textContent = scd > 0
-      ? `Changement volontaire : Cd ${scd}`
-      : "Changement volontaire : disponible";
-    swapCdBadge.title = "Remplacement volontaire : échanger un champion avec la réserve (recharge de 5 tours). Le remplacement obligatoire après une élimination n'utilise PAS ce cooldown.";
-    if (scd > 0) swapCdBadge.classList.add("off");
-    box.appendChild(swapCdBadge);
+    if (noReserveMode()) {
+      const note = document.createElement("div");
+      note.className = "roster-cd";
+      note.textContent = isQuad()
+        ? `${teamSizeTarget()} champions · 2 actions par tour · sans réserve`
+        : "3 champions · sans réserve";
+      box.appendChild(note);
+    } else {
+      const swapCdBadge = document.createElement("div");
+      swapCdBadge.className = "roster-cd";
+      const scd = swapCooldown(player);
+      swapCdBadge.textContent = scd > 0
+        ? `Changement volontaire : Cd ${scd}`
+        : "Changement volontaire : disponible";
+      swapCdBadge.title = "Remplacement volontaire : échanger un champion avec la réserve (recharge de 5 tours). Le remplacement obligatoire après une élimination n'utilise PAS ce cooldown.";
+      if (scd > 0) swapCdBadge.classList.add("off");
+      box.appendChild(swapCdBadge);
+    }
 
     const fieldTitle = document.createElement("div");
     fieldTitle.className = "roster-title";
     fieldTitle.textContent = "Sur le terrain";
     box.appendChild(fieldTitle);
 
+    const deck = state.decks[player] || [];
+    const shown = deck.length ? deck : (state.starters[player] || []);
+    if (noReserveMode()) {
+      const livingIds = new Set(state.tokens.filter((t) => t.player === player && !t.dead).map((t) => t.charId));
+      shown.forEach((charId) => {
+        const c = charById(charId);
+        if (!c) return;
+        const row = document.createElement("div");
+        row.className = "roster-row field" + (livingIds.has(charId) ? "" : " dead");
+        row.textContent = `${c.name} — ${livingIds.has(charId) ? "en jeu" : "éliminé"}`;
+        box.appendChild(row);
+      });
+      rosters.appendChild(box);
+      return;
+    }
+
     state.tokens.filter((t) => t.player === player && !t.dead).forEach((t) => {
       const c = charById(t.charId);
       const row = document.createElement("div");
       row.className = "roster-row field";
       row.textContent = `${c.name} — ${t.hp}/${c.hp} PV${t.cd > 0 ? " · Cd " + t.cd : ""}`;
-const swap = document.createElement("button");
-        swap.textContent = "↻ Remplacer";
-        swap.className = "roster-btn roster-swap";
-        const swapCd = swapCooldown(player);
-        swap.title = swapCd > 0
-          ? `Changement indisponible : encore ${swapCd} tour(s)`
-          : "Remplacer par la réserve : le sortant quitte sa case, l'entrant se pose sur sa case ou une case libre de la zone de départ";
+      const swap = document.createElement("button");
+      swap.textContent = "↻ Remplacer";
+      swap.className = "roster-btn roster-swap";
+      const swapCd = swapCooldown(player);
+      swap.title = swapCd > 0
+        ? `Changement indisponible : encore ${swapCd} tour(s)`
+        : "Remplacer par la réserve : le sortant quitte sa case, l'entrant se pose sur sa case ou une case libre de la zone de départ";
       swap.disabled =
         state.reserve[player].length === 0 ||
         swapCd > 0 ||
@@ -5096,7 +5334,7 @@ const swap = document.createElement("button");
     resTitle.textContent = "Réserve";
     box.appendChild(resTitle);
 
-    const entries = state.reserve[player];
+    const entries = state.reserve[player] || [];
     if (!entries.length) {
       const row = document.createElement("div");
       row.className = "roster-row empty";
@@ -5129,12 +5367,15 @@ const swap = document.createElement("button");
 }
 
 function openSwapDialog(player, token) {
+  if (noReserveMode()) return;
   if (swapCooldown(player) > 0) {
     alert(`Changement indisponible : encore ${swapCooldown(player)} tour(s) avant de pouvoir refaire un changement.`);
     return;
   }
   if (championAlreadyActed(token)) {
-    alert("Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
+    alert(isQuad()
+      ? "Deux champions maximum peuvent agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant."
+      : "Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
     return;
   }
   if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
@@ -5157,6 +5398,7 @@ function openSwapDialog(player, token) {
 }
 
 function fieldFromReserve(player, reserveEntry) {
+  if (noReserveMode()) return;
   const idx = state.reserve[player].indexOf(reserveEntry);
   if (idx < 0) return;
   if (!freeSpawnCells(player).length) {
@@ -5169,10 +5411,13 @@ function fieldFromReserve(player, reserveEntry) {
 }
 
 function swapChampion(player, tokenId, reserveIdx) {
+  if (noReserveMode()) return;
   const token = tokenById(tokenId);
   if (!token) return;
   if (championAlreadyActed(token)) {
-    alert("Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
+    alert(isQuad()
+      ? "Deux champions maximum peuvent agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant."
+      : "Un seul champion peut agir par tour : vous ne pouvez plus changer de champion. Passez au tour suivant.");
     return;
   }
   if (state.guardZones.some((z) => Math.abs(z.x - token.x) <= 1 && Math.abs(z.y - token.y) <= 1)) {
@@ -5310,7 +5555,7 @@ function openTokenPanel() {
     ${isAuto ? "" : `<button id="panel-ability" class="btn-swap" title="Utiliser la capacité (raccourci : X)" ${myTurn && !guarded && !blocked && tok.cd === 0 && (tok.stunned || 0) === 0 && !tok.abilityUsed && !tok.hasAttacked && (tok.charId !== "betta" || state.bettaCharges > 0) && (tok.charId !== "rapido" || (!tok.hasMoved && (tok.flurry || !tok.hasAttacked))) && (tok.charId !== "jay" || !tok.jayAura) && !(tok.charId === "braut" && tok.buffs && tok.buffs.braut) ? "" : "disabled"}>Utiliser : ${esc(c.ability.name)}${tok.charId === "betta" ? ` (${state.bettaCharges || 0}/2)` : ""}</button>`}
     <button id="panel-swap" class="btn-swap" ${(myTurn && (tok.hasAttacked || tok.abilityUsed)) || swapCooldown(tok.player) > 0 || guarded || blocked ? "disabled" : ""}>Remplacer par la réserve${guarded ? " (enfermé dans un dôme)" : blocked ? " (un seul champion par tour)" : swapCooldown(tok.player) > 0 ? ` (changement volontaire · Cd ${swapCooldown(tok.player)})` : ""}</button>
     ${myTurn && tok.abilityUsed && !isAuto ? `<div class="cd-badge">Capacité déjà utilisée ce tour : plus aucune action possible.</div>` : ""}
-    ${blocked ? `<div class="cd-badge">Un seul champion peut agir par tour : passez au tour suivant pour en jouer un autre.</div>` : ""}
+    ${blocked ? `<div class="cd-badge">${esc(activationLimitMessage())}</div>` : ""}
     ${scrabReady ? `<button class="btn-swap scrab-fire" data-token="${tok.id}">Déclencher la Riposte de SCRAB</button>` : ""}
     <div class="char-ability"><strong>${esc(c.ability.name)}</strong> — ${esc(c.ability.desc)}</div>
     ${c.passive && c.passive.name ? `<div class="char-passive"><strong>Passif : ${esc(c.passive.name)}</strong> — ${esc(c.passive.desc)}</div>` : ""}
@@ -5417,11 +5662,28 @@ function initMapSelect() {
   });
 
   const editBtn = document.getElementById("edit-toggle");
+  const zoneEditor = document.getElementById("zone-editor");
   editBtn.addEventListener("click", () => {
     editMode = !editMode;
     editBtn.classList.toggle("active", editMode);
     editBtn.textContent = editMode ? "Jeu (quitter l'édition)" : "Édition terrain";
+    if (zoneEditor) zoneEditor.classList.toggle("active", editMode);
     renderBoard();
+  });
+
+  const zoneTeam = document.getElementById("zone-edit-team");
+  const zoneMode = document.getElementById("zone-edit-mode");
+  if (zoneTeam) zoneTeam.addEventListener("change", () => {
+    zoneEditPlayer = zoneTeam.value || null;
+    renderBoard();
+  });
+  if (zoneMode) zoneMode.addEventListener("change", () => {
+    zoneEditMode = zoneMode.value === "remove" ? "remove" : "add";
+  });
+  const zoneReset = document.getElementById("zone-reset");
+  if (zoneReset) zoneReset.addEventListener("click", () => {
+    resetStartZonesDefault();
+    alert("Zones de départ restaurées (5×3 dans chaque coin). N'oubliez pas d'enregistrer le terrain.");
   });
 
   document.getElementById("save-map").addEventListener("click", () => {
@@ -5615,6 +5877,11 @@ function previewGrid(m) {
       ["A", "B"].forEach((p) => {
         const o = m.objectives[p];
         if (o && o.x === x && o.y === y) c.classList.add("obj");
+      });
+      Object.keys(m.startZones || {}).forEach((p) => {
+        if ((m.startZones[p] || []).some(([zx, zy]) => zx === x && zy === y)) {
+          c.classList.add("zone-" + p.toLowerCase());
+        }
       });
       g.appendChild(c);
     }
@@ -8104,7 +8371,7 @@ function turnTimerShouldRun() {
 
 function showTurnToast(text, player) {
   if (!onBoardTab()) return;
-  const color = player === "B" ? "#ff5c5c" : "#4f8cff";
+  const color = TEAM_COLORS[player] || TEAM_COLORS.A;
   const bn = document.createElement("div");
   bn.className = "ability-banner turn-banner";
   bn.style.setProperty("--ab-color", color);
@@ -8474,7 +8741,7 @@ function renderHomeStats() {
   if (el("stat-turns")) el("stat-turns").textContent = g.turns || 0;
   if (el("stat-winner")) {
     const w = s.lastWinner || g.winner;
-    el("stat-winner").textContent = w === "A" ? "Équipe A" : w === "B" ? "Équipe B" : w === "draw" ? "Match nul" : "-";
+    el("stat-winner").textContent = TEAMS.includes(w) ? `Équipe ${w}` : w === "draw" ? "Match nul" : "-";
   }
   if (el("stat-most")) {
     const counts = g.championCounts || {};
