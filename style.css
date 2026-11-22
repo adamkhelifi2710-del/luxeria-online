@@ -958,32 +958,6 @@ main {
   filter: brightness(1.1);
 }
 
-.build-actions {
-  margin-top: auto;
-  display: flex;
-  gap: 6px;
-  align-items: stretch;
-}
-
-.build-actions .btn-add { margin-top: 0; flex: 1; }
-
-.btn-remove-dup {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 8px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-remove-dup:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .empty-msg {
   color: var(--muted);
   font-style: italic;
@@ -5226,6 +5200,7 @@ button:hover, .btn-random-inline:hover {
   padding: 4px;
   box-sizing: border-box;
 }
+.terrain-map-board.terrain-square { aspect-ratio: 1 / 1; }
 .home-detail-space .a4-sheet { height: 88%; width: auto; max-width: 100%; }
 .home-detail-space .champion-detail { height: 100%; gap: 10px; }
 
@@ -5450,6 +5425,16 @@ button:hover, .btn-random-inline:hover {
   justify-content: center;
   gap: 4px;
 }
+/* L'arène carrée se distingue des autres cartes de terrain rectangulaires. */
+.terrain-card.terrain-card-square {
+  width: 96px;
+  min-height: 96px;
+  align-self: center;
+  aspect-ratio: 1 / 1;
+  padding: 6px;
+  font-size: 0.78rem;
+}
+.terrain-card-square small { font-size: 0.62rem; margin-top: 2px; }
 .champion-card { font-size: 0.82rem; }
 .terrain-card small, .champion-card small {
   display: block;
