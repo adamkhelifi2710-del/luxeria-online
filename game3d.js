@@ -31,6 +31,8 @@
     wallCap: 0xf6c24b,
     teamA: 0x4f8cff,
     teamB: 0xff6b6b,
+    teamC: 0x43d9a3,
+    teamD: 0xffc857,
     fire: 0xff7a2f,
     heal: 0x39d98a,
     speed: 0x4fd1ff,
@@ -40,6 +42,13 @@
     attack: 0xff4d4d,
     place: 0xf6c24b
   };
+
+  function teamColor3d(team) {
+    return team === "B" ? COL.teamB : team === "C" ? COL.teamC : team === "D" ? COL.teamD : COL.teamA;
+  }
+  function activeTeams3d() {
+    return (typeof activeTeams === "function" ? activeTeams() : ["A", "B"]);
+  }
 
   /* ---------------- état interne ---------------- */
 
@@ -251,7 +260,7 @@
     var charIds = [];
     var seen = {};
     (state.tokens || []).forEach(function (t) { if (!seen[t.charId]) { seen[t.charId] = true; charIds.push(t.charId); } });
-    ["A", "B"].forEach(function (p) {
+    activeTeams3d().forEach(function (p) {
       (state.decks && state.decks[p] || []).forEach(function (id) { if (!seen[id]) { seen[id] = true; charIds.push(id); } });
       (state.starters && state.starters[p] || []).forEach(function (id) { if (!seen[id]) { seen[id] = true; charIds.push(id); } });
     });
@@ -460,8 +469,9 @@
     }
 
     /* zones de départ */
-    (map.startZones.A || []).forEach(function (c) { addZone(c, COL.teamA); });
-    (map.startZones.B || []).forEach(function (c) { addZone(c, COL.teamB); });
+    activeTeams3d().forEach(function (p) {
+      ((map.startZones || {})[p] || []).forEach(function (c) { addZone(c, teamColor3d(p)); });
+    });
 
     /* murs du terrain */
     (map.edgesWalls || []).forEach(function (edge) { addEdgeWall(edge, COL.wallCap, 0); });
@@ -497,18 +507,19 @@
       var p = cellPos(z.x, z.y);
       var dome = new THREE.Mesh(
         new THREE.SphereGeometry(1.55, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-        std(z.player === "A" ? COL.teamA : COL.teamB, {
+        std(teamColor3d(z.player), {
           transparent: true, opacity: 0.16, roughness: 0.1, metalness: 0.1,
-          emissive: z.player === "A" ? COL.teamA : COL.teamB, emissiveIntensity: 0.6, depthWrite: false
+          emissive: teamColor3d(z.player), emissiveIntensity: 0.6, depthWrite: false
         })
       );
       dome.position.set(p.x, 0.02, p.z);
       gStatic.add(dome);
     });
 
-    /* objectifs */
-    addObjective("A");
-    addObjective("B");
+    /* objectifs (aucun en mode sans réserve) */
+    if (!(typeof noReserveMode === "function" && noReserveMode())) {
+      activeTeams3d().forEach(function (p) { addObjective(p); });
+    }
 
     /* plan de détection des clics */
     if (cellPlane) {
@@ -736,13 +747,13 @@
   }
 
   function addObjective(team) {
-    /* En Rampage il n'y a ni objectif ni réserve : rien à dessiner.
+    /* En mode sans réserve (Rampage / 4 joueurs), rien à dessiner.
        En mode Objectif, on n'affiche la structure qu'une fois réellement posée. */
-    if (typeof isRampage === "function" && isRampage()) return;
+    if (typeof noReserveMode === "function" && noReserveMode()) return;
     var pos = state.objectivePos && state.objectivePos[team];
     if (!pos) return;
     var p = cellPos(pos.x, pos.y);
-    var col = team === "A" ? COL.teamA : COL.teamB;
+    var col = teamColor3d(team);
     var hp = state.objectives && typeof state.objectives[team] === "number" ? state.objectives[team] : 20;
 
     var pillar = new THREE.Mesh(
@@ -813,7 +824,7 @@
       group.add(clone);
       var ring = new THREE.Mesh(
         new THREE.TorusGeometry(0.45, 0.04, 10, 32),
-        std(team === "A" ? COL.teamA : COL.teamB, { emissive: team === "A" ? COL.teamA : COL.teamB, emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.5 })
+        std(teamColor3d(team), { emissive: teamColor3d(team), emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.5 })
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.02;
@@ -823,8 +834,8 @@
     }
     var g = new THREE.Group();
     var body = std(COL.white, { roughness: 0.34, metalness: 0.06, emissive: 0x2a3a52, emissiveIntensity: 0.25 });
-    var teamMat = std(team === "A" ? COL.teamA : COL.teamB, {
-      emissive: team === "A" ? COL.teamA : COL.teamB, emissiveIntensity: 0.8, roughness: 0.35, metalness: 0.4
+    var teamMat = std(teamColor3d(team), {
+      emissive: teamColor3d(team), emissiveIntensity: 0.8, roughness: 0.35, metalness: 0.4
     });
 
     var b = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.215, 0.44, 24), body);
@@ -869,7 +880,7 @@
   function makeHPBar(player, hp, maxHp) {
     var group = new THREE.Group();
     var pct = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
-    var col = player === "A" ? COL.teamA : COL.teamB;
+    var col = teamColor3d(player);
 
     var barLen = 0.9;
     var barH = 0.04;
@@ -961,7 +972,7 @@
     // determine color from bar's first fill's stored color or default
     // (color is fixed at creation, so we re-derive from player via bar.userData)
     var player = bar.userData.player || "A";
-    col = player === "A" ? COL.teamA : COL.teamB;
+    col = teamColor3d(player);
 
     var startX = -barLen / 2 + segW / 2 + segGap;
     for (var i = 0; i < filledSegs; i++) {
@@ -1143,8 +1154,10 @@
       state.mapName,
       state.phase,
       state.shrinkStep,
-      state.objectivePos ? state.objectivePos.A && state.objectivePos.A.x : "n",
-      state.objectivePos ? state.objectivePos.B && state.objectivePos.B.x : "n",
+      activeTeams3d().map(function (p) {
+        var o = state.objectivePos && state.objectivePos[p];
+        return p + ":" + (o ? o.x + "," + o.y : "n");
+      }).join(";"),
       (state.walls || []).map(function (w) { return w.x + "," + w.y + "," + w.hp; }).join(";"),
       (state.arkWalls || []).map(function (w) { return w.key + "," + w.hp; }).join(";"),
       (state.guardZones || []).map(function (z) { return z.x + "," + z.y + "," + z.player; }).join(";"),
@@ -1236,10 +1249,13 @@
   function updateHud() {
     var turnEl = el("b3d-turn");
     if (turnEl) {
-      var who = state.turn === "A" ? "Équipe A" : "Équipe B";
+      var who = "Équipe " + state.turn;
       var extra = state.phase === "placement" ? " · placement" : " · tour " + (state.turnCount || 1);
+      if (typeof isQuad === "function" && isQuad() && state.phase === "playing") {
+        extra += " · " + (typeof currentActionsLeft === "function" ? currentActionsLeft() : 2) + " action(s)";
+      }
       turnEl.textContent = "Tour : " + who + extra;
-      turnEl.className = "b3d-turn " + (state.turn === "A" ? "team-a" : "team-b");
+      turnEl.className = "b3d-turn team-" + String(state.turn || "A").toLowerCase();
     }
 
     var card = el("b3d-card");
@@ -1251,8 +1267,10 @@
     if (!tok) {
       card.innerHTML = '<div class="b3d-empty">' +
         (state.phase === "placement"
-          ? (typeof isRampage === "function" && isRampage()
-              ? "Rampage : cliquez une case dorée pour poser vos 3 champions (pas d'objectif à placer)."
+          ? (typeof noReserveMode === "function" && noReserveMode()
+              ? (typeof isQuad === "function" && isQuad()
+                  ? "4 joueurs : cliquez une case dorée pour poser vos 4 champions (pas d'objectif à placer)."
+                  : "Rampage : cliquez une case dorée pour poser vos 3 champions (pas d'objectif à placer).")
               : "Placement : cliquez une case dorée pour poser votre objectif puis vos champions.")
           : "Cliquez une bouteille pour sélectionner un champion.") +
         "</div>";
@@ -1262,7 +1280,8 @@
     var ch = charById(tok.charId) || { name: tok.charId, hp: 1, atk: 0, mouvement: 0, range: 0, role: "" };
     var pct = Math.max(0, Math.min(100, (tok.hp / ch.hp) * 100));
     var badges = [];
-    if (state.activatedTokenId === tok.id) badges.push('<span class="b3d-badge">a agi</span>');
+    var activatedIds = state.activatedTokenIds || (state.activatedTokenId ? [state.activatedTokenId] : []);
+    if (activatedIds.indexOf(tok.id) >= 0) badges.push('<span class="b3d-badge">a agi</span>');
     if (tok.hasAttacked) badges.push('<span class="b3d-badge">a attaqué</span>');
     if (tok.abilityUsed) badges.push('<span class="b3d-badge">capacité utilisée</span>');
     if (tok.dead) badges.push('<span class="b3d-badge b3d-badge-red">éliminé</span>');
@@ -1288,8 +1307,10 @@
   function updateObjectives() {
     var el = document.getElementById("b3d-objectives");
     if (!el) return;
-    if (typeof isRampage === "function" && isRampage()) {
-      el.textContent = "Rampage · 3c3 · pas d'objectif";
+    if (typeof noReserveMode === "function" && noReserveMode()) {
+      el.textContent = (typeof isQuad === "function" && isQuad())
+        ? "4 joueurs · 4c4c4c4 · pas d'objectif"
+        : "Rampage · 3c3 · pas d'objectif";
       el.className = "b3d-objectives rampage";
       return;
     }
@@ -1302,7 +1323,7 @@
   function updateReserve() {
     var el = document.getElementById("b3d-reserve");
     if (!el) return;
-    if (state.phase !== "playing") {
+    if (state.phase !== "playing" || (typeof noReserveMode === "function" && noReserveMode())) {
       el.style.display = "none";
       el.innerHTML = "";
       return;
