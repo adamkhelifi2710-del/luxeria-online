@@ -1,17 +1,24 @@
 const STORAGE_KEY = "boardgame_tracker_v2";
 
-/* ---- Versions du jeu : la liste de champions dépend de la version ---- */
-const VERSION_CHAMPION_LIMITS = { "v0.1": 10, "v1": 15, "v1x": Infinity };
+/* ---- Versions du jeu : chaque champion appartient explicitement à sa version ----
+   V0.1 : les 10 premiers, V1 : +5 champions, V1.X : +5 champions. */
+const VERSION_V01_CHAMPIONS = ["braut", "vini", "abyss", "xixz", "jay", "ad", "cazou", "prince", "scrab", "koga"];
+const VERSION_V1_CHAMPIONS = VERSION_V01_CHAMPIONS.concat(["se7en", "moms", "ark", "calix", "dicrum"]);
+const VERSION_V1X_CHAMPIONS = VERSION_V1_CHAMPIONS.concat(["rapido", "betta", "fakie", "guard", "ranium"]);
+const VERSION_CHAMPIONS = {
+  "v0.1": VERSION_V01_CHAMPIONS,
+  "v1": VERSION_V1_CHAMPIONS,
+  "v1x": VERSION_V1X_CHAMPIONS
+};
 function getGameVersion() {
   try { return localStorage.getItem("luxeriaVersion") || "v1x"; } catch (e) { return "v1x"; }
 }
 function applyVersionRoster() {
   const all = GAME.allCharacters || GAME.characters.slice();
   GAME.allCharacters = all;
-  const limit = VERSION_CHAMPION_LIMITS[getGameVersion()];
-  GAME.characters = (limit === undefined || limit === Infinity)
-    ? all.slice()
-    : all.filter((c) => typeof c.number !== "number" || c.number <= limit);
+  const ids = VERSION_CHAMPIONS[getGameVersion()] || VERSION_V1X_CHAMPIONS;
+  const byId = new Map(all.map((c) => [c.id, c]));
+  GAME.characters = ids.map((id) => byId.get(id)).filter(Boolean);
   return GAME.characters;
 }
 applyVersionRoster();
