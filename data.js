@@ -11,6 +11,15 @@ const TILES_OPEN = [
   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
 
+/* Zone rectangulaire réutilisable pour les terrains 4 équipes (5×3 cases). */
+function rectZone(x0, y0, w, h) {
+  const cells = [];
+  for (let y = y0; y < y0 + h; y++) {
+    for (let x = x0; x < x0 + w; x++) cells.push([x, y]);
+  }
+  return cells;
+}
+
 const GAME = {
   maps: {
     map1: {
@@ -45,6 +54,28 @@ const GAME = {
       objectives: {
         A: { x: 2, y: 4, hp: 20 },
         B: { x: 12, y: 4, hp: 20 }
+      },
+      fireCells: [],
+      healCells: [],
+      speedCells: [],
+      voidCells: []
+    },
+    /* Arène 4 joueurs : 15×15 vierge et modifiable, 4 zones de départ 5×3. */
+    map4: {
+      name: "Arène 4J (15×15)",
+      cols: 15,
+      rows: 15,
+      tiles: Array.from({ length: 15 }, () => new Array(15).fill(0)),
+      edgesWalls: [],
+      startZones: {
+        A: rectZone(0, 0, 5, 3),
+        B: rectZone(10, 0, 5, 3),
+        C: rectZone(0, 12, 5, 3),
+        D: rectZone(10, 12, 5, 3)
+      },
+      objectives: {
+        A: { x: 2, y: 1, hp: 20 },
+        B: { x: 12, y: 1, hp: 20 }
       },
       fireCells: [],
       healCells: [],
