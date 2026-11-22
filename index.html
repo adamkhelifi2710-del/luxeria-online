@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261122c">
+  <link rel="stylesheet" href="style.css?v=20261122d">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -202,6 +202,19 @@
         <span id="turn-label">Tour : Équipe A</span>
         <select id="map-select" title="Choisir le terrain"></select>
         <button id="edit-toggle">Édition terrain</button>
+        <div id="zone-editor" class="zone-editor" title="Modifier les zones de départ : choisissez une équipe, puis cliquez les cases à ajouter ou retirer">
+          <select id="zone-edit-team" title="Équipe dont la zone de départ est modifiée">
+            <option value="A">Zone A</option>
+            <option value="B">Zone B</option>
+            <option value="C">Zone C</option>
+            <option value="D">Zone D</option>
+          </select>
+          <select id="zone-edit-mode" title="Action sur la zone">
+            <option value="add">+ Ajouter</option>
+            <option value="remove">− Retirer</option>
+          </select>
+          <button id="zone-reset" title="Restaurer les 4 zones de 5×3 aux coins">Zones 5×3</button>
+        </div>
         <button id="save-map" title="Enregistrer le contenu actuel de ce terrain comme contenu par défaut et lui donner un nom">Enregistrer ce terrain</button>
         <span id="objective-hp"></span>
         <button id="undo-btn" title="Annuler la dernière action (raccourci : U ou A)">↩ Annuler</button>
@@ -342,10 +355,10 @@
     <button id="dialog-close">Fermer</button>
   </dialog>
 
-  <script src="data.js?v=20261122a"></script>
+  <script src="data.js?v=20261122b"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261122c"></script>
-  <script src="game3d.js?v=101"></script>
+  <script src="app.js?v=20261122d"></script>
+  <script src="game3d.js?v=102"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js';
