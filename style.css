@@ -5425,16 +5425,6 @@ button:hover, .btn-random-inline:hover {
   justify-content: center;
   gap: 4px;
 }
-/* L'arène carrée se distingue des autres cartes de terrain rectangulaires. */
-.terrain-card.terrain-card-square {
-  width: 96px;
-  min-height: 96px;
-  align-self: center;
-  aspect-ratio: 1 / 1;
-  padding: 6px;
-  font-size: 0.78rem;
-}
-.terrain-card-square small { font-size: 0.62rem; margin-top: 2px; }
 .champion-card { font-size: 0.82rem; }
 .terrain-card small, .champion-card small {
   display: block;
