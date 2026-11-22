@@ -3892,8 +3892,13 @@ async function useAbility(tokenId) {
       break;
     }
     case "fakie": {
-      pendingAbility = { tokenId, type: "fakie" };
+      /* Permutation coûte 2 PV à Fakie, comme Cazou paie les siens à l'activation. */
+      tok.cd = 6;
       fxAbility(tok.id);
+      applyDamageToToken(tok, 2, null, { self: true });
+      log("FAKIE sacrifie 2 PV pour utiliser Permutation.");
+      if (tok.dead || tok.hp <= 0) break;
+      pendingAbility = { tokenId, type: "fakie" };
       log("Choisissez un champion ennemi à échanger, n'importe où sur le terrain (les murs sont ignorés).");
       renderBoard();
       break;
@@ -8616,12 +8621,39 @@ function renderHomeCards() {
   const cg = document.getElementById("home-champion-grid");
   if (cg) {
     cg.innerHTML = "";
+    /* Champions regroupés par classe : une classe = une ligne. */
+    const byRole = {};
     (GAME.characters || []).forEach((c) => {
-      const b = document.createElement("button");
-      b.className = "champion-card";
-      b.innerHTML = "<strong>" + (c.name || c.id) + "</strong><small>" + (c.role || "") + "</small>";
-      b.addEventListener("click", () => openChampionDetail(c));
-      cg.appendChild(b);
+      const role = c.role || "autre";
+      (byRole[role] = byRole[role] || []).push(c);
+    });
+    const roles = CLASS_ORDER.concat(
+      Object.keys(byRole).filter((r) => CLASS_ORDER.indexOf(r) === -1)
+    );
+    roles.forEach((role) => {
+      const list = byRole[role];
+      if (!list || !list.length) return;
+      const row = document.createElement("div");
+      row.className = "champion-class";
+      row.setAttribute("data-class", role);
+
+      const title = document.createElement("div");
+      title.className = "champion-class-title";
+      title.textContent = roleLabel(role);
+      row.appendChild(title);
+
+      const cards = document.createElement("div");
+      cards.className = "champion-class-cards";
+      list.forEach((c) => {
+        const b = document.createElement("button");
+        b.className = "champion-card";
+        b.innerHTML = "<strong>" + (c.name || c.id) + "</strong>" +
+          (c.number ? "<small>n°" + c.number + "</small>" : "");
+        b.addEventListener("click", () => openChampionDetail(c));
+        cards.appendChild(b);
+      });
+      row.appendChild(cards);
+      cg.appendChild(row);
     });
   }
 }
