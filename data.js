@@ -68,10 +68,10 @@ const GAME = {
       tiles: Array.from({ length: 15 }, () => new Array(15).fill(0)),
       edgesWalls: [],
       startZones: {
-        A: rectZone(0, 0, 5, 3),
-        B: rectZone(10, 0, 5, 3),
-        C: rectZone(0, 12, 5, 3),
-        D: rectZone(10, 12, 5, 3)
+        A: rectZone(5, 0, 5, 3),
+        B: rectZone(12, 5, 3, 5),
+        C: rectZone(5, 12, 5, 3),
+        D: rectZone(0, 5, 3, 5)
       },
       objectives: {
         A: { x: 2, y: 1, hp: 20 },
