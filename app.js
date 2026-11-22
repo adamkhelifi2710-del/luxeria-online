@@ -48,7 +48,24 @@ let state = load();
     (state.tokens || []).map((t) => t.charId),
     Object.keys(state.reserve || {}).reduce((a, k) => a.concat((state.reserve[k] || []).map((r) => r.charId)), [])
   );
-  if (used.some((id) => id && !allowed.has(id))) state = defaultState();
+  /* Une sauvegarde faite avec l'ancien réglage pouvait contenir deux fois le
+     même champion dans une équipe : on repart d'une partie propre. */
+  const hasDuplicate = (list) => {
+    const seen = new Set();
+    return (list || []).some((id) => {
+      if (!id) return false;
+      if (seen.has(id)) return true;
+      seen.add(id);
+      return false;
+    });
+  };
+  const badTeamDuplicates = TEAMS.some((p) =>
+    hasDuplicate((state.decks || {})[p]) ||
+    hasDuplicate((state.starters || {})[p]) ||
+    hasDuplicate(((state.reserve || {})[p] || []).map((r) => r.charId)) ||
+    hasDuplicate((state.tokens || []).filter((t) => t.player === p).map((t) => t.charId))
+  );
+  if (used.some((id) => id && !allowed.has(id)) || badTeamDuplicates) state = defaultState();
 })();
 
 /* Une seule finalisation par partie, quel que soit le chemin de victoire. */
@@ -615,8 +632,9 @@ function teamHasRole(player, role) {
 }
 
 /* Taille d'équipe : 3 champions en Rampage, 4 en 4 joueurs, 5 sinon.
-   Les doublons de personnages sont autorisés partout (même plusieurs fois
-   dans la même équipe) : seule la taille de l'équipe compte. */
+   Un même champion ne peut pas apparaître deux fois dans la même équipe,
+   mais deux équipes peuvent choisir le même champion. Les classes peuvent
+   se répéter : seule l'identité du champion est unique par équipe. */
 function teamSizeTarget() {
   if (isQuad()) return 4;
   return isRampage() ? 3 : CLASS_ORDER.length;
@@ -630,16 +648,16 @@ function teamComplete(player) {
   return (state.decks[player] || []).length >= teamSizeTarget();
 }
 
-/* Équipe aléatoire de `size` champions tirés avec remise : un même personnage
-   peut donc apparaître plusieurs fois, y compris dans la même équipe.
-   Le paramètre `exclude` est conservé pour compatibilité mais ignoré. */
+/* Équipe aléatoire de `size` champions distincts. Le tirage se fait sans
+   remise dans l'équipe, mais sans exclure les champions des autres équipes :
+   les doublons restent possibles entre équipes. */
 function randomTeam(size, exclude) {
   const pool = GAME.characters.map((c) => c.id);
-  const team = [];
-  for (let i = 0; i < size && pool.length; i++) {
-    team.push(pool[Math.floor(Math.random() * pool.length)]);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return team;
+  return pool.slice(0, Math.min(size, pool.length));
 }
 
 function randomFullTeam(exclude) {
@@ -684,10 +702,10 @@ function askSelectionMethod(mode) {
     icon: "🧩",
     title: "Sélection des champions",
     text: mode === "quad"
-      ? "4 Joueurs : 4 champions par équipe, doublons autorisés, sur l'arène 15×15."
+      ? "4 Joueurs : 4 champions par équipe, doublons entre équipes autorisés, sur l'arène 15×15."
       : mode === "rampage"
-        ? "Rampage : 3 champions par équipe, doublons autorisés."
-        : "Objectif : 5 champions par équipe, doublons autorisés.",
+        ? "Rampage : 3 champions par équipe, doublons entre équipes autorisés."
+        : "Objectif : 5 champions par équipe, doublons entre équipes autorisés.",
     hint: "Aléatoire : équipes tirées au sort. Normal : composez librement. Draft : chacun choisit à son tour.",
     cancel: "Annuler",
     options: [
@@ -814,7 +832,7 @@ function renderBuildBanner() {
     </span>`;
   const progressText = filled >= target
     ? "Équipe complète !"
-    : `${filled}/${target} champions · doublons autorisés`;
+    : `${filled}/${target} champions · doublons entre équipes autorisés`;
   banner.innerHTML = `
     <span class="build-title player-${cur.toLowerCase()}">${draft ? "Draft — " : ""}Équipe ${cur} — ${filled}/${target}</span>
     <span class="build-progress">${progressText}</span>
@@ -834,13 +852,18 @@ function renderBuildBanner() {
   }
 }
 
-/* Ajoute un champion à l'équipe en cours. Les doublons sont autorisés :
-   cliquer plusieurs fois sur la même carte ajoute plusieurs copies. */
+/* Ajoute un champion à l'équipe en cours. Un même champion ne peut pas être
+   ajouté deux fois à la même équipe : recliquer sur sa carte le retire.
+   Les doublons entre équipes restent autorisés. */
 function pickForBuild(charId) {
   if (!buildMode) return;
   if (buildMode.draft) return draftPick(charId);
   const cur = buildMode.player;
-  const deck = state.decks[cur];
+  const deck = state.decks[cur] || [];
+  if (deck.indexOf(charId) >= 0) {
+    removeFromBuild(charId);
+    return;
+  }
   if (deck.length >= teamSizeTarget()) {
     alert(`L'équipe ${cur} est déjà complète.`);
     return;
@@ -868,13 +891,12 @@ function pickForBuild(charId) {
   if (allTeamsComplete()) finishBuild();
 }
 
-/* Retire une copie d'un champion de l'équipe en cours (utile quand les
-   doublons sont autorisés). */
+/* Retire un champion de l'équipe en cours (clic sur une carte déjà choisie). */
 function removeFromBuild(charId) {
   if (!buildMode || buildMode.draft) return;
   const cur = buildMode.player;
   const deck = state.decks[cur] || [];
-  const idx = deck.lastIndexOf(charId);
+  const idx = deck.indexOf(charId);
   if (idx < 0) return;
   deck.splice(idx, 1);
   save();
@@ -922,18 +944,22 @@ function beginDraft() {
   renderLibrary();
 }
 
-/* Valide un choix de draft : seul le nombre de champions compte, les doublons
-   sont autorisés (y compris le même personnage plusieurs fois). */
+/* Valide un choix de draft : pas deux fois le même champion dans sa propre
+   équipe, mais le même champion peut être pris par une autre équipe. */
 function draftCanPick(player, charId) {
   if (!charById(charId)) return false;
-  return (state.decks[player] || []).length < teamSizeTarget();
+  const deck = state.decks[player] || [];
+  if (deck.indexOf(charId) >= 0) return false;
+  return deck.length < teamSizeTarget();
 }
 
 function draftPick(charId) {
   if (!buildMode || !buildMode.draft) return;
   const cur = buildMode.player;
   if (onlineMode && cur !== lanLocalTeam()) return;
-  if ((state.decks[cur] || []).length >= teamSizeTarget()) return;
+  const deck = state.decks[cur] || [];
+  if (deck.indexOf(charId) >= 0) return;
+  if (deck.length >= teamSizeTarget()) return;
 
   if (onlineMode && lanRole === "client") {
     onlineSend({ type: "draft-pick", charId });
@@ -1361,32 +1387,33 @@ function renderLibrary() {
 
     let btnLabel = "Ajouter au deck";
     let btnDisabled = false;
-    let removeHtml = "";
     if (buildMode) {
       const cur = buildMode.player;
       const deck = state.decks[cur] || [];
-      const copies = deck.filter((id) => id === c.id).length;
+      const picked = deck.indexOf(c.id) >= 0;
       const notMyTurn = buildMode.draft && onlineMode && cur !== lanLocalTeam();
       if (notMyTurn) {
         card.classList.add("build-disabled");
         btnLabel = "Tour de l'adversaire";
         btnDisabled = true;
       } else if (buildMode.draft) {
-        btnLabel = `Choisir pour l'équipe ${cur}`;
-        btnDisabled = !draftCanPick(cur, c.id);
-        if (btnDisabled) btnLabel = "Équipe complète";
-      } else {
-        if (copies) card.classList.add("build-picked");
-        btnLabel = copies
-          ? `Ajouter un doublon à l'équipe ${cur}`
-          : `Ajouter à l'équipe ${cur}`;
-        if (deck.length >= teamSizeTarget()) {
+        if (picked) {
+          btnLabel = "Déjà choisi";
+          btnDisabled = true;
+        } else if (deck.length >= teamSizeTarget()) {
           btnLabel = "Équipe complète";
           btnDisabled = true;
+        } else {
+          btnLabel = `Choisir pour l'équipe ${cur}`;
         }
-        if (copies) {
-          removeHtml = `<button class="btn-remove-dup" data-id="${c.id}" title="Retirer une copie de ${esc(c.name)}">Retirer (${copies})</button>`;
-        }
+      } else if (picked) {
+        card.classList.add("build-picked");
+        btnLabel = `Retirer de l'équipe ${cur}`;
+      } else if (deck.length >= teamSizeTarget()) {
+        btnLabel = "Équipe complète";
+        btnDisabled = true;
+      } else {
+        btnLabel = `Ajouter à l'équipe ${cur}`;
       }
     }
     card.innerHTML = `
@@ -1402,7 +1429,7 @@ function renderLibrary() {
       </div>
       <div class="char-ability"><strong>${esc(c.ability.name)}</strong> — ${esc(c.ability.desc)}</div>
       ${c.passive && c.passive.name ? `<div class="char-passive"><strong>Passif : ${esc(c.passive.name)}</strong> — ${esc(c.passive.desc)}</div>` : ""}
-      ${buildMode ? `<div class="build-actions"><button class="btn-add" data-id="${c.id}"${btnDisabled ? " disabled" : ""}>${btnLabel}</button>${removeHtml}</div>` : ""}
+      ${buildMode ? `<button class="btn-add" data-id="${c.id}"${btnDisabled ? " disabled" : ""}>${btnLabel}</button>` : ""}
     `;
     list.appendChild(card);
     const addBtn = card.querySelector(".btn-add");
@@ -1412,8 +1439,6 @@ function renderLibrary() {
         pickForBuild(c.id);
       });
     }
-    const rmBtn = card.querySelector(".btn-remove-dup");
-    if (rmBtn) rmBtn.addEventListener("click", () => removeFromBuild(c.id));
   });
   renderBuildBanner();
 }
@@ -6487,8 +6512,8 @@ function onlineHostChooseMap() {
         icon: "🧩",
         title: "Sélection des champions",
         text: mode === "rampage"
-          ? "Rampage : 3 champions par équipe, doublons autorisés."
-          : "Mode normal : 5 champions par équipe, doublons autorisés.",
+          ? "Rampage : 3 champions par équipe, doublons entre équipes autorisés."
+          : "Mode normal : 5 champions par équipe, doublons entre équipes autorisés.",
         cancel: "Quitter la partie",
         options: [
           { label: "🔁 Tour par tour (draft)", value: "draft" },
@@ -8112,34 +8137,30 @@ function aiReplaceOnDeath(deadToken) {
    personnages, pas de rejouer toujours les mêmes combos. */
 const AI_COMBOS = [["calix", "ark"], ["prince", "ranium"], ["koga", "betta"], ["cazou", "fakie"]];
 
-/* Tire une équipe avec remise : les doublons sont autorisés, y compris
-   plusieurs fois le même champion dans la même équipe. On garde un biais
-   « une classe par poste » pour varier les styles, et ~45 % des équipes
+/* Tire une équipe sans doublon interne : un même champion ne revient pas
+   deux fois dans la même équipe. Les doublons avec l'équipe adverse restent
+   possibles car le vivier complet est passé à chaque appel. ~45 % des équipes
    essaient de poser une paire signature. */
 function aiPickTeam(pool, size, rolePool) {
-  if (!pool || !pool.length) return [];
-  const byRole = {};
-  pool.forEach((id) => {
-    const c = charById(id);
-    if (c) (byRole[c.role] = byRole[c.role] || []).push(id);
-  });
+  const src = (pool || []).slice();
+  if (!src.length) return [];
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const availRoles = (rolePool || CLASS_ORDER).filter((r) => byRole[r] && byRole[r].length);
   const team = [];
   if (Math.random() < 0.45) {
     const legal = AI_COMBOS.filter(([a, b]) =>
-      charRole(a) !== charRole(b) && pool.indexOf(a) >= 0 && pool.indexOf(b) >= 0
+      a !== b && src.indexOf(a) >= 0 && src.indexOf(b) >= 0
     );
     if (legal.length) {
       const pair = rand(legal);
       team.push(pair[0], pair[1]);
     }
   }
-  while (team.length < size && availRoles.length) {
-    team.push(rand(byRole[rand(availRoles)]));
+  while (team.length < size) {
+    const remaining = src.filter((id) => team.indexOf(id) < 0);
+    if (!remaining.length) break;
+    team.push(rand(remaining));
   }
-  while (team.length < size) team.push(rand(pool));
-  return team.slice(0, size);
+  return team;
 }
 
 function aiBuildTeamB() {
@@ -8210,8 +8231,8 @@ function askSelectionMethodAI(mode) {
     icon: "🧩",
     title: "Sélection des champions",
     text: mode === "rampage"
-      ? "Rampage : 3 champions par équipe, doublons autorisés."
-      : "Objectif : 5 champions par équipe, doublons autorisés.",
+      ? "Rampage : 3 champions par équipe, doublons entre équipes autorisés."
+      : "Objectif : 5 champions par équipe, doublons entre équipes autorisés.",
     hint: "Aléatoire : équipes tirées au sort. Normal : composez librement votre équipe.",
     cancel: "Annuler",
     options: [
@@ -8288,8 +8309,8 @@ function aiSetupGame(mapId, mode, method) {
   beginTeamBuild();
 }
 
-/* L'équipe de l'IA tire ses champions avec remise : les doublons sont
-   autorisés, y compris face à une équipe qui contient déjà le même champion. */
+/* L'équipe de l'IA tire des champions distincts, mais peut reprendre un
+   champion déjà présent chez l'adversaire. */
 function aiChooseTeamAgainst(taken) {
   return aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice());
 }
@@ -8843,6 +8864,9 @@ function showTerrainPreview(key) {
 
   const board = document.createElement("div");
   board.className = "terrain-map-board";
+  /* L'arène 15x15 est carrée : son aperçu ne doit pas être étiré comme les
+     terrains 15x10. */
+  if (m.cols === m.rows) board.classList.add("terrain-square");
   /* Rotation d'un quart de tour : la zone A (x faible) passe en bas, la B en haut. */
   const viewCols = m.rows;
   const viewRows = m.cols;
@@ -8926,6 +8950,7 @@ function renderHomeCards() {
       const m = GAME.maps[key];
       const b = document.createElement("button");
       b.className = "terrain-card";
+      if (m.cols === m.rows) b.classList.add("terrain-card-square");
       b.innerHTML = "<strong>" + (m.name || key) + "</strong><small>" + (m.cols || "?") + "x" + (m.rows || "?") + "</small>";
       b.addEventListener("click", () => showTerrainPreview(key));
       tc.appendChild(b);
