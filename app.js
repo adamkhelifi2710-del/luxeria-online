@@ -89,9 +89,20 @@ let busy = false;
 let undoStack = [];
 let buildMode = null;
 
-/* ---- Mode IA : l'ordinateur contrôle l'équipe B ---- */
+/* ---- Mode IA : une ou plusieurs équipes peuvent être contrôlées par l'IA.
+   En 4 joueurs, les équipes non prises par un humain sont attribuées à l'IA. ---- */
 let aiMode = false;
 let aiPlayer = "B";
+let aiTeams = [];
+let humanTeams = ["A", "B"];
+function setAiTeams(list) {
+  aiTeams = (list || []).slice();
+  aiPlayer = aiTeams[0] || "B";
+  aiMode = aiTeams.length > 0;
+}
+function isAiTeam(player) {
+  return aiMode && aiTeams.indexOf(player) >= 0;
+}
 let aiDifficulty = "normal";
 let aiRunning = false;
 let aiAutoChoice = undefined;
@@ -678,7 +689,8 @@ function randomStarters(team) {
 }
 
 function openPlayMode() {
-  aiMode = false;
+  setAiTeams([]);
+  humanTeams = ["A", "B"];
   askChoicePrompt({
     icon: "🎮",
     title: "Nouvelle partie",
@@ -692,6 +704,35 @@ function openPlayMode() {
     ]
   }).then((mode) => {
     if (!mode) { showHome(); return; }
+    if (mode === "quad") { askQuadPlayerCount(mode); return; }
+    askSelectionMethod(mode);
+  });
+}
+
+/* En 4 joueurs, on demande combien d'humains jouent : A, B, C, D sont
+   attribués dans cet ordre et les places restantes sont prises par l'IA. */
+function setQuadPlayers(count) {
+  const n = Math.max(1, Math.min(4, parseInt(count, 10) || 1));
+  humanTeams = ["A", "B", "C", "D"].slice(0, n);
+  setAiTeams(["A", "B", "C", "D"].slice(n));
+}
+
+function askQuadPlayerCount(mode) {
+  askChoicePrompt({
+    icon: "👥",
+    title: "Joueurs humains — 4 Joueurs",
+    text: "Combien de joueurs humains vont jouer sur l'arène 4J ?",
+    hint: "Équipes A, B, C, D dans cet ordre. Les autres équipes sont contrôlées par l'IA.",
+    cancel: "Annuler",
+    options: [
+      { label: "1 joueur · 3 IA", value: "1" },
+      { label: "2 joueurs · 2 IA", value: "2" },
+      { label: "3 joueurs · 1 IA", value: "3" },
+      { label: "4 joueurs · sans IA", value: "4" }
+    ]
+  }).then((val) => {
+    if (!val) { showHome(); return; }
+    setQuadPlayers(val);
     askSelectionMethod(mode);
   });
 }
@@ -706,7 +747,8 @@ function askSelectionMethod(mode) {
       : mode === "rampage"
         ? "Rampage : 3 champions par équipe, doublons entre équipes autorisés."
         : "Objectif : 5 champions par équipe, doublons entre équipes autorisés.",
-    hint: "Aléatoire : équipes tirées au sort. Normal : composez librement. Draft : chacun choisit à son tour.",
+    hint: (mode === "quad" && aiTeams.length ? `IA : équipes ${aiTeams.join(", ")}. ` : "") +
+      "Aléatoire : équipes tirées au sort. Normal : composez librement. Draft : chacun choisit à son tour.",
     cancel: "Annuler",
     options: [
       { label: "🎲 Aléatoire", value: "random" },
@@ -778,10 +820,12 @@ function startConfiguredGame(mapId, mode, method) {
 }
 
 function randomSelectTeams() {
-  const used = new Set();
   activeTeams().forEach((p) => {
-    state.decks[p] = isQuad() ? randomQuadTeam(used) : randomTeam(teamSizeTarget(), used);
-    state.decks[p].forEach((id) => used.add(id));
+    /* Chaque équipe IA tire son propre deck, sans contrainte vis-à-vis des
+       autres équipes : un champion peut apparaître dans plusieurs équipes. */
+    state.decks[p] = isAiTeam(p)
+      ? aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice())
+      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget());
   });
   state.starters = teamMap([]);
   activeTeams().forEach((p) => {
@@ -827,7 +871,7 @@ function renderBuildBanner() {
     : draft
       ? `<span class="build-teams"><button class="build-cancel">Annuler</button></span>`
       : `<span class="build-teams">
-      ${activeTeams().map((p) => `<button class="build-team-btn ${cur === p ? "active" : ""} ${done[p] ? "done" : ""}" data-team="${p}">${p}${done[p] ? " ✓" : ""}</button>`).join("")}
+      ${activeTeams().map((p) => `<button class="build-team-btn ${cur === p ? "active" : ""} ${done[p] ? "done" : ""}" data-team="${p}"${isAiTeam(p) ? " disabled" : ""}>${p}${isAiTeam(p) ? " 🤖" : ""}${done[p] ? " ✓" : ""}</button>`).join("")}
       <button class="build-cancel">Annuler</button>
     </span>`;
   const progressText = filled >= target
@@ -878,13 +922,13 @@ function pickForBuild(charId) {
     return;
   }
   if (teamComplete(cur)) {
-    /* Mode IA : l'ordinateur compose toute seul son équipe dès que la vôtre est
-       prête, puis on part directement au choix des titulaires. */
-    if (aiMode && cur === "A") {
-      aiBuildTeamB();
+    /* Quand l'équipe suivante est contrôlée par l'IA, elle est composée
+       automatiquement ; on enchaîne jusqu'au prochain joueur humain. */
+    const next = activeTeams().find((p) => !teamComplete(p));
+    if (next && isAiTeam(next)) {
+      aiBuildTeam(next);
       return;
     }
-    const next = activeTeams().find((p) => !teamComplete(p));
     if (next) buildMode.player = next;
   }
   renderLibrary();
@@ -973,12 +1017,25 @@ function draftPick(charId) {
   afterDraftPickLocal();
 }
 
-/* En local, on suit le cycle de draft (A, B, B, A, A, B…). */
+/* En local, on suit le cycle de draft (A, B, B, A, A, B…).
+   Les équipes IA choisissent automatiquement leur tour. */
 function afterDraftPickLocal() {
   if (allTeamsComplete()) { finishDraft(); return; }
   const next = nextDraftPlayer();
-  if (next) buildMode.player = next;
+  if (next) {
+    buildMode.player = next;
+    if (isAiTeam(next)) { aiDraftPick(); return; }
+  }
   renderLibrary();
+}
+
+function aiDraftPick() {
+  if (!buildMode || !buildMode.draft) return;
+  const p = buildMode.player;
+  if (!isAiTeam(p)) return;
+  const pool = GAME.characters.map((c) => c.id).filter((id) => draftCanPick(p, id));
+  if (!pool.length) return;
+  draftPick(pool[Math.floor(Math.random() * pool.length)]);
 }
 
 function finishDraft() {
@@ -1032,10 +1089,10 @@ function startRandomGame(mode) {
   state.mode = (mode === "rampage" || mode === "quad") ? mode : "classic";
   buildMode = null;
   renderBuildBanner();
-  const used = new Set();
   activeTeams().forEach((p) => {
-    state.decks[p] = isQuad() ? randomQuadTeam(used) : randomTeam(teamSizeTarget(), used);
-    state.decks[p].forEach((id) => used.add(id));
+    state.decks[p] = isAiTeam(p)
+      ? aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice())
+      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget());
   });
   state.starters = teamMap([]);
   activeTeams().forEach((p) => {
@@ -1778,7 +1835,8 @@ function startGame() {
     });
     log("Phase de placement : chaque équipe doit placer son objectif puis ses 3 titulaires dans sa zone.");
   } else if (isQuad()) {
-    log("4 joueurs (4c4c4c4) : 4 champions par équipe, 2 actions par tour, pas de réserve ni d'objectif. Dernière équipe en vie gagne.");
+    const aiLabel = aiTeams.length ? ` IA : ${aiTeams.join(", ")}.` : "";
+    log(`4 joueurs (4c4c4c4) : 4 champions par équipe, 2 actions par tour, pas de réserve ni d'objectif. Dernière équipe en vie gagne.${aiLabel}`);
   } else {
     log("Rampage (3c3) : pas d'objectif ni de réserve. Placez vos 3 champions, éliminez toute l'équipe adverse.");
   }
@@ -3277,10 +3335,11 @@ function kogaDeathZone(x, y, player) {
   let type = "block";
   /* IA : l'ordinateur choisit tout seul la case laissée par KOGA (feu pour
      punir les adversaires proches, sinon obstacle). Aucune fenêtre bloquante. */
-  if (aiMode && player === aiPlayer) {
-    const enemy = aiPlayer === "A" ? "B" : "A";
+  if (aiMode && isAiTeam(player)) {
+    const enemy = aiOther(player);
     const nearEnemy = state.tokens.some((t) =>
-      !t.dead && t.player === enemy && Math.abs(t.x - x) <= 1 && Math.abs(t.y - y) <= 1);
+      !t.dead && isAiTeam(t.player) === false && t.player !== player
+        && Math.abs(t.x - x) <= 1 && Math.abs(t.y - y) <= 1);
     type = nearEnemy ? "fire" : "block";
   } else try {
     const ans = prompt(
@@ -3631,10 +3690,10 @@ function freeSpawnCells(player, excludeTokenId) {
     .filter((t) => !t.dead && t.id !== excludeTokenId)
     .forEach((t) => occupied.add(`${t.x},${t.y}`));
   if (state.objectivePos) {
-    for (const p of ["A", "B"]) {
+    activeTeams().forEach((p) => {
       const o = state.objectivePos[p];
       if (o) occupied.add(`${o.x},${o.y}`);
-    }
+    });
   }
   return GAME.startZones[player].filter(
     ([sx, sy]) => isPassable(sx, sy, player) && !occupied.has(`${sx},${sy}`)
@@ -3700,7 +3759,7 @@ async function handleReserveReplacementOnDeath(deadToken) {
   if (suppressReplacePrompt) return;
   /* IA : l'ordinateur remplace lui-même, sans fenêtre, en choisissant le meilleur
      remplaçant et une case libre. */
-  if (aiMode && deadToken.player === aiPlayer) {
+  if (aiMode && isAiTeam(deadToken.player)) {
     aiReplaceOnDeath(deadToken);
     return;
   }
@@ -5001,7 +5060,7 @@ function endPlayerTurn() {
      mourir pendant le tour de l'IA et le joueur humain ne peut poser son
      remplaçant qu'à son propre tour. (L'IA pose son remplaçant immédiatement,
      donc dans son cas pendingSpawn est déjà remis à null.) */
-  if (!(pendingSpawn && pendingSpawn.mode === "replace" && pendingSpawn.player !== aiPlayer)) {
+  if (!(pendingSpawn && pendingSpawn.mode === "replace" && !isAiTeam(pendingSpawn.player))) {
     pendingSpawn = null;
   }
   state.activatedTokenId = null;
@@ -5117,7 +5176,7 @@ function endPlayerTurn() {
   log(`Au tour de l'équipe ${side}.`);
   save();
   renderBoard();
-  if (aiMode && state.turn === aiPlayer && !state.winner && state.phase === "playing") {
+  if (aiMode && isAiTeam(state.turn) && !state.winner && state.phase === "playing") {
     aiScheduleTurn();
   }
   setTimeout(() => startTurnTimer(true), 50);
@@ -5126,7 +5185,7 @@ function endPlayerTurn() {
 document.getElementById("reset-board").addEventListener("click", () => {
   if (lanMode && lanRole === "client") return;
   if (!confirm("Réinitialiser la partie ? Toutes les positions, PV et états seront perdus.")) return;
-  aiMode = false;
+  setAiTeams([]);
   const keep = confirm("Conserver les decks actuels ? (Non = tout vider)");
   if (keep) {
     state.starters = teamMap([]);
@@ -6334,7 +6393,7 @@ function onlineIsHost() {
 }
 
 function openOnlineLobby() {
-  aiMode = false;
+  setAiTeams([]);
   const dlg = document.getElementById("online-dialog");
   if (!dlg) return;
   onlineSetLobbyStatus(
@@ -6856,12 +6915,21 @@ const AI_DIFF = {
 
 const AI_PASSIVE = ["koga", "xixz"]; // passifs : aucune capacité manuelle
 
-function aiOther(p) { return p === "A" ? "B" : "A"; }
+function teamsForMode(s) { return s && s.mode === "quad" ? TEAMS : ["A", "B"]; }
+
+/* Adversaire « principal » de l'IA : en 1v1 c'est l'autre équipe, en 4J
+   le premier adversaire encore en vie (les autres restent des ennemis). */
+function aiOther(p) {
+  const others = activeTeams().filter((t) => t !== p);
+  const alive = others.filter((t) => (state.tokens || []).some((tk) => !tk.dead && tk.player === t));
+  return alive[0] || others[0] || (p === "A" ? "B" : "A");
+}
 
 /* Vérrou : l'humain ne pilote rien pendant qu'un tour / placement IA. */
 function aiBlocksInput() {
   return aiMode && !state.winner &&
-    (aiRunning || (state.phase === "playing" && state.turn === aiPlayer));
+    (aiRunning || (state.phase === "placement" && isAiTeam(state.placingPlayer)) ||
+      (state.phase === "playing" && isAiTeam(state.turn)));
 }
 
 /* ---------- Simulation sur clone (évaluation uniquement) ---------- */
@@ -7170,10 +7238,10 @@ function aiAttackCellsAt(s, tk, x, y) {
 }
 
 function aiIsTargetCell(s, me, x, y) {
-  const foe = aiOther(me);
-  if ((s.tokens || []).some((t) => !t.dead && t.player === foe && t.x === x && t.y === y)) return true;
-  if (s.mode !== "rampage") {
-    const o = s.objectivePos && s.objectivePos[foe];
+  const enemies = teamsForMode(s).filter((t) => t !== me);
+  if ((s.tokens || []).some((t) => !t.dead && enemies.indexOf(t.player) >= 0 && t.x === x && t.y === y)) return true;
+  if (s.mode !== "rampage" && s.mode !== "quad") {
+    const o = s.objectivePos && s.objectivePos[aiOther(me)];
     if (o && o.x === x && o.y === y) return true;
   }
   return false;
@@ -7181,10 +7249,10 @@ function aiIsTargetCell(s, me, x, y) {
 
 /* Idem mais sur l'état réel (exécution). */
 function aiIsTargetCellReal(me, x, y) {
-  const foe = aiOther(me);
-  if (state.tokens.some((t) => !t.dead && t.player === foe && t.x === x && t.y === y)) return true;
-  if (!isRampage()) {
-    const o = state.objectivePos && state.objectivePos[foe];
+  const enemies = activeTeams().filter((t) => t !== me);
+  if (state.tokens.some((t) => !t.dead && enemies.indexOf(t.player) >= 0 && t.x === x && t.y === y)) return true;
+  if (!isRampage() && !isQuad()) {
+    const o = state.objectivePos && state.objectivePos[aiOther(me)];
     if (o && o.x === x && o.y === y) return true;
   }
   return false;
@@ -7932,22 +8000,23 @@ async function aiExecutePlan(plan) {
 /* ---------- Boucle de tour IA ---------- */
 
 function aiScheduleTurn() {
-  if (!aiMode || state.turn !== aiPlayer || state.winner) return;
+  if (!aiMode || !isAiTeam(state.turn) || state.winner) return;
   if (aiRunning) return;
   aiRunning = true;
   setTimeout(aiTurnLoop, 420);
 }
 
 async function aiTurnLoop() {
+  const me = state.turn;
   try {
-    if (!aiMode || state.turn !== aiPlayer || state.winner || state.phase !== "playing") {
+    if (!aiMode || !isAiTeam(me) || state.winner || state.phase !== "playing") {
       aiStatus(null);
       return;
     }
     await aiWaitIdle();
     if (state.winner) { aiStatus(null); return; }
 
-    const plan = aiChoosePlan(aiPlayer, aiDifficulty);
+    const plan = aiChoosePlan(me, aiDifficulty);
     if (plan) {
       await aiExecutePlan(plan);
       await aiWaitIdle();
@@ -7956,14 +8025,17 @@ async function aiTurnLoop() {
 
     aiStatus(null);
     pushUndo();
-    endPlayerTurn(); // repasse le tour à A (ne re-déclenche pas l'IA)
+    endPlayerTurn(); // passe au tour suivant ; l'IA suivante sera replanifiée
   } catch (e) {
     try { aiStatus(null); } catch (e2) {}
     try { pendingAbility = null; } catch (e3) {}
-    try { if (state.turn === aiPlayer && !state.winner) { aiRunning = false; endPlayerTurn(); } } catch (e4) {}
+    try { if (state.turn === me && !state.winner) { aiRunning = false; endPlayerTurn(); } } catch (e4) {}
   } finally {
     aiRunning = false;
     renderBoard();
+    /* endPlayerTurn a pu passer le tour à une autre équipe IA pendant que
+       aiRunning était encore vrai : on la relance ici. */
+    if (aiMode && isAiTeam(state.turn) && !state.winner && state.phase === "playing") aiScheduleTurn();
   }
 }
 
@@ -7976,7 +8048,8 @@ function aiOnGameStart() {
 
 function aiMaybeSchedulePlacement() {
   if (!aiMode || state.phase !== "placement") return;
-  if (state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) return;
+  const p = state.placingPlayer;
+  if (!isAiTeam(p) || state.placement[p]) return;
   if (aiRunning) return;
   aiRunning = true;
   setTimeout(aiPlacementStep, 350);
@@ -7988,10 +8061,11 @@ function aiChoosePlacementCell() {
     if (!isPassable(x, y, player)) return false;
     if (state.tokens.some((t) => !t.dead && t.x === x && t.y === y)) return false;
     if (state.objectivePos) {
-      for (const p of ["A", "B"]) {
+      const blocked = activeTeams().some((p) => {
         const o = state.objectivePos[p];
-        if (o && o.x === x && o.y === y) return false;
-      }
+        return o && o.x === x && o.y === y;
+      });
+      if (blocked) return false;
     }
     return true;
   });
@@ -8069,7 +8143,8 @@ function aiChoosePlacementCell() {
 
 function aiPlacementStep() {
   try {
-    if (!aiMode || state.phase !== "placement" || state.placingPlayer !== aiPlayer || state.placement[aiPlayer]) {
+    const me = state.placingPlayer;
+    if (!aiMode || state.phase !== "placement" || !isAiTeam(me) || state.placement[me]) {
       aiRunning = false;
       aiStatus(null);
       return;
@@ -8079,11 +8154,13 @@ function aiPlacementStep() {
     if (!cell) { aiRunning = false; aiStatus(null); return; }
     placeAt(cell[0], cell[1]);
     aiRunning = false;
-    if (state.phase === "placement" && state.placingPlayer === aiPlayer && !state.placement[aiPlayer]) {
+    const next = state.placingPlayer;
+    if (state.phase === "placement" && isAiTeam(next) && !state.placement[next]) {
       aiRunning = true;
       setTimeout(aiPlacementStep, 280);
     } else {
       aiStatus(null);
+      aiMaybeSchedulePlacement();
     }
   } catch (e) {
     aiRunning = false;
@@ -8093,16 +8170,17 @@ function aiPlacementStep() {
 
 /* ---------- Remplacement automatique (mort d'un champion IA) ---------- */
 
-function aiPickSpawnCell() {
-  const cells = freeSpawnCells(aiPlayer);
+function aiPickSpawnCell(player) {
+  const me = player || aiPlayer;
+  const cells = freeSpawnCells(me);
   if (!cells.length) return null;
-  const foe = aiOther(aiPlayer);
+  const foe = aiOther(me);
   const nexus = state.objectivePos && state.objectivePos[foe];
   if (nexus) {
     cells.sort((a, b) => distanceCheb(a[0], a[1], nexus.x, nexus.y) - distanceCheb(b[0], b[1], nexus.x, nexus.y));
     return cells[0];
   }
-  const enemies = state.tokens.filter((t) => !t.dead && t.player === foe);
+  const enemies = state.tokens.filter((t) => !t.dead && t.player !== me);
   if (enemies.length) {
     let cx = 0, cy = 0;
     enemies.forEach((t) => { cx += t.x; cy += t.y; });
@@ -8114,9 +8192,10 @@ function aiPickSpawnCell() {
 }
 
 function aiReplaceOnDeath(deadToken) {
-  const reserve = state.reserve[aiPlayer];
+  const player = deadToken.player;
+  const reserve = state.reserve[player] || [];
   if (!reserve.length) return;
-  const cell = aiPickSpawnCell();
+  const cell = aiPickSpawnCell(player);
   if (!cell) return;
   let idx = 0, best = -Infinity;
   reserve.forEach((r, i) => {
@@ -8126,7 +8205,7 @@ function aiReplaceOnDeath(deadToken) {
     if (c.role === "colosse") sc += 1;
     if (sc > best) { best = sc; idx = i; }
   });
-  pendingSpawn = { mode: "replace", player: aiPlayer, reserveIdx: idx, tokenId: deadToken.id };
+  pendingSpawn = { mode: "replace", player, reserveIdx: idx, tokenId: deadToken.id };
   commitSpawnPlacement(cell[0], cell[1]);
 }
 
@@ -8163,19 +8242,49 @@ function aiPickTeam(pool, size, rolePool) {
   return team;
 }
 
-function aiBuildTeamB() {
+function aiBuildTeam(player) {
   const pool = GAME.characters.map((c) => c.id);
-  state.decks.B = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
+  state.decks[player] = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
   buildMode = null;
   save();
   renderDecks();
   renderBuildBanner();
-  if (teamComplete("A") && teamComplete("B")) finishBuild();
+  if (allTeamsComplete()) { finishBuild(); return; }
+  const next = activeTeams().find((p) => !teamComplete(p));
+  if (next && isAiTeam(next)) { aiBuildTeam(next); return; }
+  if (next) {
+    buildMode = { player: next };
+    renderBuildBanner();
+    renderLibrary();
+  }
+}
+
+/* Conservé pour les anciens appels / tests : l'IA classique contrôle l'équipe B. */
+function aiBuildTeamB() {
+  setAiTeams(["B"]);
+  aiBuildTeam("B");
 }
 
 /* ---------- Titulaires de l'IA ---------- */
 
 function aiPickStartersInDialog() {
+  aiTeams.forEach((player) => {
+    const chips = Array.prototype.slice.call(
+      document.querySelectorAll(`.starter-chip[data-player="${player}"]`)
+    );
+    if (!chips.length) return;
+    const shuffled = chips.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const n = Math.min(3, chips.length);
+    for (let i = 0; i < n; i++) shuffled[i].classList.add("picked");
+  });
+  updateStarterConfirm();
+}
+
+function _aiPickStartersInDialogLegacy() {
   const chips = Array.prototype.slice.call(
     document.querySelectorAll('.starter-chip[data-player="B"]')
   );
@@ -8193,7 +8302,8 @@ function aiPickStartersInDialog() {
 /* ---------- Menu IA ---------- */
 
 function aiOpenMode() {
-  aiMode = false;
+  setAiTeams([]);
+  humanTeams = ["A", "B"];
   askChoicePrompt({
     icon: "🤖",
     title: "Jouer contre l'IA",
@@ -8241,7 +8351,8 @@ function askSelectionMethodAI(mode) {
     ]
   }).then((method) => {
     if (!method) { showHome(); return; }
-    if (method === "random") { aiStartRandomGame(mode); return; }
+    if (method === "random") { setAiTeams(["B"]); aiStartRandomGame(mode); return; }
+    setAiTeams(["B"]);
     aiOpenTerrainPicker(mode);
   });
 }
@@ -8266,6 +8377,7 @@ function aiOpenTerrainPicker(mode) {
 }
 
 function aiStartRandomGame(mode) {
+  setAiTeams(["B"]);
   const ids = Object.keys(GAME.maps).filter((id) => GAME.maps[id]);
   const id = ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
   if (!id) { alert("Aucun terrain disponible."); showHome(); return; }
@@ -8273,8 +8385,7 @@ function aiStartRandomGame(mode) {
 }
 
 function aiSetupGame(mapId, mode, method) {
-  aiMode = true;
-  aiPlayer = "B";
+  if (!aiTeams.length) setAiTeams(["B"]);
   aiRunning = false;
   aiAutoChoice = undefined;
   setActiveMap(mapId);
@@ -8350,7 +8461,7 @@ function onBoardTab() {
 function turnTimerShouldRun() {
   if (!onBoardTab()) return false;
   if (state.winner || state.phase !== "playing") return false;
-  if (aiMode && state.turn === aiPlayer) return false;
+  if (aiMode && isAiTeam(state.turn)) return false;
   if (aiMode && aiRunning) return false;
   if (pendingAbility || pendingSpawn || pendingReplaceChoice) return false;
   if (lanMode) {
