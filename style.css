@@ -958,6 +958,32 @@ main {
   filter: brightness(1.1);
 }
 
+.build-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.build-actions .btn-add { margin-top: 0; flex: 1; }
+
+.btn-remove-dup {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-remove-dup:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .empty-msg {
   color: var(--muted);
   font-style: italic;
