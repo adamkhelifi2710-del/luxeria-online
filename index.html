@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261123a">
+  <link rel="stylesheet" href="style.css?v=20261123b">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -200,29 +200,32 @@
     <section id="tab-board" class="tab active">
       <div class="board-toolbar">
         <span id="turn-label">Tour : Équipe A</span>
-        <select id="map-select" title="Choisir le terrain"></select>
-        <button id="edit-toggle">Édition terrain</button>
-        <div id="zone-editor" class="zone-editor" title="Modifier les zones de départ : choisissez une équipe, puis cliquez les cases à ajouter ou retirer">
-          <select id="zone-edit-team" title="Équipe dont la zone de départ est modifiée">
-            <option value="A">Zone A</option>
-            <option value="B">Zone B</option>
-            <option value="C">Zone C</option>
-            <option value="D">Zone D</option>
-          </select>
-          <select id="zone-edit-mode" title="Action sur la zone">
-            <option value="add">+ Ajouter</option>
-            <option value="remove">− Retirer</option>
-          </select>
-          <button id="zone-reset" title="Restaurer les 4 zones de 5×3 au centre de chaque côté">Zones 5×3</button>
-        </div>
-        <button id="save-map" title="Enregistrer le contenu actuel de ce terrain comme contenu par défaut et lui donner un nom">Enregistrer ce terrain</button>
         <span id="objective-hp"></span>
-        <button id="undo-btn" title="Annuler la dernière action (raccourci : U ou A)">↩ Annuler</button>
-        <button id="next-turn" class="btn-accent" title="Passer au tour suivant (raccourci : Espace ou Z)">Passer au tour suivant</button>
-        <button id="stop-timer" title="Arrêter le chronomètre pour ce tour">⏸ Stop chrono</button>
-        <button id="reserve-block">Activer le blocage réserve</button>
-        <button id="fullscreen-btn" title="Passer le terrain en plein écran (raccourci : F)">⛶ Grand écran</button>
-        <button id="reset-board">Nouvelle partie</button>
+        <button id="undo-btn" title="Annuler la dernière action (raccourci : U ou A)">↩</button>
+        <button id="next-turn" class="btn-accent" title="Passer au tour suivant (raccourci : Espace ou Z)">▶ Tour suivant</button>
+        <button id="fullscreen-btn" title="Passer le terrain en plein écran (raccourci : F)">⛶</button>
+        <button id="toolbar-more" class="toolbar-more" title="Autres actions" aria-expanded="false" aria-controls="toolbar-extra">⋯</button>
+        <div id="toolbar-extra" class="toolbar-extra">
+          <select id="map-select" title="Choisir le terrain"></select>
+          <button id="edit-toggle">Édition terrain</button>
+          <div id="zone-editor" class="zone-editor" title="Modifier les zones de départ : choisissez une équipe, puis cliquez les cases à ajouter ou retirer">
+            <select id="zone-edit-team" title="Équipe dont la zone de départ est modifiée">
+              <option value="A">Zone A</option>
+              <option value="B">Zone B</option>
+              <option value="C">Zone C</option>
+              <option value="D">Zone D</option>
+            </select>
+            <select id="zone-edit-mode" title="Action sur la zone">
+              <option value="add">+ Ajouter</option>
+              <option value="remove">− Retirer</option>
+            </select>
+            <button id="zone-reset" title="Restaurer les 4 zones de 5×3 au centre de chaque côté">Zones 5×3</button>
+          </div>
+          <button id="save-map" title="Enregistrer le contenu actuel de ce terrain comme contenu par défaut et lui donner un nom">Enregistrer ce terrain</button>
+          <button id="stop-timer" title="Arrêter le chronomètre pour ce tour">⏸ Stop chrono</button>
+          <button id="reserve-block">Activer le blocage réserve</button>
+          <button id="reset-board">Nouvelle partie</button>
+        </div>
       </div>
       <div id="placement-banner"></div>
       <div id="rosters"></div>
@@ -357,7 +360,7 @@
 
   <script src="data.js?v=20261122c"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261123b"></script>
+  <script src="app.js?v=20261123c"></script>
   <script src="game3d.js?v=103"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
