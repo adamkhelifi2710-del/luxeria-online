@@ -89,6 +89,36 @@ let busy = false;
 let undoStack = [];
 let buildMode = null;
 
+/* Petit clic audio sur tous les boutons, sans fichier externe : le son est
+   généré une seule fois par l'API Web Audio au premier clic de l'utilisateur. */
+let _clickAudio = null;
+function playClickSound() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!_clickAudio) _clickAudio = new AC();
+    if (_clickAudio.state === "suspended") _clickAudio.resume();
+    const t = _clickAudio.currentTime;
+    const osc = _clickAudio.createOscillator();
+    const gain = _clickAudio.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(760, t);
+    osc.frequency.exponentialRampToValueAtTime(420, t + 0.035);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.03, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    osc.connect(gain);
+    gain.connect(_clickAudio.destination);
+    osc.start(t);
+    osc.stop(t + 0.05);
+  } catch (e) { /* audio indisponible : on ignore silencieusement */ }
+}
+document.addEventListener("click", function (e) {
+  if (!e.isTrusted) return; /* on ne joue que les vrais clics utilisateur */
+  const b = e.target && e.target.closest ? e.target.closest("button") : null;
+  if (b && !b.disabled) playClickSound();
+}, true);
+
 /* ---- Mode IA : une ou plusieurs équipes peuvent être contrôlées par l'IA.
    En 4 joueurs, les équipes non prises par un humain sont attribuées à l'IA. ---- */
 let aiMode = false;
@@ -1962,6 +1992,27 @@ function renderBoard() {
   const reachSet = new Set(reachable.map(([x, y]) => `${x},${y}`));
   const atkSet = new Set(attackCells.map(([x, y]) => `${x},${y}`));
   const dangerSet = dangerCellSet();
+  const boardTeams = activeTeams();
+
+  /* Pré-calcul une seule fois par rendu : évite de parcourir les zones et
+     les murs pour chaque case (principale source de latence du plateau). */
+  const spawnKeys = new Set();
+  const guardKeys = new Set();
+  const editZoneKeys = new Set();
+  boardTeams.forEach((p) => {
+    (GAME.startZones[p] || []).forEach(([zx, zy]) => {
+      spawnKeys.add(p + "|" + zx + "," + zy);
+      if (zoneEditPlayer === p) editZoneKeys.add(zx + "," + zy);
+    });
+    (state.guardZones || []).forEach((gz) => {
+      if (gz.player !== p) return;
+      for (let gy = gz.y - 1; gy <= gz.y + 1; gy++) {
+        for (let gx = gz.x - 1; gx <= gz.x + 1; gx++) guardKeys.add(p + "|" + gx + "," + gy);
+      }
+    });
+  });
+  const wallMap = new Map((state.walls || []).map((w) => [w.x + "," + w.y, w]));
+  const fragment = document.createDocumentFragment();
 
   const selTok = tokenById(selectedTokenId);
   const selOwnTurn = selTok && !selTok.dead && isTurnOf(selTok.player);
@@ -2044,15 +2095,11 @@ function renderBoard() {
       cell.dataset.x = x;
       cell.dataset.y = y;
 
-      activeTeams().forEach((p) => {
-        const inGuard = state.guardZones.some((gz) => gz.player === p && Math.abs(gz.x - x) <= 1 && Math.abs(gz.y - y) <= 1);
-        if (inGuard) cell.classList.add("guard-zone", "guard-" + p.toLowerCase());
-        if (GAME.startZones[p] && GAME.startZones[p].some(([zx, zy]) => zx === x && zy === y)) {
-          cell.classList.add("spawn-" + p.toLowerCase());
-        }
-        if (zoneEditPlayer === p && GAME.startZones[p] && GAME.startZones[p].some(([zx, zy]) => zx === x && zy === y)) {
-          cell.classList.add("zone-marked");
-        }
+      boardTeams.forEach((p) => {
+        const cellKey = p + "|" + x + "," + y;
+        if (guardKeys.has(cellKey)) cell.classList.add("guard-zone", "guard-" + p.toLowerCase());
+        if (spawnKeys.has(cellKey)) cell.classList.add("spawn-" + p.toLowerCase());
+        if (zoneEditPlayer === p && editZoneKeys.has(x + "," + y)) cell.classList.add("zone-marked");
       });
 
       if (GAME.map.tiles[y][x] === 1) {
@@ -2067,7 +2114,7 @@ function renderBoard() {
       if (isBurned(x, y)) cell.classList.add("shrink-burned");
       else if (dangerSet.has(`${x},${y}`)) cell.classList.add("shrink-danger");
 
-      const dw = state.walls.find((w) => w.x === x && w.y === y);
+      const dw = wallMap.get(x + "," + y) || null;
       if (dw) {
         const dwEl = document.createElement("div");
         dwEl.className = "dwall";
@@ -2185,7 +2232,7 @@ function renderBoard() {
         cell.appendChild(vb);
       }
 
-      activeTeams().forEach((player) => {
+      boardTeams.forEach((player) => {
         const o = objectiveDef(player);
         if (o.x < 0 || o.y < 0) return;
         if (state.phase === "placement" && !state.objectivePos[player]) return;
@@ -2586,9 +2633,10 @@ if (t.charId === "cazou") {
       cell.addEventListener("click", () => cellClick(x, y));
       cell.addEventListener("mouseenter", () => showPathPreview(x, y));
       cell.addEventListener("mouseleave", clearPathPreview);
-      board.appendChild(cell);
+      fragment.appendChild(cell);
     }
   }
+  board.appendChild(fragment);
 
   if (pendingSpawn) {
     /* On utilise spawnChoiceAt : pour un échange, la case du champion sortant est
@@ -5049,6 +5097,16 @@ document.addEventListener("keydown", (e) => {
 function blurFocused() {
   const el = document.activeElement;
   if (el && el.blur) el.blur();
+}
+
+const toolbarMoreBtn = document.getElementById("toolbar-more");
+if (toolbarMoreBtn) {
+  toolbarMoreBtn.addEventListener("click", function () {
+    const extra = document.getElementById("toolbar-extra");
+    if (!extra) return;
+    const open = extra.classList.toggle("open");
+    toolbarMoreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 document.getElementById("undo-btn").addEventListener("click", undoLast);
@@ -7919,6 +7977,17 @@ function aiChoosePlan(me, diff) {
 
 /* ---------- Exécution (uniquement via les fonctions du jeu) ---------- */
 
+/* Rythme volontairement ralenti : on voit le déplacement, puis l'attaque ou
+   la capacité dans un second temps, au lieu d'un enchaînement instantané. */
+const AI_TURN_START_MS = 500;
+const AI_PLAN_START_MS = 250;
+const AI_MOVE_PAUSE_MS = 850;
+const AI_ACTION_PAUSE_MS = 650;
+
+function aiPause(ms) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
 function aiStatus(text) {
   const el = document.getElementById("ai-status");
   if (!el) return;
@@ -8011,6 +8080,9 @@ async function aiExecutePlan(plan) {
     moveToken(plan.tokenId, plan.to[0], plan.to[1]);
     await aiWaitIdle();
     if (state.winner) return;
+    /* On laisse le déplacement visible avant l'attaque ou la capacité. */
+    await aiPause(AI_MOVE_PAUSE_MS);
+    if (state.winner) return;
   }
 
   if (plan.type === "attack" || plan.type === "move_attack") {
@@ -8050,7 +8122,7 @@ function aiScheduleTurn() {
   if (!aiMode || !isAiTeam(state.turn) || state.winner) return;
   if (aiRunning) return;
   aiRunning = true;
-  setTimeout(aiTurnLoop, 420);
+  setTimeout(aiTurnLoop, AI_TURN_START_MS);
 }
 
 async function aiTurnLoop() {
@@ -8070,6 +8142,8 @@ async function aiTurnLoop() {
     let acted = 0;
     while (acted < maxActions && state.turn === me && !state.winner &&
            state.phase === "playing" && currentActionsLeft() > 0) {
+      await aiPause(AI_PLAN_START_MS);
+      if (state.winner || state.turn !== me || state.phase !== "playing") break;
       const before = currentActionsLeft();
       const plan = aiChoosePlan(me, aiDifficulty);
       if (!plan) break;
@@ -8078,6 +8152,10 @@ async function aiTurnLoop() {
       if (state.winner) { aiStatus(null); return; }
       acted++;
       if (currentActionsLeft() >= before) break;
+      /* Pause entre deux actions (ou avant de rendre la main) pour que
+         l'attaque / la capacité reste lisible. */
+      await aiPause(AI_ACTION_PAUSE_MS);
+      if (state.winner || state.turn !== me) break;
     }
     if (state.winner) { aiStatus(null); return; }
 
