@@ -1974,6 +1974,38 @@ function clearPathPreview() {
   pathPreview = [];
 }
 
+/* Le plateau est dimensionné en pixels pour occuper tout l'espace disponible
+   sans jamais écraser les cases : on respecte toujours le ratio du terrain. */
+function fitBoard(force) {
+  const board = document.getElementById("board");
+  const wrap = document.getElementById("board-wrap");
+  if (!board || !GAME.map || !GAME.map.rows || !GAME.map.cols) return;
+  const big = document.body.classList.contains("bigscreen");
+  const fitKey = [big ? 1 : 0, GAME.activeMap, GAME.map.cols, GAME.map.rows,
+    window.innerWidth, window.innerHeight].join("|");
+  if (!force && board.dataset.fitKey === fitKey) return;
+
+  const ratio = GAME.map.cols / GAME.map.rows;
+  let availW, availH;
+  if (big) {
+    availW = Math.max(200, window.innerWidth - 16);
+    availH = Math.max(160, window.innerHeight - 56);
+  } else {
+    availW = wrap ? wrap.clientWidth : 0;
+    availH = wrap ? wrap.clientHeight : 0;
+    if (!availW || !availH) return;
+  }
+  let w = availW;
+  let h = w / ratio;
+  if (h > availH) {
+    h = availH;
+    w = h * ratio;
+  }
+  board.style.width = Math.floor(w) + "px";
+  board.style.height = Math.floor(h) + "px";
+  board.dataset.fitKey = fitKey;
+}
+
 function renderBoard() {
   const board = document.getElementById("board");
   board.innerHTML = "";
@@ -2798,6 +2830,7 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
   updateHeartbeat();
   updatePlacementBanner();
   updateBigscreenActions();
+  fitBoard();
   fx = emptyFx();
 
   if (lanMode && lanRole === "host" && lanConnected && !lanApplying && !onlineSetupPhase) {
@@ -5108,6 +5141,8 @@ if (toolbarMoreBtn) {
     toolbarMoreBtn.setAttribute("aria-expanded", open ? "true" : "false");
   });
 }
+
+window.addEventListener("resize", function () { fitBoard(true); });
 
 document.getElementById("undo-btn").addEventListener("click", undoLast);
 
