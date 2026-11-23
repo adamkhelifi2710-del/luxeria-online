@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261123c">
+  <link rel="stylesheet" href="style.css?v=20261123d">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -198,6 +198,8 @@
 
   <main>
     <section id="tab-board" class="tab active">
+      <div id="board-wrap"><div id="board"></div></div>
+      <aside id="board-side">
       <div class="board-toolbar">
         <span id="turn-label">Tour : Équipe A</span>
         <span id="objective-hp"></span>
@@ -229,8 +231,8 @@
       </div>
       <div id="placement-banner"></div>
       <div id="rosters"></div>
-      <div id="board-wrap"><div id="board"></div></div>
       <div id="board-log"></div>
+      </aside>
       <div id="win-overlay" class="win-overlay">
         <div class="win-box">
           <h2 id="win-title">Victoire !</h2>
