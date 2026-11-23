@@ -1429,14 +1429,18 @@ body.bigscreen {
 /* Le terrain passe au-dessus de tout : aucune superposition fragile. */
 body.bigscreen #board {
   position: fixed;
-  inset: 0;
+  top: 48px;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
   z-index: 999;
   display: grid;
   width: auto;
   height: auto;
+  margin: auto;
+  box-sizing: border-box;
   aspect-ratio: auto;
-  padding: 8px;
-  padding-top: 52px;
+  padding: 4px;
   gap: 3px;
   border: none;
   border-radius: 0;
@@ -5756,5 +5760,41 @@ body.bigscreen #board.board-square { aspect-ratio: auto; }
 }
 #board-log { margin-top: 8px; padding: 8px; background: transparent; border: none; }
 #rosters { margin-bottom: 8px; }
+
+/* ---- Le plateau tient dans une seule page (pas de défilement) ---- */
+header { padding: 8px 16px; }
+main { padding: 8px 16px; }
+#tab-board.active {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  min-height: 0;
+  gap: 6px;
+}
+#board-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#board { box-sizing: border-box; }
+#rosters {
+  flex: 0 0 auto;
+  max-height: 84px;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+#rosters .roster { padding: 4px; }
+#rosters h3 { font-size: 0.75rem; margin-bottom: 2px; }
+#rosters .roster-title,
+#rosters .roster-cd { display: none; }
+#rosters .roster-row { padding: 2px 4px; margin-bottom: 1px; font-size: 0.72rem; }
+#board-log {
+  flex: 0 0 auto;
+  max-height: 62px;
+  overflow-y: auto;
+  margin-top: 0;
+}
 .roster { padding: 8px; border-radius: 6px; }
 
