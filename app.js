@@ -3146,6 +3146,28 @@ const RAMPAGE_SHRINK_BASE = [
 ];
 const RAMPAGE_SHRINK_CYCLE = ["width", "width", "width", "length", "width"];
 
+/* Mode 4V4V4V4 : le feu démarre au tour 4 puis avance tous les 4 tours
+   (un tour = une manche complète A+B+C+D). Contrairement aux autres modes,
+   la carte rétrécit en carré : longueur ET largeur dans le même palier. */
+let _quadSchedule = null;
+let _quadScheduleKey = "";
+
+function quadShrinkSchedule() {
+  const rows = (GAME.map && GAME.map.rows) || 0;
+  const cols = (GAME.map && GAME.map.cols) || 0;
+  if (!rows || !cols) return [];
+  const key = rows + "x" + cols;
+  if (_quadScheduleKey === key && _quadSchedule) return _quadSchedule;
+  const maxLayer = Math.max(Math.ceil(rows / 2), Math.ceil(cols / 2));
+  const sched = [];
+  for (let layer = 1; layer <= maxLayer; layer++) {
+    sched.push({ round: layer * 4, axis: "square", layer: layer });
+  }
+  _quadSchedule = sched;
+  _quadScheduleKey = key;
+  return sched;
+}
+
 let _rampageSchedule = null;
 let _rampageScheduleKey = "";
 
@@ -3174,7 +3196,7 @@ function rampageShrinkSchedule() {
 }
 
 function activeShrinkSchedule() {
-  if (isQuad()) return [];
+  if (isQuad()) return quadShrinkSchedule();
   return isRampage() ? rampageShrinkSchedule() : SHRINK_SCHEDULE;
 }
 
@@ -3183,6 +3205,25 @@ function shrinkCellsFor(entry) {
   const rows = GAME.map.rows;
   const cols = GAME.map.cols;
   const i = entry.layer - 1;
+  if (entry.axis === "square") {
+    const seen = new Set();
+    const push = function (x, y) {
+      const k = x + "," + y;
+      if (!seen.has(k)) {
+        seen.add(k);
+        cells.push([x, y]);
+      }
+    };
+    [i, rows - 1 - i].forEach(function (yy) {
+      if (yy < 0 || yy >= rows) return;
+      for (let x = 0; x < cols; x++) push(x, yy);
+    });
+    [i, cols - 1 - i].forEach(function (xx) {
+      if (xx < 0 || xx >= cols) return;
+      for (let y = 0; y < rows; y++) push(xx, y);
+    });
+    return cells;
+  }
   if (entry.axis === "length") {
     var l1 = [i, rows - 1 - i];
     for (var a = 0; a < l1.length; a++) {
@@ -3294,7 +3335,9 @@ function applyShrinkRound(completedRound) {
     const ev = schedule[state.shrinkStep];
     state.shrinkStep++;
     if (state.winner) break;
-    log(`Le feu gagne du terrain — ${ev.axis === "length" ? "bords haut/bas" : "bords gauche/droite"} (couche ${ev.layer}).`);
+    const edgeLabel = ev.axis === "square" ? "bords haut/bas et gauche/droite (carré)"
+      : ev.axis === "length" ? "bords haut/bas" : "bords gauche/droite";
+    log(`Le feu gagne du terrain — ${edgeLabel} (couche ${ev.layer}).`);
     if (state.winner) break;
   }
 }
