@@ -7402,7 +7402,25 @@ function teamsForMode(s) { return s && s.mode === "quad" ? TEAMS : ["A", "B"]; }
 function aiOther(p) {
   const others = activeTeams().filter((t) => t !== p);
   const alive = others.filter((t) => (state.tokens || []).some((tk) => !tk.dead && tk.player === t));
-  return alive[0] || others[0] || (p === "A" ? "B" : "A");
+  if (!alive.length) return others[0] || (p === "A" ? "B" : "A");
+  if (state.mode !== "quad") return alive[0];
+  /* En 4J, viser l'équipe la plus proche évite que trois camps s'acharnent
+     toujours sur A (premier de la liste) : la menace réelle est le voisin. */
+  const mine = (state.tokens || []).filter((t) => !t.dead && t.player === p);
+  let cx = 0, cy = 0;
+  if (mine.length) {
+    mine.forEach((t) => { cx += t.x; cy += t.y; });
+    cx /= mine.length; cy /= mine.length;
+  }
+  let best = alive[0], bestD = Infinity;
+  for (const t of alive) {
+    let d = Infinity;
+    (state.tokens || []).forEach((tk) => {
+      if (!tk.dead && tk.player === t) d = Math.min(d, distanceCheb(cx, cy, tk.x, tk.y));
+    });
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
 }
 
 /* Vérrou : l'humain ne pilote rien pendant qu'un tour / placement IA. */
@@ -7515,26 +7533,31 @@ function aiTerminalScore(s, me) {
    depuis sa position, moins ceux que j'exerce sur lui. Favorise la mise à
    distance et la couverture de l'ennemi. Coûteux : réservé à l'éval principale. */
 function aiThreats(s, me) {
-  const foe = aiOther(me);
   const mine = (s.tokens || []).filter((t) => !t.dead && t.player === me);
-  const theirs = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+  /* En 4J on surveille TOUS les voisins, pas seulement l'adversaire "principal". */
+  const foes = s.mode === "quad"
+    ? teamsForMode(s).filter((t) => t !== me && (s.tokens || []).some((tk) => !tk.dead && tk.player === t))
+    : [aiOther(me)];
   let sc = 0;
-  for (const t of theirs) {
-    const ac = aiAttackCellsAt(s, t, t.x, t.y);
-    if (!ac.length) continue;
-    const dmg = charById(t.charId).atk;
-    for (const m of mine) {
-      if (!ac.some(([x, y]) => x === m.x && y === m.y)) continue;
-      sc -= (dmg >= m.hp ? 2.4 : 0.7 + 0.15 * Math.min(dmg, m.hp));
-    }
-  }
-  for (const m of mine) {
-    const ac = aiAttackCellsAt(s, m, m.x, m.y);
-    if (!ac.length) continue;
-    const dmg = charById(m.charId).atk;
+  for (const foe of foes) {
+    const theirs = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
     for (const t of theirs) {
-      if (!ac.some(([x, y]) => x === t.x && y === t.y)) continue;
-      sc += 0.5 * (dmg >= t.hp ? 2.2 : 0.6 + 0.15 * Math.min(dmg, t.hp));
+      const ac = aiAttackCellsAt(s, t, t.x, t.y);
+      if (!ac.length) continue;
+      const dmg = charById(t.charId).atk;
+      for (const m of mine) {
+        if (!ac.some(([x, y]) => x === m.x && y === m.y)) continue;
+        sc -= (dmg >= m.hp ? 2.4 : 0.7 + 0.15 * Math.min(dmg, m.hp));
+      }
+    }
+    for (const m of mine) {
+      const ac = aiAttackCellsAt(s, m, m.x, m.y);
+      if (!ac.length) continue;
+      const dmg = charById(m.charId).atk;
+      for (const t of theirs) {
+        if (!ac.some(([x, y]) => x === t.x && y === t.y)) continue;
+        sc += 0.5 * (dmg >= t.hp ? 2.2 : 0.6 + 0.15 * Math.min(dmg, t.hp));
+      }
     }
   }
   return sc;
@@ -7558,7 +7581,11 @@ function aiEvaluate(s, me, aggro, withThreats) {
   }
 
   const myAlive = (s.tokens || []).filter((t) => !t.dead && t.player === me);
-  const foeAlive = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+  /* En 4J, toutes les autres équipes sont des ennemis : les ignorer ferait
+     progresses aveuglément dans le dos d'un voisin. */
+  const foeAlive = s.mode === "quad"
+    ? (s.tokens || []).filter((t) => !t.dead && t.player !== me)
+    : (s.tokens || []).filter((t) => !t.dead && t.player === foe);
 
   if (rampage) {
     v += 13 * myAlive.length - 13.6 * foeAlive.length;
@@ -7679,6 +7706,49 @@ function aiEvaluate(s, me, aggro, withThreats) {
     });
     v += 1.8 * aggro * sumClose;
     v -= 0.9 * aggro * (laggard / maxD);
+  }
+
+  /* Mode 4V4V4V4 : agressivité, cohésion et stratégie d'ensemble.
+     - on pousse TOUS les champions vers le centre (contrôle de l'arène) ;
+     - on punit le traînard qui laisse son équipe en infériorité numérique ;
+     - on garde les combattants au contact de l'ennemi, mais seulement quand
+       un allié est assez proche pour appuyer l'attaque (focus fire) ;
+     - les soutiens restent en retrait tout en couvrant leurs alliés ;
+     - une cible blessée est prioritaire : l'achever retire un champion. */
+  if (s.mode === "quad" && myAlive.length) {
+    const cols = GAME.map.cols || 15, rows = GAME.map.rows || 15;
+    const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
+    const maxD = Math.max(1, distanceCheb(0, 0, cx, cy));
+    const enemies = (s.tokens || []).filter((t) => !t.dead && t.player !== me);
+    let centerSum = 0, laggard = 0, dispersion = 0;
+    myAlive.forEach((t) => {
+      const dc = distanceCheb(t.x, t.y, cx, cy);
+      centerSum += (maxD - dc) / maxD;
+      laggard = Math.max(laggard, dc);
+      let nearAlly = 99, nearEnemy = 99;
+      myAlive.forEach((o) => {
+        if (o !== t) nearAlly = Math.min(nearAlly, distanceCheb(t.x, t.y, o.x, o.y));
+      });
+      enemies.forEach((e) => {
+        nearEnemy = Math.min(nearEnemy, distanceCheb(t.x, t.y, e.x, e.y));
+      });
+      dispersion += Math.max(0, Math.min(nearAlly, 10) - 2);
+      const role = charById(t.charId).role;
+      if (role === "soutien" || role === "expert") {
+        v += 0.45 * Math.max(0, 4 - Math.min(nearAlly, 6));
+        if (nearEnemy <= 2) v -= 0.9 * aggro;
+      } else {
+        v += 0.42 * aggro * Math.max(0, 6 - Math.min(nearEnemy, 8));
+        if (nearEnemy <= 2 && nearAlly <= 2) v += 0.7 * aggro;
+      }
+    });
+    v += 1.6 * aggro * centerSum;
+    v -= 1.2 * aggro * (laggard / maxD);
+    v -= 0.65 * dispersion;
+    enemies.forEach((e) => {
+      const mx = charById(e.charId).hp;
+      if (mx > 0 && e.hp < mx) v += 0.6 * aggro * (1 - e.hp / mx);
+    });
   }
 
   /* Buffs actifs et ressources (tempo de la réserve, enchantements). */
@@ -8184,6 +8254,23 @@ function aiMoveHeuristic(s, tk, x, y) {
   const role = charById(tk.charId).role;
   const allies = (s.tokens || []).filter((t) => !t.dead && t.player === tk.player && t.id !== tk.id);
   const foes = (s.tokens || []).filter((t) => !t.dead && t.player === foe);
+  /* 4J : même logique, mais groupée. On avance vers le centre et vers le
+     voisin le plus proche ; un combattant isolé ne doit pas charger seul. */
+  if (s.mode === "quad") {
+    sc += Math.max(0, 8 - distanceCheb(x, y, cx, cy)) * 0.55;
+    let nearAlly = 99, nearEnemy = 99;
+    allies.forEach((a) => { nearAlly = Math.min(nearAlly, distanceCheb(x, y, a.x, a.y)); });
+    (s.tokens || []).forEach((e) => {
+      if (!e.dead && e.player !== tk.player) nearEnemy = Math.min(nearEnemy, distanceCheb(x, y, e.x, e.y));
+    });
+    sc += Math.max(0, 4 - Math.min(nearAlly, 6)) * 0.45;
+    if (role === "soutien" || role === "expert") {
+      if (nearEnemy <= 1) sc -= 1;
+    } else {
+      sc += Math.max(0, 5 - Math.min(nearEnemy, 7)) * 0.45;
+      if (nearEnemy <= 2 && nearAlly <= 2) sc += 0.7;
+    }
+  }
 
   if (role === "soutien" || role === "expert") {
     /* Soutiens/experts : se tenir au milieu de l'équipe (près des alliés). */
@@ -8330,6 +8417,23 @@ function aiScorePlan(s, me, p, cfg) {
   if (p.type === "attack" || p.type === "move_attack") {
     const tok = (s.tokens || []).find((t) => t.id === p.tokenId);
     if (tok) sc += aiRoleAttackBonus(tok.charId) * (s.mode === "rampage" ? 1.35 : 1);
+    if (s.mode === "quad") {
+      /* En 4J, privilégier l'attaque dès qu'elle est possible, et finir une
+         cible déjà blessée plutôt que disperser les dégâts. */
+      sc += 0.7;
+      const victim = p.target && (s.tokens || []).find(
+        (t) => !t.dead && t.x === p.target[0] && t.y === p.target[1]
+      );
+      if (victim) {
+        const mx = charById(victim.charId).hp;
+        if (mx > 0 && victim.hp < mx) sc += 0.9 + 0.6 * (1 - victim.hp / mx);
+        const support = (s.tokens || []).filter(
+          (a) => !a.dead && a.player === me && a.id !== p.tokenId &&
+            distanceCheb(a.x, a.y, victim.x, victim.y) <= 2
+        ).length;
+        sc += Math.min(2, support) * 0.3;
+      }
+    }
   }
   if (cfg.depth >= 2 && cfg.reply > 0) {
     const foe = aiOther(me);
