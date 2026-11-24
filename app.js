@@ -266,28 +266,53 @@ function migrateLegacyFixed() {
   } catch (e) {}
 }
 
-/* L'arène 4J est désormais complète et identique dans data.js. Toute
-   personnalisation de map4 enregistrée sur un appareil (vide ou non) écrase
-   l'arène officielle : on la supprime systématiquement au chargement pour que
-   le terrain 4J soit le même sur le téléphone, la tablette et le PC. */
+/* Utilisé par l'éditeur pour reconnaître une arène 4J vide. Les surcharges
+   locales des terrains officiels sont désormais toutes supprimées au chargement
+   (voir migrateBlankArena) : les terrains sont identiques sur tous les appareils. */
 function isBlankMapOverride(o) {
   if (!o) return false;
   const empty = (a) => !Array.isArray(a) || a.length === 0;
   return empty(o.edges) && empty(o.fire) && empty(o.heal) && empty(o.speed) && empty(o.void);
 }
 
+/* Terrains officiels (ceux livrés dans data.js + maps.js) : aucune
+   personnalisation locale ne doit les faire différer d'un appareil à l'autre.
+   On purge donc TOUTES les surcharges enregistrées pour ces terrains, pas
+   seulement map4. Les terrains créés par l'utilisateur (NEW_MAPS_KEY) restent
+   locaux et ne sont pas concernés. */
+function sharedMapIds() {
+  return Object.keys(GAME.maps).filter((id) => id === "map4" || (GAME.maps[id] && !isUserMap(id)));
+}
+
 function migrateBlankArena() {
   try {
     const all = loadFixedMaps();
+    let fixedChanged = false;
     if (all.map4) {
       delete all.map4;
-      localStorage.setItem(FIXED_MAPS_KEY, JSON.stringify(all));
+      fixedChanged = true;
     }
+    sharedMapIds().forEach((id) => {
+      if (id !== "map4" && all[id]) {
+        delete all[id];
+        fixedChanged = true;
+      }
+    });
+    if (fixedChanged) localStorage.setItem(FIXED_MAPS_KEY, JSON.stringify(all));
+
     const custom = loadCustomMaps();
+    let customChanged = false;
     if (custom.map4) {
       delete custom.map4;
-      localStorage.setItem(CUSTOM_MAP_KEY, JSON.stringify(custom));
+      customChanged = true;
     }
+    sharedMapIds().forEach((id) => {
+      if (id !== "map4" && custom[id]) {
+        delete custom[id];
+        customChanged = true;
+      }
+    });
+    if (customChanged) localStorage.setItem(CUSTOM_MAP_KEY, JSON.stringify(custom));
   } catch (e) {}
 }
 
@@ -342,6 +367,9 @@ function loadCustomMaps() {
 function applyCustomMapFor(name) {
   const m = GAME.maps[name];
   if (!m) return;
+  /* Terrains officiels : jamais de surcharge locale, sinon ils diffèrent
+     entre le PC, le téléphone et la tablette. */
+  if (sharedMapIds().indexOf(name) >= 0) return;
   const custom = loadCustomMaps()[name];
   if (custom && Array.isArray(custom.edges) && !(name === "map4" && isBlankMapOverride(custom))) {
     m.edgesWalls = custom.edges.slice();
@@ -2284,6 +2312,7 @@ function renderBoard() {
     if (t.charId !== "xixz" || t.dead) return;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue; /* XIXZ ne bénéficie pas de son Pacif */
         xixzAura.add(`${t.x + dx},${t.y + dy}`);
       }
     }
@@ -2497,7 +2526,7 @@ function renderBoard() {
           const fxAbiEnt = fx.abilities.includes(t.id);
           const fxEnterEnt = fx.entered.includes(t.id);
           const AURA_MAP = { jay: "aura-jay", rapido: "aura-rapido", xixz: "aura-xixz" };
-          if (AURA_MAP[t.charId] && (t.charId !== "jay" || t.jayAura)) tok.classList.add("aura", AURA_MAP[t.charId]);
+          if (AURA_MAP[t.charId] && t.charId !== "xixz" && (t.charId !== "jay" || t.jayAura)) tok.classList.add("aura", AURA_MAP[t.charId]);
           if (t.buffs.abyss) tok.classList.add("buff-abyss");
           if (t.buffs.braut) tok.classList.add("buff-braut");
           if (t.buffs.vini) tok.classList.add("buff-vini");
@@ -2756,7 +2785,7 @@ if (t.charId === "cazou") {
           if (t.charId === "xixz") {
             const shield = document.createElement("div");
             shield.className = "xixz-shield";
-            shield.title = "Pacif : -1 dégât pour les alliés dans l'aura 3×3";
+            shield.title = "Pacif : -1 dégât pour les alliés dans l'aura 3×3 (XIXZ exclu)";
             shield.innerHTML = '<span class="xixz-shield-core">✚</span>';
             tok.appendChild(shield);
           }
@@ -2898,7 +2927,10 @@ turnLabel.textContent = `Tour 0 - Placement - équipe ${lanMode && state.phase =
     turnLabel.className = "player-" + state.placingPlayer.toLowerCase();
   } else {
     const shrinkNext = nextShrinkInfo();
-    const shrinkHint = shrinkNext ? ` · Feu au tour ${shrinkNext.round}` : "";
+    /* En 4J, l'annonce « Feu au tour X » n'apparaît qu'au tour précédent
+       (ex. annonce au tour 2 pour un feu au tour 3), comme les cases dangereuses. */
+    const shrinkImminent = shrinkNext && (!isQuad() || shrinkNext.round - state.turnCount <= 1);
+    const shrinkHint = shrinkImminent ? ` · Feu au tour ${shrinkNext.round}` : "";
     const actionHint = isQuad()
       ? ` · ${currentActionsLeft()} action(s) restante(s)`
       : "";
@@ -3398,9 +3430,10 @@ const RAMPAGE_SHRINK_BASE = [
 ];
 const RAMPAGE_SHRINK_CYCLE = ["width", "width", "width", "length", "width"];
 
-/* Mode 4V4V4V4 : le feu démarre au tour 4 puis avance tous les 4 tours
-   (un tour = une manche complète A+B+C+D). Contrairement aux autres modes,
-   la carte rétrécit en carré : longueur ET largeur dans le même palier. */
+/* Mode 4V4V4V4 : le feu démarre au tour 3 (annoncé au tour 2), puis avance
+   tous les 4 tours (tours 3, 7, 11… ; un tour = une manche complète A+B+C+D).
+   Contrairement aux autres modes, la carte rétrécit en carré : longueur ET
+   largeur dans le même palier. */
 let _quadSchedule = null;
 let _quadScheduleKey = "";
 
@@ -3413,7 +3446,7 @@ function quadShrinkSchedule() {
   const maxLayer = Math.max(Math.ceil(rows / 2), Math.ceil(cols / 2));
   const sched = [];
   for (let layer = 1; layer <= maxLayer; layer++) {
-    sched.push({ round: layer * 4, axis: "square", layer: layer });
+    sched.push({ round: layer * 4 - 1, axis: "square", layer: layer });
   }
   _quadSchedule = sched;
   _quadScheduleKey = key;
@@ -3883,9 +3916,10 @@ function reselectAfter() {
 
 /* ---------- Dégâts et attaques ---------- */
 
-/* Pacif : la cible est-elle un allié protégé par l'aura 3x3 d'un XIXZ vivant ? */
+/* Pacif : la cible est-elle un allié protégé par l'aura 3x3 d'un XIXZ vivant ?
+   XIXZ n'est jamais protégé par sa PROPRE aura : il subit 100 % des dégâts. */
 function xixzPacifActive(target) {
-  if (target.dead) return false;
+  if (target.dead || target.charId === "xixz") return false;
   return state.tokens.some((z) => {
     if (z.dead || z.charId !== "xixz") return false;
     if (z.player !== target.player) return false;
@@ -3903,7 +3937,7 @@ function applyDamageToToken(target, amount, sourceToken, opts = {}) {
     log(`${charById(target.charId).name} (${target.player}) réduit les dégâts de moitié (ABYSS) → ${dmg}.`);
   }
 
-  // Pacif de XIXZ : -1 dégât pour les alliés dans l'aura 3x3 (XIXZ inclus).
+  // Pacif de XIXZ : -1 dégât pour les alliés dans l'aura 3x3 (XIXZ exclu de sa propre aura).
   // Ne s'applique ni au poison, ni au feu du terrain, ni aux sacrifices sur soi-même.
   if (!opts.poison && !opts.terrain && !opts.self && xixzPacifActive(target)) {
     dmg = Math.max(0, dmg - 1);
@@ -7562,6 +7596,7 @@ function aiWithState(s, fn) {
 function aiTok(s, id) { return (s.tokens || []).find((t) => t.id === id) || null; }
 
 function aiPacifActive(s, target) {
+  if (!target || target.charId === "xixz") return false;
   return (s.tokens || []).some(
     (t) => !t.dead && t.player === target.player && t.charId === "xixz" &&
       distanceCheb(t.x, t.y, target.x, target.y) <= 1
