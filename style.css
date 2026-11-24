@@ -5813,9 +5813,11 @@ main { padding: 8px 16px; }
 #tab-board.active {
   display: flex;
   flex-direction: row;
-  height: calc(100vh - 64px);
+  /* Il n'y a plus de header au-dessus du plateau : on récupère toute la
+     hauteur laissée par le padding de main (8 px en haut et en bas). */
+  height: calc(100dvh - 16px);
   min-height: 0;
-  gap: 10px;
+  gap: 8px;
 }
 #board-wrap {
   flex: 1 1 auto;
@@ -5826,22 +5828,51 @@ main { padding: 8px 16px; }
   justify-content: center;
 }
 #board-side {
-  flex: 0 0 clamp(320px, 28vw, 420px);
-  width: clamp(320px, 28vw, 420px);
+  order: 2;
+  flex: 0 0 clamp(240px, 22vw, 320px);
+  width: clamp(240px, 22vw, 320px);
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 2px;
 }
-#board-side .board-toolbar { flex-wrap: wrap; }
+#board-side .board-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 0; }
+#board-side .board-toolbar button,
+#board-side .board-toolbar select { padding: 4px 8px; }
 #board-side #rosters { max-height: none; overflow: visible; }
 #board-side #rosters.rosters-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-#board-side #board-log { max-height: none; overflow: visible; }
+#board-side #board-log { max-height: 104px; overflow-y: auto; }
 body.bigscreen #board-side,
-body.bigscreen #board-title { display: none; }
+body.bigscreen #board-title,
+body.bigscreen #board-side-toggle { display: none; }
+
+/* Le titre, la barre d'outils, les rosters et le journal sont tous relégués
+   à droite. Le bouton permet de masquer la colonne pour un plateau pleine
+   largeur sans passer par le mode plein écran. */
+#board-side-toggle {
+  position: fixed;
+  top: 50%;
+  right: calc(clamp(240px, 22vw, 320px) + 12px);
+  transform: translateY(-50%);
+  z-index: 920;
+  width: 20px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px 0 0 6px;
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 1rem;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
+}
+body.board-side-collapsed #board-side,
+body.board-side-collapsed #board-title { display: none; }
+body.board-side-collapsed #board-side-toggle { right: 8px; border-radius: 6px; }
 #board { box-sizing: border-box; }
 
 /* ---- Téléphone : l'arène 15×15 passe au-dessus des rosters ----
@@ -5852,9 +5883,9 @@ body.bigscreen #board-title { display: none; }
   #tab-board.active {
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 64px);
+    min-height: calc(100dvh - 16px);
     overflow-y: auto;
-    gap: 12px;
+    gap: 8px;
   }
   #board-wrap {
     width: 100%;
@@ -5867,12 +5898,15 @@ body.bigscreen #board-title { display: none; }
     aspect-ratio: 1 / 1;
   }
   #board-side {
+    order: 2;
     flex: 0 0 auto;
     width: 100%;
     max-width: 100%;
     overflow: visible;
     padding-right: 0;
   }
+  #board-title { order: 3; }
+  #board-side-toggle { display: none; }
   #board-side #rosters.rosters-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nav-menu-btn { top: 8px; right: 8px; }
   .turn-timer { top: 14px; right: 60px; }
@@ -5921,10 +5955,11 @@ body.bigscreen #board-title { display: none; }
   font-size: 0.8rem;
 }
 
-/* Titre « Suivi de Partie » à la verticale, juste à gauche des boutons. */
+/* Titre « Suivi de Partie » à la verticale, tout à droite de la colonne. */
 #board-title {
-  flex: 0 0 26px;
-  width: 26px;
+  order: 3;
+  flex: 0 0 20px;
+  width: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5956,4 +5991,62 @@ body.bigscreen #board-title { display: none; }
   margin-top: 0;
 }
 .roster { padding: 8px; border-radius: 6px; }
+
+/* ---- Noms des champions colorés par équipe, PV lisibles, cooldown réduit ---- */
+.token.player-a,
+.token.player-b,
+.token.player-c,
+.token.player-d {
+  background: rgba(9, 14, 22, 0.94);
+  border: 1px solid var(--team-a);
+  color: var(--team-a);
+}
+.token.player-b { border-color: var(--team-b); color: var(--team-b); }
+.token.player-c { border-color: var(--team-c); color: var(--team-c); }
+.token.player-d { border-color: var(--team-d); color: var(--team-d); }
+
+.token-hp {
+  right: -4px;
+  bottom: -4px;
+  min-width: 14px;
+  height: 12px;
+  padding: 0 2px;
+  border: 1px solid rgba(255, 123, 123, 0.65);
+  border-radius: 3px;
+  color: #ff9b9b;
+  font-size: 9px;
+  line-height: 10px;
+  text-align: center;
+}
+.token-hp.full {
+  border-color: rgba(102, 255, 176, 0.55);
+  color: #7ce0a5;
+}
+
+.token-cd {
+  left: -4px;
+  bottom: -4px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid rgba(143, 179, 255, 0.7);
+  border-radius: 3px;
+  color: #9fc0ff;
+  font-size: 9px;
+  line-height: 10px;
+  text-align: center;
+}
+
+.char-card[data-team="A"] .char-name { color: var(--team-a); }
+.char-card[data-team="B"] .char-name { color: var(--team-b); }
+.char-card[data-team="C"] .char-name { color: var(--team-c); }
+.char-card[data-team="D"] .char-name { color: var(--team-d); }
+
+.champ-name { font-weight: 700; }
+.champ-name.team-a { color: var(--team-a); }
+.champ-name.team-b { color: var(--team-b); }
+.champ-name.team-c { color: var(--team-c); }
+.champ-name.team-d { color: var(--team-d); }
+.roster-hp { color: var(--text); }
+.roster-cd-num { color: #9fc0ff; font-weight: 700; }
 
