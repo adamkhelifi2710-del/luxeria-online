@@ -5844,6 +5844,40 @@ body.bigscreen #board-side,
 body.bigscreen #board-title { display: none; }
 #board { box-sizing: border-box; }
 
+/* ---- Téléphone : l'arène 15×15 passe au-dessus des rosters ----
+   En colonne forcée, le plateau prenait quelques pixels sur mobile. Ici il
+   occupe toute la largeur et reste parfaitement carré, les infos passent
+   dessous avec le défilement normal de la page. */
+@media (max-width: 900px) {
+  #tab-board.active {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 64px);
+    overflow-y: auto;
+    gap: 12px;
+  }
+  #board-wrap {
+    width: 100%;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+  #board.board-square {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+  }
+  #board-side {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    padding-right: 0;
+  }
+  #board-side #rosters.rosters-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nav-menu-btn { top: 8px; right: 8px; }
+  .turn-timer { top: 14px; right: 60px; }
+}
+
 /* ---- Salon en ligne : mode, places, code, joueurs ---- */
 .online-box [hidden] { display: none !important; }
 .online-box .online-setup {
