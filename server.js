@@ -3,9 +3,10 @@
  *
  * Rôle :
  *   - sert les fichiers statiques du jeu (index.html, app.js, data.js, style.css, images...) ;
- *   - gère une file d'attente ("matchmaking") : les deux premiers joueurs en attente
- *     sont appariés (le premier = hôte / Équipe A, le second = client / Équipe B) ;
- *   - relaie tous les messages de jeu entre les deux joueurs d'une même partie.
+ *   - gère des salons de 2 ou 4 joueurs : le créateur choisit le mode et la
+ *     taille, les autres rejoignent avec un code ; les rôles sont A, B, C, D ;
+ *   - relaie tous les messages de jeu entre les membres d'un même salon.
+ *   - conserve l'ancien matchmaking « queue » (2 joueurs) pour compatibilité.
  *
  * Lancement local :  npm install  puis  npm start  (http://localhost:3000)
  * Déploiement      :  Render (Web Service) -> Build: npm install  /  Start: npm start
@@ -93,9 +94,10 @@ function serveStatic(req, res) {
 const server = http.createServer(serveStatic);
 const wss = new WebSocketServer({ server });
 
-let waiting = [];           // joueurs en file d'attente (WebSocket)
+const ROLE_ORDER = ["A", "B", "C", "D"];
+let waiting = [];           // matchmaking 1v1 historique
 let roomSeq = 0;
-const rooms = new Map();    // roomId -> { a: ws, b: ws }
+const rooms = new Map();    // code -> { code, size, mode, members: [{ ws, role }] }
 
 function safeSend(ws, obj) {
   if (!ws || ws.readyState !== ws.OPEN) return;
@@ -110,25 +112,73 @@ function removeFromQueue(ws, notify) {
   }
 }
 
-function peerOf(ws) {
-  const room = ws.__room && rooms.get(ws.__room);
-  if (!room) return null;
-  return room.a === ws ? room.b : room.a;
+function roomInfo(room) {
+  return {
+    code: room.code,
+    size: room.size,
+    mode: room.mode,
+    players: room.members.map((m) => m.role)
+  };
+}
+
+function broadcastRoom(room, obj, except) {
+  room.members.forEach((m) => {
+    if (m.ws !== except) safeSend(m.ws, obj);
+  });
+}
+
+function broadcastRaw(room, raw, except) {
+  room.members.forEach((m) => {
+    if (m.ws === except || m.ws.readyState !== m.ws.OPEN) return;
+    try { m.ws.send(raw); } catch (e) {}
+  });
+}
+
+function newCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  do {
+    code = "";
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  } while (rooms.has(code));
+  return code;
+}
+
+function createRoom(size, mode) {
+  const cap = size === 4 ? 4 : 2;
+  const room = {
+    code: newCode(),
+    size: cap,
+    mode: mode === "quad" || mode === "rampage" ? mode : "classic",
+    members: []
+  };
+  rooms.set(room.code, room);
+  return room;
+}
+
+function addToRoom(ws, room, role) {
+  ws.__room = room.code;
+  ws.__role = role;
+  room.members.push({ ws, role });
 }
 
 function leaveRoom(ws, notify) {
-  const roomId = ws.__room;
-  if (!roomId) return;
-  const room = rooms.get(roomId);
-  rooms.delete(roomId);
+  const code = ws.__room;
+  if (!code) return;
+  const room = rooms.get(code);
   ws.__room = null;
-  if (room) {
-    const peer = room.a === ws ? room.b : room.a;
-    if (peer) {
-      peer.__room = null;
-      if (notify) safeSend(peer, { type: "peer-left" });
-    }
+  ws.__role = null;
+  if (!room) return;
+  const leaving = room.members.find((m) => m.ws === ws);
+  const leavingRole = leaving ? leaving.role : null;
+  room.members = room.members.filter((m) => m.ws !== ws);
+  if (!room.members.length) {
+    rooms.delete(code);
+    return;
   }
+  broadcastRoom(room, { type: "room-update", ...roomInfo(room) });
+  broadcastRoom(room, { type: "peer-left", role: leavingRole });
+  if (notify) safeSend(ws, { type: "room-left" });
 }
 
 function tryMatch() {
@@ -138,18 +188,17 @@ function tryMatch() {
     if (a.readyState !== a.OPEN) { if (b.readyState === b.OPEN) waiting.unshift(b); continue; }
     if (b.readyState !== b.OPEN) { waiting.unshift(a); continue; }
 
-    const roomId = "room-" + (++roomSeq) + "-" + Date.now();
-    a.__room = roomId;
-    b.__room = roomId;
-    rooms.set(roomId, { a, b });
-
-    safeSend(a, { type: "matched", role: "host" });
-    safeSend(b, { type: "matched", role: "client" });
+    const room = createRoom(2, "classic");
+    addToRoom(a, room, "A");
+    addToRoom(b, room, "B");
+    safeSend(a, { type: "matched", role: "host", ...roomInfo(room) });
+    safeSend(b, { type: "matched", role: "client", ...roomInfo(room) });
   }
 }
 
 wss.on("connection", (ws) => {
   ws.__room = null;
+  ws.__role = null;
 
   ws.on("message", (raw) => {
     let msg = null;
@@ -165,26 +214,47 @@ wss.on("connection", (ws) => {
       }
       return;
     }
-    if (t === "cancel") {
+    if (t === "create") {
+      removeFromQueue(ws, false);
+      if (ws.__room) leaveRoom(ws, true);
+      const room = createRoom(msg.size, msg.mode);
+      addToRoom(ws, room, "A");
+      safeSend(ws, { type: "room-created", role: "host", ...roomInfo(room) });
+      return;
+    }
+    if (t === "join") {
+      removeFromQueue(ws, false);
+      if (ws.__room) leaveRoom(ws, true);
+      const code = String(msg.code || "").trim().toUpperCase();
+      const room = rooms.get(code);
+      if (!room) { safeSend(ws, { type: "room-error", message: "Code introuvable." }); return; }
+      if (room.members.length >= room.size) { safeSend(ws, { type: "room-error", message: "Le salon est complet." }); return; }
+      const used = room.members.map((m) => m.role);
+      const role = ROLE_ORDER.find((r) => used.indexOf(r) < 0) || "B";
+      addToRoom(ws, room, role);
+      safeSend(ws, { type: "room-joined", role, ...roomInfo(room) });
+      broadcastRoom(room, { type: "room-update", ...roomInfo(room) }, ws);
+      return;
+    }
+    if (t === "cancel" || t === "leave") {
       removeFromQueue(ws, true);
+      leaveRoom(ws, true);
       return;
     }
 
-    // Tout le reste est relayé au partenaire de la partie.
-    const peer = peerOf(ws);
-    if (peer && peer.readyState === peer.OPEN) {
-      try { peer.send(raw.toString()); } catch (e) {}
-    }
+    // Tout le reste est relayé à tous les autres membres du salon.
+    const room = ws.__room && rooms.get(ws.__room);
+    if (room) broadcastRaw(room, raw.toString(), ws);
   });
 
   ws.on("close", () => {
     removeFromQueue(ws, false);
-    leaveRoom(ws, true);
+    leaveRoom(ws, false);
   });
 
   ws.on("error", () => {
     removeFromQueue(ws, false);
-    leaveRoom(ws, true);
+    leaveRoom(ws, false);
   });
 });
 
