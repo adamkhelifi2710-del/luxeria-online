@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261124a">
+  <link rel="stylesheet" href="style.css?v=20261124d">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -184,16 +184,15 @@
     <button id="home3d-back" title="Revenir à l'accueil classique">← Accueil</button>
   </div>
 
-  <header>
-    <div id="turn-timer" class="turn-timer"></div>
-    <nav>
-      <button class="tab-btn active" data-tab="board">Plateau</button>
-      <button class="tab-btn" data-tab="board3d" title="Mode 3D">3D</button>
-      <button class="tab-btn" data-tab="library">Champions</button>
-      <button class="tab-btn" data-tab="maps">Terrains</button>
-      <button id="nav-home" class="tab-btn">Accueil</button>
-    </nav>
-  </header>
+  <div id="turn-timer" class="turn-timer"></div>
+  <button id="nav-menu-btn" class="nav-menu-btn" title="Navigation" aria-expanded="false" aria-controls="nav-menu" aria-label="Ouvrir le menu de navigation">☰</button>
+  <div id="nav-menu" class="nav-menu" hidden>
+    <button class="tab-btn active" data-tab="board">Plateau</button>
+    <button class="tab-btn" data-tab="board3d" title="Mode 3D">3D</button>
+    <button class="tab-btn" data-tab="library">Champions</button>
+    <button class="tab-btn" data-tab="maps">Terrains</button>
+    <button id="nav-home" class="tab-btn">Accueil</button>
+  </div>
 
   <main>
     <section id="tab-board" class="tab active">
@@ -320,7 +319,7 @@
   <dialog id="online-dialog">
     <div class="online-box">
       <h2>Partie en ligne</h2>
-      <p class="online-info">Créez un hébergement (2 ou 4 places) dans le mode de votre choix, puis partagez le code. Le créateur est l'Équipe A, puis B, C et D rejoignent dans cet ordre.</p>
+      <p class="online-info">Objectif et Rampage : 2 joueurs. 4V4V4V4 : 4 joueurs. Créez un hébergement, puis partagez le code. Le créateur est l'Équipe A, puis B, C et D rejoignent dans cet ordre.</p>
       <div class="online-setup">
         <label>Mode
           <select id="online-mode">
@@ -332,7 +331,6 @@
         <label>Places
           <select id="online-size">
             <option value="2">2 joueurs</option>
-            <option value="4">4 joueurs</option>
           </select>
         </label>
         <button type="button" id="online-create" class="home-btn online-small">Créer l'hébergement</button>
@@ -390,9 +388,9 @@
     <button id="dialog-close">Fermer</button>
   </dialog>
 
-  <script src="data.js?v=20261124b"></script>
+  <script src="data.js?v=20261124d"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261124c"></script>
+  <script src="app.js?v=20261124d"></script>
   <script src="game3d.js?v=103"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
