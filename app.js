@@ -251,10 +251,10 @@ function migrateLegacyFixed() {
   } catch (e) {}
 }
 
-/* L'arène 4J est désormais complète dans data.js. Les anciennes
-   personnalisations vides enregistrées sur l'appareil la rendaient vierge :
-   on les supprime au chargement pour que tous les joueurs voient le même
-   terrain, quelle que soit leur machine. */
+/* L'arène 4J est désormais complète et identique dans data.js. Toute
+   personnalisation de map4 enregistrée sur un appareil (vide ou non) écrase
+   l'arène officielle : on la supprime systématiquement au chargement pour que
+   le terrain 4J soit le même sur le téléphone, la tablette et le PC. */
 function isBlankMapOverride(o) {
   if (!o) return false;
   const empty = (a) => !Array.isArray(a) || a.length === 0;
@@ -264,12 +264,12 @@ function isBlankMapOverride(o) {
 function migrateBlankArena() {
   try {
     const all = loadFixedMaps();
-    if (all.map4 && isBlankMapOverride(all.map4)) {
+    if (all.map4) {
       delete all.map4;
       localStorage.setItem(FIXED_MAPS_KEY, JSON.stringify(all));
     }
     const custom = loadCustomMaps();
-    if (custom.map4 && isBlankMapOverride(custom.map4)) {
+    if (custom.map4) {
       delete custom.map4;
       localStorage.setItem(CUSTOM_MAP_KEY, JSON.stringify(custom));
     }
