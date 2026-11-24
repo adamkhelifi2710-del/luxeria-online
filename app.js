@@ -251,8 +251,34 @@ function migrateLegacyFixed() {
   } catch (e) {}
 }
 
+/* L'arène 4J est désormais complète dans data.js. Les anciennes
+   personnalisations vides enregistrées sur l'appareil la rendaient vierge :
+   on les supprime au chargement pour que tous les joueurs voient le même
+   terrain, quelle que soit leur machine. */
+function isBlankMapOverride(o) {
+  if (!o) return false;
+  const empty = (a) => !Array.isArray(a) || a.length === 0;
+  return empty(o.edges) && empty(o.fire) && empty(o.heal) && empty(o.speed) && empty(o.void);
+}
+
+function migrateBlankArena() {
+  try {
+    const all = loadFixedMaps();
+    if (all.map4 && isBlankMapOverride(all.map4)) {
+      delete all.map4;
+      localStorage.setItem(FIXED_MAPS_KEY, JSON.stringify(all));
+    }
+    const custom = loadCustomMaps();
+    if (custom.map4 && isBlankMapOverride(custom.map4)) {
+      delete custom.map4;
+      localStorage.setItem(CUSTOM_MAP_KEY, JSON.stringify(custom));
+    }
+  } catch (e) {}
+}
+
 function applyFixedMaps() {
   migrateLegacyFixed();
+  migrateBlankArena();
   const all = loadFixedMaps();
   Object.keys(all).forEach((mapId) => {
     const fixed = all[mapId];
@@ -302,7 +328,7 @@ function applyCustomMapFor(name) {
   const m = GAME.maps[name];
   if (!m) return;
   const custom = loadCustomMaps()[name];
-  if (custom && Array.isArray(custom.edges)) {
+  if (custom && Array.isArray(custom.edges) && !(name === "map4" && isBlankMapOverride(custom))) {
     m.edgesWalls = custom.edges.slice();
     m.fireCells = (custom.fire || []).map((p) => p.slice());
     m.healCells = (custom.heal || []).map((p) => p.slice());
