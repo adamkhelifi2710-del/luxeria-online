@@ -392,7 +392,7 @@ const GAME = {
       range: 2,
       ability: {
         name: "Pacif",
-        desc: "Passif permanent (aucun Cd) - Une aura de 3×3 cases centrée sur XIXZ se déplace avec lui. Tous ses champions alliés dans cette zone (XIXZ inclus) subissent 1 dégât de moins par attaque reçue (3 dégâts deviennent 2 ; une attaque de 1 dégât est totalement absorbée). Ne s'applique ni au poison ni au feu du terrain."
+        desc: "Passif permanent (aucun Cd) - Une aura de 3×3 cases centrée sur XIXZ se déplace avec lui. Ses champions alliés dans cette zone subissent 1 dégât de moins par attaque reçue (3 dégâts deviennent 2 ; une attaque de 1 dégât est totalement absorbée). XIXZ lui-même n'est PAS protégé par son propre Pacif et reçoit 100 % des dégâts. Ne s'applique ni au poison ni au feu du terrain."
       },
       passive: { name: "", desc: "" }
     }
