@@ -5794,8 +5794,70 @@ main { padding: 8px 16px; }
 #board-side #rosters { max-height: none; overflow: visible; }
 #board-side #rosters.rosters-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #board-side #board-log { max-height: none; overflow: visible; }
-body.bigscreen #board-side { display: none; }
+body.bigscreen #board-side,
+body.bigscreen #board-title { display: none; }
 #board { box-sizing: border-box; }
+
+/* ---- Salon en ligne : mode, places, code, joueurs ---- */
+.online-box [hidden] { display: none !important; }
+.online-box .online-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 10px 0;
+}
+.online-box .online-setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8rem;
+  color: var(--muted, #8fa3b8);
+}
+.online-box .online-setup select,
+.online-box .online-setup input {
+  background: var(--panel, #151a22);
+  color: var(--text, #e6edf5);
+  border: 1px solid var(--border, #2a3542);
+  border-radius: 8px;
+  padding: 7px 9px;
+  min-width: 130px;
+}
+.online-box .online-setup input { text-transform: uppercase; letter-spacing: 2px; }
+.online-room {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border, #2a3542);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.online-room-code { font-size: 0.9rem; margin-bottom: 8px; }
+.online-room-code strong { color: var(--accent, #f6c24b); letter-spacing: 3px; font-size: 1.1rem; }
+.online-room-players { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.online-room-players span {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #2a3542);
+  font-size: 0.8rem;
+}
+
+/* Titre « Suivi de Partie » à la verticale, juste à gauche des boutons. */
+#board-title {
+  flex: 0 0 26px;
+  width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.72rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted, #8fa3b8);
+  white-space: nowrap;
+  border-left: 1px solid var(--border);
+  padding-left: 4px;
+}
 #rosters {
   flex: 0 0 auto;
   max-height: 84px;
