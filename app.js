@@ -106,7 +106,7 @@ function playClickSound() {
     osc.frequency.setValueAtTime(760, t);
     osc.frequency.exponentialRampToValueAtTime(420, t + 0.035);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.03, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.06, t + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
     osc.connect(gain);
     gain.connect(_clickAudio.destination);
@@ -1504,8 +1504,30 @@ document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "board") renderBoard();
     if (btn.dataset.tab === "maps") renderMapGallery();
+    toggleNavMenu(false);
     hideHome();
   });
+});
+
+/* Navigation regroupée dans un seul bouton fixe en haut à droite : le menu
+   contient Plateau, 3D, Champions, Terrains et Accueil. */
+function toggleNavMenu(open) {
+  const btn = document.getElementById("nav-menu-btn");
+  const menu = document.getElementById("nav-menu");
+  if (!btn || !menu) return;
+  const show = open === undefined ? menu.hidden : !!open;
+  menu.hidden = !show;
+  btn.setAttribute("aria-expanded", show ? "true" : "false");
+}
+
+const navMenuBtn = document.getElementById("nav-menu-btn");
+if (navMenuBtn) navMenuBtn.addEventListener("click", () => toggleNavMenu());
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("nav-menu");
+  if (!menu || menu.hidden || !e.target) return;
+  const btn = document.getElementById("nav-menu-btn");
+  if (btn && btn.contains(e.target)) return;
+  if (!menu.contains(e.target)) toggleNavMenu(false);
 });
 
 /* ---------- Librairie ---------- */
@@ -6687,6 +6709,7 @@ function openOnlineLobby() {
   const dlg = document.getElementById("online-dialog");
   if (!dlg) return;
   onlineResetLobbyState();
+  onlineRefreshSizeOptions();
   onlineRenderRoomUI();
   onlineSetLobbyStatus(
     location.host
@@ -6735,11 +6758,32 @@ function onlineConnect(afterOpen) {
   };
 }
 
+/* Objectif et Rampage se jouent à 2 joueurs, le 4V4V4V4 à 4. Aucune autre
+   taille n'est proposée ni acceptée, côté client comme côté serveur. */
+function onlineAllowedSizes(mode) {
+  return mode === "quad" ? [4] : [2];
+}
+
+function onlineRefreshSizeOptions() {
+  const modeSel = document.getElementById("online-mode");
+  const sizeSel = document.getElementById("online-size");
+  if (!sizeSel) return;
+  const mode = modeSel ? modeSel.value : "classic";
+  const allowed = onlineAllowedSizes(mode);
+  const current = parseInt(sizeSel.value, 10);
+  sizeSel.innerHTML = allowed.map((n) => `<option value="${n}">${n} joueurs</option>`).join("");
+  sizeSel.value = String(allowed.indexOf(current) >= 0 ? current : allowed[0]);
+  sizeSel.disabled = allowed.length === 1;
+}
+
 function onlineCreate() {
   const modeSel = document.getElementById("online-mode");
   const sizeSel = document.getElementById("online-size");
   const mode = modeSel ? modeSel.value : "classic";
-  const size = mode === "quad" ? 4 : Math.max(2, Math.min(4, parseInt((sizeSel && sizeSel.value) || "2", 10) || 2));
+  const allowed = onlineAllowedSizes(mode);
+  const asked = parseInt((sizeSel && sizeSel.value) || "", 10);
+  const size = allowed.indexOf(asked) >= 0 ? asked : allowed[0];
+  if (sizeSel) sizeSel.value = String(size);
   onlineLobbyMode = mode;
   onlineLobbySize = size;
   onlineConnect(() => {
@@ -7292,12 +7336,7 @@ const homeOnline = document.getElementById("home-online");
 if (homeOnline) homeOnline.addEventListener("click", openOnlineLobby);
 
 const onlineModeSel = document.getElementById("online-mode");
-if (onlineModeSel) onlineModeSel.addEventListener("change", () => {
-  const sizeSel = document.getElementById("online-size");
-  if (onlineModeSel.value === "quad") {
-    if (sizeSel) { sizeSel.value = "4"; sizeSel.disabled = true; }
-  } else if (sizeSel) sizeSel.disabled = false;
-});
+if (onlineModeSel) onlineModeSel.addEventListener("change", onlineRefreshSizeOptions);
 
 const onlineCreateBtn = document.getElementById("online-create");
 if (onlineCreateBtn) onlineCreateBtn.addEventListener("click", onlineCreate);
