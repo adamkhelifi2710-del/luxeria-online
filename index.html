@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suivi de Partie — Jeu de Plateau</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Cinzel+Decorative:wght@400;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=20261123d">
+  <link rel="stylesheet" href="style.css?v=20261124a">
   <link rel="stylesheet" href="style3d.css?v=11">
   <script type="importmap">
   {
@@ -185,7 +185,6 @@
   </div>
 
   <header>
-    <h1>Suivi de Partie</h1>
     <div id="turn-timer" class="turn-timer"></div>
     <nav>
       <button class="tab-btn active" data-tab="board">Plateau</button>
@@ -199,6 +198,7 @@
   <main>
     <section id="tab-board" class="tab active">
       <div id="board-wrap"><div id="board"></div></div>
+      <div id="board-title" class="board-title">Suivi de Partie</div>
       <aside id="board-side">
       <div class="board-toolbar">
         <span id="turn-label">Tour : Équipe A</span>
@@ -320,10 +320,40 @@
   <dialog id="online-dialog">
     <div class="online-box">
       <h2>Partie en ligne</h2>
-      <p class="online-info">Matchmaking automatique : le premier joueur en attente est l'Équipe A, le second l'Équipe B. Vous composez chacun votre équipe et vous choisissez chacun vos titulaires avant que la partie ne commence.</p>
-      <button type="button" id="online-search" class="home-btn online-small">Rechercher une partie</button>
+      <p class="online-info">Créez un hébergement (2 ou 4 places) dans le mode de votre choix, puis partagez le code. Le créateur est l'Équipe A, puis B, C et D rejoignent dans cet ordre.</p>
+      <div class="online-setup">
+        <label>Mode
+          <select id="online-mode">
+            <option value="classic">🎯 Objectif</option>
+            <option value="rampage">💥 Rampage</option>
+            <option value="quad">⚔️ 4V4V4V4</option>
+          </select>
+        </label>
+        <label>Places
+          <select id="online-size">
+            <option value="2">2 joueurs</option>
+            <option value="4">4 joueurs</option>
+          </select>
+        </label>
+        <button type="button" id="online-create" class="home-btn online-small">Créer l'hébergement</button>
+      </div>
+      <div class="online-setup">
+        <label>Code du salon
+          <input id="online-code" type="text" maxlength="5" placeholder="EXABC" autocomplete="off">
+        </label>
+        <button type="button" id="online-join" class="home-btn online-small">Rejoindre</button>
+      </div>
+      <div id="online-room" class="online-room" hidden>
+        <div class="online-room-code">Code : <strong id="online-room-code"></strong>
+          <button type="button" id="online-copy" class="lan-btn">Copier</button>
+        </div>
+        <div id="online-room-players" class="online-room-players"></div>
+        <button type="button" id="online-fill-ai" class="home-btn online-small" hidden>🤖 Compléter avec l'IA</button>
+        <button type="button" id="online-start" class="home-btn online-small" hidden>▶ Lancer la partie</button>
+      </div>
       <div id="online-status" class="lan-status"></div>
       <div class="lan-actions">
+        <button type="button" id="online-quit" class="lan-btn">Quitter le salon</button>
         <button type="button" id="online-cancel" class="lan-btn">Fermer</button>
       </div>
     </div>
@@ -362,7 +392,7 @@
 
   <script src="data.js?v=20261122c"></script>
   <script src="maps.js?v=20261103"></script>
-  <script src="app.js?v=20261123d"></script>
+  <script src="app.js?v=20261124a"></script>
   <script src="game3d.js?v=103"></script>
   <script src="home3d.js?v=11"></script>
   <script type="module">
