@@ -20,6 +20,76 @@ function rectZone(x0, y0, w, h) {
   return cells;
 }
 
+/* Arène 4 joueurs : terrain complet défini ici, dans data.js, pour être
+   strictement identique sur tous les appareils (aucune personnalisation
+   locale nécessaire). Chaque élément est ajouté avec ses 3 rotations de 90°,
+   donc les quatre équipes disposent exactement des mêmes abris et des mêmes
+   cases spéciales autour de leur zone de départ. */
+function makeArenaMap() {
+  const cols = 15, rows = 15;
+  const tiles = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  const fireCells = [], healCells = [], speedCells = [], voidCells = [], edgesWalls = [];
+  const used = { tile: {}, fire: {}, heal: {}, speed: {}, void: {}, edge: {} };
+  const rot = (x, y) => [14 - y, x];
+  const key = (x, y) => x + "," + y;
+
+  function addTile(x, y) {
+    let cx = x, cy = y;
+    for (let i = 0; i < 4; i++) {
+      const k = key(cx, cy);
+      if (!used.tile[k]) { used.tile[k] = 1; tiles[cy][cx] = 1; }
+      [cx, cy] = rot(cx, cy);
+    }
+  }
+  function addCell(list, kind, x, y) {
+    let cx = x, cy = y;
+    for (let i = 0; i < 4; i++) {
+      const k = key(cx, cy);
+      if (!used[kind][k]) { used[kind][k] = 1; list.push([cx, cy]); }
+      [cx, cy] = rot(cx, cy);
+    }
+  }
+  function addEdge(x1, y1, x2, y2) {
+    let a = [x1, y1], b = [x2, y2];
+    for (let i = 0; i < 4; i++) {
+      const e = key(a[0], a[1]) + "-" + key(b[0], b[1]);
+      if (!used.edge[e]) { used.edge[e] = 1; edgesWalls.push(e); }
+      a = rot(a[0], a[1]); b = rot(b[0], b[1]);
+    }
+  }
+
+  /* Blocs d'abri dans les coins, puis couronne de murs autour du centre
+     (quatre ouvertures en diagonale gardent l'accès à l'arène centrale). */
+  addTile(1, 1); addTile(1, 2); addTile(2, 1);
+  addTile(6, 4); addTile(7, 4); addTile(8, 4);
+
+  /* Une case de chaque type par approche d'équipe. */
+  addCell(fireCells, "fire", 2, 2);
+  addCell(healCells, "heal", 7, 3);
+  addCell(speedCells, "speed", 7, 5);
+  addCell(voidCells, "void", 3, 4);
+
+  /* Murs de bordure complétant les abris. */
+  addEdge(2, 3, 3, 3);
+  addEdge(6, 3, 7, 3);
+
+  return {
+    id: "map4",
+    name: "Arène 4J (15×15)",
+    cols, rows, tiles, edgesWalls, fireCells, healCells, speedCells, voidCells,
+    startZones: {
+      A: rectZone(5, 0, 5, 3),
+      B: rectZone(12, 5, 3, 5),
+      C: rectZone(5, 12, 5, 3),
+      D: rectZone(0, 5, 3, 5)
+    },
+    objectives: {
+      A: { x: 2, y: 1, hp: 20 },
+      B: { x: 12, y: 1, hp: 20 }
+    }
+  };
+}
+
 const GAME = {
   maps: {
     map1: {
@@ -60,28 +130,8 @@ const GAME = {
       speedCells: [],
       voidCells: []
     },
-    /* Arène 4 joueurs : 15×15 vierge et modifiable, 4 zones de départ 5×3. */
-    map4: {
-      name: "Arène 4J (15×15)",
-      cols: 15,
-      rows: 15,
-      tiles: Array.from({ length: 15 }, () => new Array(15).fill(0)),
-      edgesWalls: [],
-      startZones: {
-        A: rectZone(5, 0, 5, 3),
-        B: rectZone(12, 5, 3, 5),
-        C: rectZone(5, 12, 5, 3),
-        D: rectZone(0, 5, 3, 5)
-      },
-      objectives: {
-        A: { x: 2, y: 1, hp: 20 },
-        B: { x: 12, y: 1, hp: 20 }
-      },
-      fireCells: [],
-      healCells: [],
-      speedCells: [],
-      voidCells: []
-    }
+    /* Arène 4 joueurs : 15×15 complète et symétrique, 4 zones de départ 5×3. */
+    map4: makeArenaMap()
   },
   activeMap: "map1",
   characters: [
