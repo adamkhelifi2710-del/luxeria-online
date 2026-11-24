@@ -215,9 +215,16 @@ wss.on("connection", (ws) => {
       return;
     }
     if (t === "create") {
+      /* Objectif et Rampage : 2 joueurs uniquement ; 4V4V4V4 : 4 uniquement. */
+      const mode = msg.mode === "quad" || msg.mode === "rampage" ? msg.mode : "classic";
+      const allowed = mode === "quad" ? 4 : 2;
+      if (Number(msg.size) !== allowed) {
+        safeSend(ws, { type: "room-error", message: `Ce mode accepte uniquement ${allowed} joueurs.` });
+        return;
+      }
       removeFromQueue(ws, false);
       if (ws.__room) leaveRoom(ws, true);
-      const room = createRoom(msg.size, msg.mode);
+      const room = createRoom(allowed, mode);
       addToRoom(ws, room, "A");
       safeSend(ws, { type: "room-created", role: "host", ...roomInfo(room) });
       return;
