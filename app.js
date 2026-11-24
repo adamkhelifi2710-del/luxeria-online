@@ -39,34 +39,49 @@ applyVersionRoster();
 
 let state = load();
 /* Une partie sauvegardée avec une autre version ne doit pas réintroduire
-   des champions absents de la version courante. */
+   des champions absents de la version courante. Les anciennes sauvegardes
+   pouvaient contenir deux fois la même classe dans une équipe : on répare la
+   liste en gardant le premier champion de chaque classe, sans effacer la
+   partie. */
 (function sanitizeStateForVersion() {
   const allowed = new Set(GAME.characters.map((c) => c.id));
+  const roleOf = (id) => {
+    const c = GAME.characters.find((x) => x.id === id);
+    return c ? c.role : id;
+  };
   const used = [].concat(
     Object.keys(state.decks || {}).reduce((a, k) => a.concat(state.decks[k] || []), []),
     Object.keys(state.starters || {}).reduce((a, k) => a.concat(state.starters[k] || []), []),
     (state.tokens || []).map((t) => t.charId),
     Object.keys(state.reserve || {}).reduce((a, k) => a.concat((state.reserve[k] || []).map((r) => r.charId)), [])
   );
-  /* Règle actuelle : une seule classe par équipe. Une sauvegarde plus ancienne
-     pouvait contenir deux Soutiens dans la même équipe : on repart propre. */
-  const hasDuplicateRole = (list) => {
+  if (used.some((id) => id && !allowed.has(id))) { state = defaultState(); return; }
+
+  const dedupe = (list, getId) => {
     const seen = new Set();
-    return (list || []).some((id) => {
-      const c = GAME.characters.find((x) => x.id === id);
-      const role = c ? c.role : id;
-      if (seen.has(role)) return true;
+    return (list || []).filter((entry) => {
+      const id = getId(entry);
+      if (!id || !allowed.has(id)) return false;
+      const role = roleOf(id);
+      if (seen.has(role)) return false;
       seen.add(role);
-      return false;
+      return true;
     });
   };
-  const badTeamDuplicates = TEAMS.some((p) =>
-    hasDuplicateRole((state.decks || {})[p]) ||
-    hasDuplicateRole((state.starters || {})[p]) ||
-    hasDuplicateRole(((state.reserve || {})[p] || []).map((r) => r.charId)) ||
-    hasDuplicateRole((state.tokens || []).filter((t) => t.player === p).map((t) => t.charId))
-  );
-  if (used.some((id) => id && !allowed.has(id)) || badTeamDuplicates) state = defaultState();
+  TEAMS.forEach((p) => {
+    state.decks[p] = dedupe(state.decks[p], (id) => id);
+    state.starters[p] = dedupe(state.starters[p], (id) => id);
+    state.reserve[p] = dedupe(state.reserve[p], (r) => r.charId);
+    state.placingQueue[p] = dedupe(state.placingQueue[p], (id) => id);
+  });
+  const tokenRoles = {};
+  state.tokens = (state.tokens || []).filter((t) => {
+    if (!t || !allowed.has(t.charId)) return false;
+    const key = String(t.player) + "|" + roleOf(t.charId);
+    if (tokenRoles[key]) return false;
+    tokenRoles[key] = true;
+    return true;
+  });
 })();
 
 /* Une seule finalisation par partie, quel que soit le chemin de victoire. */
@@ -722,6 +737,50 @@ function canAddToTeam(player, charId) {
   return !roleAlreadyPicked(player, c.role, charId);
 }
 
+/* Filet de sécurité unique : quelle que soit la source du tirage (aléatoire,
+   IA, draft en ligne, sauvegarde), une équipe ne garde qu'UN champion par
+   classe. Les mêmes champions restent autorisés dans les autres équipes. */
+function teamRolesUnique(ids) {
+  const seen = new Set();
+  return (ids || []).every((id) => {
+    const role = charRole(id);
+    if (seen.has(role)) return false;
+    seen.add(role);
+    return true;
+  });
+}
+
+function normalizeTeam(ids, size) {
+  const out = [];
+  const roles = new Set();
+  (ids || []).forEach((id) => {
+    if (!charById(id) || roles.has(charRole(id))) return;
+    if (size && out.length >= size) return;
+    out.push(id);
+    roles.add(charRole(id));
+  });
+  if (size && out.length < size) {
+    const rest = GAME.characters.map((c) => c.id)
+      .filter((id) => out.indexOf(id) < 0 && !roles.has(charRole(id)));
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    rest.forEach((id) => {
+      if (out.length >= size) return;
+      out.push(id);
+      roles.add(charRole(id));
+    });
+  }
+  return out;
+}
+
+function assignTeam(player, ids, size) {
+  const target = typeof size === "number" ? size : teamSizeTarget();
+  state.decks[player] = normalizeTeam(ids, target);
+  return state.decks[player];
+}
+
 /* Taille d'équipe : 3 champions en Rampage, 4 en 4 joueurs, 5 sinon.
    Une seule classe par équipe : les doublons de champions restent autorisés
    ENTRE équipes, jamais dans la même équipe. */
@@ -754,12 +813,19 @@ function randomTeam(size, exclude) {
     team.push(pool[Math.floor(Math.random() * pool.length)]);
   }
   if (team.length < size) {
-    const rest = GAME.characters.map((c) => c.id).filter((id) => team.indexOf(id) < 0);
+    /* Même en repli, on ne reprend jamais une classe déjà présente dans
+       l'équipe : c'était la source des doublons (deux Soutiens par exemple). */
+    const usedRoles = team.map(charRole);
+    const rest = GAME.characters
+      .filter((c) => team.indexOf(c.id) < 0 && usedRoles.indexOf(c.role) < 0)
+      .map((c) => c.id);
     while (team.length < size && rest.length) {
-      team.push(rest.splice(Math.floor(Math.random() * rest.length), 1)[0]);
+      const picked = rest.splice(Math.floor(Math.random() * rest.length), 1)[0];
+      team.push(picked);
+      usedRoles.push(charRole(picked));
     }
   }
-  return team;
+  return normalizeTeam(team, size);
 }
 
 function randomFullTeam(exclude) {
@@ -926,9 +992,9 @@ function randomSelectTeams() {
   activeTeams().forEach((p) => {
     /* Chaque équipe IA tire son propre deck, sans contrainte vis-à-vis des
        autres équipes : un champion peut apparaître dans plusieurs équipes. */
-    state.decks[p] = isAiTeam(p)
+    assignTeam(p, isAiTeam(p)
       ? aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice())
-      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget());
+      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget()));
   });
   state.starters = teamMap([]);
   activeTeams().forEach((p) => {
@@ -1191,9 +1257,9 @@ function startRandomGame(mode) {
   buildMode = null;
   renderBuildBanner();
   activeTeams().forEach((p) => {
-    state.decks[p] = isAiTeam(p)
+    assignTeam(p, isAiTeam(p)
       ? aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice())
-      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget());
+      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget()));
   });
   state.starters = teamMap([]);
   activeTeams().forEach((p) => {
@@ -1569,6 +1635,7 @@ function renderLibrary() {
     let btnDisabled = false;
     if (buildMode) {
       const cur = buildMode.player;
+      card.dataset.team = cur;
       const deck = state.decks[cur] || [];
       const picked = deck.indexOf(c.id) >= 0;
       const roleTaken = !picked && roleAlreadyPicked(cur, c.role);
@@ -2403,7 +2470,7 @@ function renderBoard() {
       if (toks) {
         toks.forEach((t, i) => {
           const tok = document.createElement("div");
-          tok.className = `token player-${t.player}`;
+          tok.className = `token player-${String(t.player).toLowerCase()}`;
           tok.textContent = charById(t.charId).name.slice(0, 8);
           if (t.charId === "calix") {
             const brick = document.createElement("span");
@@ -2717,16 +2784,18 @@ if (t.charId === "cazou") {
             gl.appendChild(l2);
             tok.appendChild(gl);
           }
-          if (t.hp < charById(t.charId).hp) {
-            const hpEl = document.createElement("span");
-            hpEl.className = "token-hp";
-            hpEl.textContent = t.hp;
-            tok.appendChild(hpEl);
-          }
+          /* Les PV sont toujours visibles sur le plateau, même à pleine santé. */
+          const maxHp = charById(t.charId).hp;
+          const hpEl = document.createElement("span");
+          hpEl.className = "token-hp" + (t.hp >= maxHp ? " full" : "");
+          hpEl.textContent = String(t.hp);
+          hpEl.title = `${charById(t.charId).name} — ${t.hp}/${maxHp} PV`;
+          tok.appendChild(hpEl);
           if (t.cd > 0) {
             const cdEl = document.createElement("span");
             cdEl.className = "token-cd";
-            cdEl.textContent = "Cd " + t.cd;
+            cdEl.textContent = String(t.cd);
+            cdEl.title = `Capacité en recharge : ${t.cd} tour(s)`;
             tok.appendChild(cdEl);
           }
           if ((t.stunned || 0) > 0) {
@@ -2758,7 +2827,7 @@ if (t.charId === "cazou") {
         const dt = state.tokens.find((t) => t.id === id);
         if (dt && dt.x === x && dt.y === y) {
           const ghost = document.createElement("div");
-          ghost.className = `token player-${dt.player} anim-death`;
+          ghost.className = `token player-${String(dt.player).toLowerCase()} anim-death`;
           ghost.textContent = charById(dt.charId).name.slice(0, 8);
           cell.appendChild(ghost);
         }
@@ -5244,6 +5313,21 @@ if (toolbarMoreBtn) {
   });
 }
 
+/* La colonne de droite peut être masquée d'un clic : le plateau occupe alors
+   toute la largeur et toute la hauteur disponibles. */
+const boardSideToggle = document.getElementById("board-side-toggle");
+if (boardSideToggle) {
+  boardSideToggle.addEventListener("click", function () {
+    const collapsed = document.body.classList.toggle("board-side-collapsed");
+    boardSideToggle.textContent = collapsed ? "‹" : "›";
+    boardSideToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    boardSideToggle.title = collapsed
+      ? "Afficher les informations à droite du plateau"
+      : "Masquer les informations pour agrandir le plateau";
+    fitBoard(true);
+  });
+}
+
 window.addEventListener("resize", function () { fitBoard(true); });
 
 document.getElementById("undo-btn").addEventListener("click", undoLast);
@@ -5553,6 +5637,13 @@ document.getElementById("win-close").addEventListener("click", () => {
 
 /* ---------- Réserve / remplacements ---------- */
 
+function rosterName(player, text) {
+  const span = document.createElement("span");
+  span.className = "champ-name team-" + player.toLowerCase();
+  span.textContent = text;
+  return span;
+}
+
 function renderRosters() {
   const rosters = document.getElementById("rosters");
   rosters.innerHTML = "";
@@ -5574,7 +5665,7 @@ function renderRosters() {
       swapCdBadge.className = "roster-cd";
       const scd = swapCooldown(player);
       swapCdBadge.textContent = scd > 0
-        ? `Changement volontaire : Cd ${scd}`
+        ? `Changement volontaire : ${scd} tour(s)`
         : "Changement volontaire : disponible";
       swapCdBadge.title = "Remplacement volontaire : échanger un champion avec la réserve (recharge de 5 tours). Le remplacement obligatoire après une élimination n'utilise PAS ce cooldown.";
       if (scd > 0) swapCdBadge.classList.add("off");
@@ -5600,10 +5691,18 @@ function renderRosters() {
         if (!c) return;
         const n = used[charId] || 0;
         used[charId] = n + 1;
-        const alive = (living[charId] || 0) > n;
+        const aliveTokens = state.tokens.filter((t) =>
+          t.player === player && t.charId === charId && !t.dead);
+        const alive = aliveTokens.length > n;
         const row = document.createElement("div");
         row.className = "roster-row field" + (alive ? "" : " dead");
-        row.textContent = `${c.name} — ${alive ? "en jeu" : "éliminé"}`;
+        row.appendChild(rosterName(player, c.name));
+        const info = document.createElement("span");
+        info.className = "roster-hp";
+        info.textContent = alive
+          ? ` — ${aliveTokens[n].hp}/${c.hp} PV`
+          : ` — éliminé (0/${c.hp} PV)`;
+        row.appendChild(info);
         box.appendChild(row);
       });
       rosters.appendChild(box);
@@ -5614,7 +5713,18 @@ function renderRosters() {
       const c = charById(t.charId);
       const row = document.createElement("div");
       row.className = "roster-row field";
-      row.textContent = `${c.name} — ${t.hp}/${c.hp} PV${t.cd > 0 ? " · Cd " + t.cd : ""}`;
+      row.appendChild(rosterName(player, c.name));
+      const hp = document.createElement("span");
+      hp.className = "roster-hp";
+      hp.textContent = ` — ${t.hp}/${c.hp} PV`;
+      row.appendChild(hp);
+      if (t.cd > 0) {
+        const cd = document.createElement("span");
+        cd.className = "roster-cd-num";
+        cd.textContent = ` · ${t.cd}`;
+        cd.title = `Capacité en recharge : ${t.cd} tour(s)`;
+        row.appendChild(cd);
+      }
       const swap = document.createElement("button");
       swap.textContent = "↻ Remplacer";
       swap.className = "roster-btn roster-swap";
@@ -5653,7 +5763,11 @@ function renderRosters() {
       const c = charById(r.charId);
       const row = document.createElement("div");
       row.className = "roster-row reserve";
-      row.textContent = `${c.name} — ${r.hp}/${c.hp} PV`;
+      row.appendChild(rosterName(player, c.name));
+      const hp = document.createElement("span");
+      hp.className = "roster-hp";
+      hp.textContent = ` — ${r.hp}/${c.hp} PV`;
+      row.appendChild(hp);
       if (canEnter) {
         const enterBtn = document.createElement("button");
         enterBtn.textContent = "▶";
@@ -5847,7 +5961,7 @@ function openTokenPanel() {
     <div class="char-stats">
       <span>PV ${tok.hp}/${c.hp}</span><span>ATQ ${c.atk}</span><span>DÉP ${myTurn ? movementBudget(tok) : c.mouvement}</span><span>PORTÉE ${c.range}</span>
     </div>
-    ${tok.cd > 0 ? `<div class="cd-badge">Capacité en recharge : Cd ${tok.cd}</div>` : ""}
+    ${tok.cd > 0 ? `<div class="cd-badge">Capacité en recharge : ${tok.cd} tour(s)</div>` : ""}
     <div class="hp-controls">
       <button data-delta="-1">-1 PV</button>
       <button data-delta="-5">-5</button>
@@ -6961,9 +7075,9 @@ function onlineBeginDraft(role) {
 
 function onlineRandomHost() {
   activeTeams().forEach((p) => {
-    state.decks[p] = isAiTeam(p)
+    assignTeam(p, isAiTeam(p)
       ? aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice())
-      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget());
+      : isQuad() ? randomQuadTeam() : randomTeam(teamSizeTarget()));
   });
   state.starters = teamMap([]);
   activeTeams().forEach((p) => {
@@ -6992,7 +7106,10 @@ function onlineClientStart(msg) {
       setActiveMap(msg.mapName);
     }
     if (msg.mode) state.mode = msg.mode;
-    if (msg.decks) state.decks = teamMap((p) => (msg.decks[p] || []).slice());
+    if (msg.decks) {
+      state.decks = teamMap([]);
+      activeTeams().forEach((p) => assignTeam(p, msg.decks[p] || []));
+    }
     if (msg.starters) state.starters = teamMap((p) => (msg.starters[p] || []).slice());
     save();
     renderDecks();
@@ -7044,7 +7161,11 @@ function onlineDraftAfterPick() {
 
 function onlineClientDraftState(msg) {
   if (!onlineMode || lanRole !== "client") return;
-  state.decks = teamMap((p) => ((msg.decks && msg.decks[p]) || []).slice());
+  state.decks = teamMap([]);
+  activeTeams().forEach((p) => {
+    const deck = (msg.decks && msg.decks[p]) || [];
+    assignTeam(p, deck, deck.length);
+  });
   save();
   if (msg.done) {
     buildMode = null;
@@ -7093,7 +7214,7 @@ function onlineBeginBuildFor(team) {
 
 function onlineApplyLiveDeck(team, deck) {
   if (!Array.isArray(deck) || team === lanLocalTeam()) return;
-  state.decks[team] = deck.slice();
+  assignTeam(team, deck, deck.length);
   renderDecks();
   renderLibrary();
 }
@@ -7117,7 +7238,7 @@ function onlineHostReceiveDeck(msg) {
   if (!Array.isArray(msg.deck) || msg.deck.length < teamSizeTarget()) return;
   if (onlineHumanTeams().indexOf(msg.team) < 0 || msg.team === "A") return;
   onlineRemoteDeck[msg.team] = msg.deck.slice();
-  state.decks[msg.team] = msg.deck.slice();
+  assignTeam(msg.team, msg.deck);
   renderDecks();
   onlineMaybeProceedHost();
 }
@@ -7134,7 +7255,7 @@ function onlineMaybeProceedHost() {
     return;
   }
   activeTeams().forEach((p) => {
-    if (p !== "A" && onlineRemoteDeck[p]) state.decks[p] = onlineRemoteDeck[p].slice();
+    if (p !== "A" && onlineRemoteDeck[p]) assignTeam(p, onlineRemoteDeck[p]);
   });
   save();
   renderDecks();
@@ -8870,12 +8991,12 @@ function aiPickTeam(pool, size, rolePool) {
     if (!remaining.length) break;
     team.push(rand(remaining));
   }
-  return team;
+  return normalizeTeam(team, size);
 }
 
 function aiBuildTeam(player) {
   const pool = GAME.characters.map((c) => c.id);
-  state.decks[player] = aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice());
+  assignTeam(player, aiPickTeam(pool, teamSizeTarget(), CLASS_ORDER.slice()));
   buildMode = null;
   save();
   renderDecks();
@@ -9033,7 +9154,8 @@ function aiSetupGame(mapId, mode, method) {
   renderDecks();
   refreshMapSelectOptions();
   if (method === "random") {
-    state.decks = { A: randomTeam(teamSizeTarget(), null) };
+    state.decks = teamMap([]);
+    assignTeam("A", randomTeam(teamSizeTarget(), null));
     state.decks.B = aiChooseTeamAgainst(state.decks.A);
     buildMode = null;
     renderBuildBanner();
@@ -9054,7 +9176,10 @@ function aiSetupGame(mapId, mode, method) {
 /* L'équipe de l'IA tire des champions distincts, mais peut reprendre un
    champion déjà présent chez l'adversaire. */
 function aiChooseTeamAgainst(taken) {
-  return aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice());
+  return normalizeTeam(
+    aiPickTeam(GAME.characters.map((c) => c.id), teamSizeTarget(), CLASS_ORDER.slice()),
+    teamSizeTarget()
+  );
 }
 
 /* ---------- Bouton d'accueil ---------- */
